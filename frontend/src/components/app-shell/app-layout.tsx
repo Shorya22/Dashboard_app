@@ -8,15 +8,44 @@ import { StatusFooter } from './status-footer'
 
 const pageTitles: Record<string, string> = {
   '/': 'Home',
+  '/hr-portal': 'HR Portal',
   '/hr-analytics': 'HR Analytics',
   '/workforce': 'Workforce',
   '/skills-experience': 'Skills & Experience',
   '/employee-directory': 'Employee Directory',
+  '/utilization': 'Utilization',
+  '/utilization/search': 'Search Utilization',
+  '/utilization/employees': 'Employee Utilization',
+  '/utilization/projects': 'Project Utilization',
+  '/utilization/overview-summary': 'Utilization Overview',
+}
+
+const pageSubtitles: Record<string, string> = {
+  '/': 'Workforce overview at a glance',
+  '/hr-portal': 'Workforce composition overview — status, region, entity, and experience',
+  '/hr-analytics': 'Headcount, joiners/exits, and attrition',
+  '/workforce': 'Seniority, type, and regional distribution',
+  '/skills-experience': 'Skills and experience breakdown across workforce segments',
+  '/employee-directory': 'Browse employees and their current roles',
+  '/utilization': 'Weekly time booking across client and internal work',
+  '/utilization/search': 'Filter time-booking records by week, region, department, entity, holding, or hours type',
+  '/utilization/employees': 'Review employee utilization detail',
+  '/utilization/projects': 'Review project utilization detail',
+  '/utilization/overview-summary': 'Period utilization rate and employee-level breakdown',
 }
 
 export function AppLayout() {
   const location = useLocation()
-  const title = pageTitles[location.pathname] ?? 'Workforce Analytics'
+  const title =
+    pageTitles[location.pathname] ||
+    (location.pathname.startsWith('/utilization/employees/') ? 'Employee Utilization' :
+    location.pathname.startsWith('/utilization/projects/') ? 'Project Utilization' :
+    'Overview')
+  const subtitle =
+    pageSubtitles[location.pathname] ||
+    (location.pathname.startsWith('/utilization/employees/') ? 'Review employee utilization detail' :
+    location.pathname.startsWith('/utilization/projects/') ? 'Review project utilization detail' :
+    'Dashboard overview and quick actions')
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false)
 
   // Close the drawer whenever the route changes.
@@ -30,6 +59,7 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar
           title={title}
+          subtitle={subtitle}
           variant={location.pathname === '/' ? 'home' : 'default'}
           onMenuClick={() => setMobileNavOpen(true)}
         />

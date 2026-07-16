@@ -16,9 +16,9 @@ export function CommandMenu({
   const navigate = useNavigate()
   const { setAuth } = useAuth()
 
-  const run = (fn: () => void) => {
+  const run = async (fn: () => Promise<void>) => {
     onOpenChange(false)
-    fn()
+    await fn()
   }
 
   return (
@@ -54,7 +54,7 @@ export function CommandMenu({
             <Command.Group heading="Account">
               <Command.Item
                 onSelect={() =>
-                  run(async () => {
+                  void run(async () => {
                     try {
                       await apiClient.post('/auth/logout')
                     } finally {

@@ -73,40 +73,40 @@ export function Sidebar({
 
       <aside
         className={cn(
-          'flex h-screen shrink-0 flex-col border-r border-[#535983]/40 bg-[#07125E] text-white transition-[width] duration-200',
+          'flex h-screen shrink-0 flex-col border-r border-[#1c4f97] bg-[#1c4f97] text-white transition-[width] duration-200',
           // Desktop: normal flow, width toggles
           'lg:relative lg:z-auto lg:translate-x-0',
-          collapsed ? 'lg:w-16' : 'lg:w-64',
+          collapsed ? 'lg:w-16' : 'lg:w-72',
           // Mobile: fixed off-canvas drawer, slides in
-          'fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-200 ease-out',
+          'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-16 flex-col justify-center gap-1 border-b border-[#535983]/40 px-4">
+        <div className="flex h-20 flex-col justify-center gap-2 border-b border-[#4C81FF] px-5 py-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {/* DEPT is the foregrounded/primary mark (larger, first);
-                  Hexaware renders smaller as a "powered by" secondary credit.
-                  Rendered once — no duplicate responsive-breakpoint copies. */}
-              <img src={deptLogo} alt="DEPT" className="h-7 w-auto shrink-0 brightness-0 invert" />
+            <div className="flex items-center gap-3">
+              <img src={deptLogo} alt="DEPT" className="h-10 w-auto shrink-0 brightness-0 invert" />
               {!collapsed && (
-                <>
-                  <span className="h-5 w-px bg-white/30" />
-                  <img src={hexawareLogo} alt="Hexaware" className="h-5 w-auto shrink-0 opacity-80" />
-                </>
+                <span className="text-base font-semibold uppercase tracking-[0.15em] text-white">
+                  HEXAWARE
+                </span>
               )}
             </div>
             <button
               type="button"
               onClick={onMobileClose}
-              className="rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
+              className="rounded-lg p-2 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
               aria-label="Close menu"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
           {!collapsed && (
-            <span className="truncate text-[11px] text-white/60">Workforce Analytics</span>
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate text-[11px] uppercase tracking-[0.3em] text-white/70">
+                Workforce Analytics
+              </span>
+            </div>
           )}
         </div>
 
@@ -132,8 +132,8 @@ export function Sidebar({
                       cn(
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
                         isActive
-                          ? 'bg-[#1D86FF]/15 text-[#1D86FF]'
-                          : 'text-white/70 hover:bg-white/10 hover:text-white',
+                          ? 'bg-[#1B6FFF]/25 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)]'
+                          : 'text-white/80 hover:bg-white/10 hover:text-white',
                       )
                     }
                     title={collapsed ? item.label : undefined}
@@ -142,7 +142,7 @@ export function Sidebar({
                       <>
                         <span
                           className={cn(
-                            'absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[#1D86FF] transition-opacity',
+                            'absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[#8CC7FF] transition-opacity',
                             isActive ? 'opacity-100' : 'opacity-0',
                           )}
                         />
@@ -157,11 +157,11 @@ export function Sidebar({
           ))}
         </nav>
 
-        <div className="hidden border-t border-[#535983]/40 p-3 lg:block">
+        <div className="hidden border-t border-[#4C81FF] p-4 lg:block">
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-sm text-white/90 transition hover:bg-white/15 hover:text-white"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

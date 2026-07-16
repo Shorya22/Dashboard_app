@@ -81,39 +81,31 @@ export function UtilizationHomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col flex-wrap items-start justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Utilization</h1>
-          <p className="text-sm text-muted-foreground">
-            Weekly time booking across client and internal work
-          </p>
-        </div>
-        <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
-          <FilterSelect
-            label="Hours Type"
-            value={hoursType}
-            options={filterOptions.data?.hours_types ?? []}
-            onChange={setHoursType}
-          />
-          <FilterSelect
-            label="Region"
-            value={region}
-            options={filterOptions.data?.regions ?? []}
-            onChange={setRegion}
-          />
-          <FilterSelect
-            label="Week"
-            value={week}
-            options={filterOptions.data?.weeks ?? []}
-            onChange={setWeek}
-          />
-          <FilterSelect
-            label="Department"
-            value={department}
-            options={filterOptions.data?.departments ?? []}
-            onChange={setDepartment}
-          />
-        </div>
+      <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
+        <FilterSelect
+          label="Hours Type"
+          value={hoursType}
+          options={filterOptions.data?.hours_types ?? []}
+          onChange={setHoursType}
+        />
+        <FilterSelect
+          label="Region"
+          value={region}
+          options={filterOptions.data?.regions ?? []}
+          onChange={setRegion}
+        />
+        <FilterSelect
+          label="Week"
+          value={week}
+          options={filterOptions.data?.weeks ?? []}
+          onChange={setWeek}
+        />
+        <FilterSelect
+          label="Department"
+          value={department}
+          options={filterOptions.data?.departments ?? []}
+          onChange={setDepartment}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

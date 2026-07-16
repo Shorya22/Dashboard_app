@@ -80,9 +80,21 @@ export function KpiCard({
   return (
     <Card className="rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-1.5">
-          <Text className="text-muted-foreground">{label}</Text>
-          {provisional && <ProvisionalBadge note={provisionalNote} />}
+        <div>
+          <div className="flex items-center gap-1.5">
+            <Text className="text-muted-foreground">{label}</Text>
+            {provisional && <ProvisionalBadge note={provisionalNote} />}
+          </div>
+          {delta !== undefined && (
+            <p
+              className={cn(
+                'mt-1 text-xs font-medium uppercase tracking-[0.12em]',
+                isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+              )}
+            >
+              {isPositive ? 'Improving' : 'Declining'}
+            </p>
+          )}
         </div>
         {Icon && (
           <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', TONE_CLASSES[iconTone])}>
@@ -90,13 +102,15 @@ export function KpiCard({
           </span>
         )}
       </div>
-      <div className="mt-2 flex items-end justify-between">
+      <div className="mt-4 flex items-end justify-between gap-4">
         <AnimatedMetric value={value} />
         {delta !== undefined && (
           <span
             className={cn(
-              'flex items-center gap-0.5 text-sm font-medium',
-              isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+              'flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-semibold',
+              isGood
+                ? 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-200'
+                : 'border-destructive/20 bg-destructive/10 text-destructive dark:border-destructive/30 dark:bg-destructive/15',
             )}
           >
             {isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}

@@ -204,13 +204,6 @@ export function UtilizationSearchPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Search Utilization</h1>
-        <p className="text-sm text-muted-foreground">
-          Filter time-booking records by week, region, department, entity, holding, or hours type
-        </p>
-      </div>
-
       <Card className="rounded-2xl border-border bg-card p-6 shadow-card">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

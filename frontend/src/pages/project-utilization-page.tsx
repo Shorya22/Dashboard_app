@@ -140,16 +140,6 @@ function ProjectPickerPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <FolderKanban className="h-5 w-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Project Utilization</h1>
-          <p className="text-sm text-muted-foreground">Select a project/holding to view its utilization detail</p>
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -406,13 +396,6 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
         <Link to="/utilization/projects" className="text-sm text-primary hover:underline">
           Change project
         </Link>
-      </div>
-
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {query.isLoading ? 'Loading…' : query.data?.holding ?? holding}
-        </h1>
-        <p className="text-sm text-muted-foreground">Project / holding utilization detail</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

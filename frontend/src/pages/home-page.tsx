@@ -26,8 +26,9 @@ export function HomePage() {
   const trends = useRosterTrends()
   const booking = useBookingSummary()
 
-  const growthData =
-    trends.data?.month_wise_closing_headcount.map((m) => ({
+  const headcountTrend = trends.data?.month_wise_closing_headcount ?? []
+
+  const growthData = headcountTrend.map((m) => ({
       month: m.month,
       'Closing Headcount': m.closing_headcount,
     })) ?? []
@@ -87,14 +88,7 @@ export function HomePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Home</h1>
-        <p className="text-sm text-muted-foreground">
-          Workforce overview at a glance
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard
           label="Active Employees"
           value={summary.data?.active_employees ?? '—'}
@@ -107,6 +101,13 @@ export function HomePage() {
           value={breakdowns.data?.strategic_pool ?? '—'}
           loading={breakdowns.isLoading}
           icon={Target}
+          iconTone="blue"
+        />
+        <KpiCard
+          label="Closing Headcount"
+          value={summary.data?.closing_headcount ?? '—'}
+          loading={summary.isLoading}
+          icon={Building2}
           iconTone="blue"
         />
       </div>

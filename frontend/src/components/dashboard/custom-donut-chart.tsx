@@ -81,25 +81,27 @@ export function CustomDonutChart({ data, colors, className, totalLabel = 'Total'
             cy="50%"
             innerRadius="55%"
             outerRadius="70%"
-            paddingAngle={1}
+            paddingAngle={3}
             isAnimationActive
             animationDuration={1000}
             label={renderLabel}
-            labelLine
+            labelLine={false}
           >
             {data.map((d, i) => (
-              <Cell key={d.name} fill={tremorHex(colors[i] ?? 'gray')} stroke="transparent" />
+              <Cell key={d.name} fill={tremorHex(colors[i] ?? 'slate')} stroke="transparent" />
             ))}
           </Pie>
           <Tooltip content={<FullLabelTooltip />} />
         </PieChart>
       </ResponsiveContainer>
       {totalLabel !== null && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-semibold tabular-nums text-tremor-content-strong dark:text-dark-tremor-content-strong">
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-2xl font-semibold tracking-tight text-tremor-content-strong dark:text-dark-tremor-content-strong">
             {formatValue(total)}
           </span>
-          <span className="text-xs text-tremor-content dark:text-dark-tremor-content">{totalLabel}</span>
+          <span className="mt-1 text-xs uppercase tracking-[0.24em] text-tremor-content dark:text-dark-tremor-content">
+            {totalLabel}
+          </span>
         </div>
       )}
     </div>

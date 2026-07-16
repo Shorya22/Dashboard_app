@@ -157,13 +157,6 @@ export function EmployeeDirectoryPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Employee Directory</h1>
-        <p className="text-sm text-muted-foreground">
-          {total ? `${total} employees` : isLoading ? 'Loading…' : 'No employees match these filters'}
-        </p>
-      </div>
-
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

@@ -123,9 +123,9 @@ export function LoginPage() {
             />
 
             <div className="relative z-10 mb-10 flex items-center gap-3.5">
-              <img src={deptLogo} alt="DEPT" className="h-8 w-auto dark:invert" />
+              <img src={deptLogo} alt="DEPT" className="h-10 w-auto dark:invert" />
               <span className="h-5 w-px bg-border" />
-              <img src={hexawareLogo} alt="Hexaware" className="h-5 w-auto" />
+              <img src={hexawareLogo} alt="Hexaware" className="h-6 w-auto" />
             </div>
 
             <div className="relative z-10 max-w-md">
@@ -186,9 +186,9 @@ export function LoginPage() {
             <div className="w-full max-w-[440px]">
               {/* Logos shown here on small screens where left panel is hidden */}
               <div className="mb-6 flex items-center gap-3.5 lg:hidden">
-                <img src={deptLogo} alt="DEPT" className="h-8 w-auto dark:invert" />
+                <img src={deptLogo} alt="DEPT" className="h-10 w-auto dark:invert" />
                 <span className="h-5 w-px bg-border" />
-                <img src={hexawareLogo} alt="Hexaware" className="h-5 w-auto" />
+                <img src={hexawareLogo} alt="Hexaware" className="h-6 w-auto" />
               </div>
 
               <h2 className="mb-1.5 text-[24px] font-extrabold tracking-tight text-foreground">Sign in</h2>

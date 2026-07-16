@@ -115,13 +115,6 @@ export function WorkforcePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Workforce</h1>
-        <p className="text-sm text-muted-foreground">
-          Seniority, type, and regional distribution
-        </p>
-      </div>
-
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

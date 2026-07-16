@@ -24,9 +24,9 @@ export function StatusFooter() {
   })
 
   return (
-    <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-card/80 px-3 py-2 text-[11px] text-muted-foreground backdrop-blur sm:px-6">
+    <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-[#D6E6FF] bg-white/90 px-4 py-3 text-[11px] text-[#6F7E9B] backdrop-blur sm:px-6">
       <span className="truncate">Dashboard loaded {formatted}</span>
-      <span className="hidden truncate sm:inline">DEPT × Hexaware Workforce Analytics</span>
+      <span className="hidden truncate sm:inline">All data as of the browser load time</span>
     </footer>
   )
 }
