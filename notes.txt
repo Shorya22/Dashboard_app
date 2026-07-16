@@ -580,3 +580,40 @@ MOBILE RESPONSIVENESS — round 2, real bugs found after "verified" round 1
    listener + ResizeObserver) and applied it to all 6 instances.
    Full 390px screenshot sweep across every page (not just automated
    checks) found nothing else. tsc clean, zero console errors.
+
+END-TO-END PERFORMANCE RE-CHECK
+
+   Backend re-verification: RE-CONFIRMED SOLID, no fixes needed.
+   Audited every aggregation function against the caching decorator —
+   newer endpoints (by-region-market, holdings-projects) were already
+   correctly cached from when they were built. get_filtered_records
+   correctly left uncached by design (takes per-request filter lists,
+   caching decorator's own docs warn against unhashable args). Cached
+   endpoints all sub-250ms at 100 concurrent, matching earlier
+   baseline. Confirmed Docker adds ZERO meaningful overhead vs bare
+   uvicorn (tested against the live tester-facing container without
+   disrupting it). 144/144 tests pass.
+
+   Frontend performance: real win found and fixed.
+   FINDING: all 15+ pages were statically imported in App.tsx — every
+   page's JS shipped in one bundle on first load, even for a user who
+   only visits Home.
+   FIX: converted to React.lazy() + Suspense per route, with a
+   skeleton loading fallback matching the existing ChartCard pattern.
+   MEASURED RESULT: initial gzipped JS bundle 459.80 kB -> 121.50 kB
+   (74% reduction). Per-page chunks now load on demand (2-4 kB gzip
+   each); shared chart library code split into its own lazy chunk
+   loaded once on first chart-bearing page visit.
+   ALSO: bumped React Query staleTime 30s -> 5 minutes (data is
+   Excel-backed, rarely changes within a session — cuts needless
+   refetches on page revisits).
+   CHECKED, NO CHANGE NEEDED: derived-data memoization already correct
+   on the heaviest pages (Employee picker, Workforce); dependencies
+   not bloated; Docker multi-stage build already correctly excludes
+   node_modules/source from the runtime image.
+   Verified live across 8+ pages with real data, zero console errors.
+   FLAGGED, NOT FIXED (pre-existing, unrelated): ~20 TypeScript errors
+   across a few page files predate this work (same issue noted when
+   Docker was first set up) — doesn't block builds since Vite doesn't
+   require type-checking to succeed, but still an open item if full
+   type-cleanliness is wanted.

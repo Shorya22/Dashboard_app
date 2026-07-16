@@ -7,19 +7,47 @@ import { AuthProvider, useAuth } from '@/lib/auth-context'
 import { apiClient, setOnAuthLost, setOnTokenRefreshed } from '@/lib/api-client'
 import { ProtectedRoute } from '@/components/protected-route'
 import { AppLayout } from '@/components/app-shell/app-layout'
+import { PageLoadingFallback } from '@/components/dashboard/page-loading-fallback'
+
+// Route-level code splitting: each page's JS is only fetched when the user
+// actually navigates there, instead of shipping all 15+ pages in one
+// eagerly-loaded bundle. LoginPage stays eager since it's the first thing
+// an unauthenticated user sees.
 import { LoginPage } from '@/pages/login-page'
-import { HomePage } from '@/pages/home-page'
-import { HrPortalHomePage } from '@/pages/hr-portal-home-page'
-import { HrAnalyticsPage } from '@/pages/hr-analytics-page'
-import { WorkforcePage } from '@/pages/workforce-page'
-import { SkillsExperiencePage } from '@/pages/skills-experience-page'
-import { EmployeeDirectoryPage } from '@/pages/employee-directory-page'
-import { UtilizationHomePage } from '@/pages/utilization-home-page'
-import { UtilizationSearchPage } from '@/pages/utilization-search-page'
-import { UtilizationResultsPage } from '@/pages/utilization-results-page'
-import { EmployeeUtilizationPage } from '@/pages/employee-utilization-page'
-import { ProjectUtilizationPage } from '@/pages/project-utilization-page'
-import { UtilizationOverviewPage } from '@/pages/utilization-overview-page'
+const HomePage = React.lazy(() => import('@/pages/home-page').then((m) => ({ default: m.HomePage })))
+const HrPortalHomePage = React.lazy(() =>
+  import('@/pages/hr-portal-home-page').then((m) => ({ default: m.HrPortalHomePage })),
+)
+const HrAnalyticsPage = React.lazy(() =>
+  import('@/pages/hr-analytics-page').then((m) => ({ default: m.HrAnalyticsPage })),
+)
+const WorkforcePage = React.lazy(() =>
+  import('@/pages/workforce-page').then((m) => ({ default: m.WorkforcePage })),
+)
+const SkillsExperiencePage = React.lazy(() =>
+  import('@/pages/skills-experience-page').then((m) => ({ default: m.SkillsExperiencePage })),
+)
+const EmployeeDirectoryPage = React.lazy(() =>
+  import('@/pages/employee-directory-page').then((m) => ({ default: m.EmployeeDirectoryPage })),
+)
+const UtilizationHomePage = React.lazy(() =>
+  import('@/pages/utilization-home-page').then((m) => ({ default: m.UtilizationHomePage })),
+)
+const UtilizationSearchPage = React.lazy(() =>
+  import('@/pages/utilization-search-page').then((m) => ({ default: m.UtilizationSearchPage })),
+)
+const UtilizationResultsPage = React.lazy(() =>
+  import('@/pages/utilization-results-page').then((m) => ({ default: m.UtilizationResultsPage })),
+)
+const EmployeeUtilizationPage = React.lazy(() =>
+  import('@/pages/employee-utilization-page').then((m) => ({ default: m.EmployeeUtilizationPage })),
+)
+const ProjectUtilizationPage = React.lazy(() =>
+  import('@/pages/project-utilization-page').then((m) => ({ default: m.ProjectUtilizationPage })),
+)
+const UtilizationOverviewPage = React.lazy(() =>
+  import('@/pages/utilization-overview-page').then((m) => ({ default: m.UtilizationOverviewPage })),
+)
 
 function AuthBridge() {
   const { accessToken, user, setAuth } = useAuth()
@@ -69,20 +97,118 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<HomePage />} />
-        <Route path="hr-portal" element={<HrPortalHomePage />} />
-        <Route path="hr-analytics" element={<HrAnalyticsPage />} />
-        <Route path="workforce" element={<WorkforcePage />} />
-        <Route path="skills-experience" element={<SkillsExperiencePage />} />
-        <Route path="employee-directory" element={<EmployeeDirectoryPage />} />
-        <Route path="utilization" element={<UtilizationHomePage />} />
-        <Route path="utilization/search" element={<UtilizationSearchPage />} />
-        <Route path="utilization/results" element={<UtilizationResultsPage />} />
-        <Route path="utilization/employees" element={<EmployeeUtilizationPage />} />
-        <Route path="utilization/employees/:employee" element={<EmployeeUtilizationPage />} />
-        <Route path="utilization/projects" element={<ProjectUtilizationPage />} />
-        <Route path="utilization/projects/:holding" element={<ProjectUtilizationPage />} />
-        <Route path="utilization/overview-summary" element={<UtilizationOverviewPage />} />
+        <Route
+          index
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <HomePage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="hr-portal"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <HrPortalHomePage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="hr-analytics"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <HrAnalyticsPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="workforce"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <WorkforcePage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="skills-experience"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <SkillsExperiencePage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="employee-directory"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <EmployeeDirectoryPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <UtilizationHomePage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/search"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <UtilizationSearchPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/results"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <UtilizationResultsPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/employees"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <EmployeeUtilizationPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/employees/:employee"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <EmployeeUtilizationPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/projects"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <ProjectUtilizationPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/projects/:holding"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <ProjectUtilizationPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="utilization/overview-summary"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <UtilizationOverviewPage />
+            </React.Suspense>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
