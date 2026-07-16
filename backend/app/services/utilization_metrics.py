@@ -46,6 +46,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.services.cache_utils import cache_on_df
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_GROUND_TRUTH_PATH = (
@@ -277,6 +279,7 @@ def reconcile_weekly_utilization(
     return result
 
 
+@cache_on_df
 def get_utilization_overview(ground_truth_long_df: pd.DataFrame) -> dict:
     """
     KPIs/trend/split/ranking for the Utilization Overview page, sourced

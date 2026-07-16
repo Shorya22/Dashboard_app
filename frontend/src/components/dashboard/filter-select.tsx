@@ -25,14 +25,14 @@ export function FilterSelect({
   getOptionLabel,
 }: FilterSelectProps) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <Select
         value={value ?? ALL}
         onValueChange={(v) => onChange(v === ALL ? undefined : v)}
       >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder={placeholder ?? `All ${label}`} />
+        <SelectTrigger className="w-full min-w-0 max-w-full sm:w-[180px]">
+          <SelectValue placeholder={placeholder ?? `All ${label}`} className="truncate" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>All {label}</SelectItem>

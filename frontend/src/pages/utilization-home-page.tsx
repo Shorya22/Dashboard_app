@@ -81,14 +81,14 @@ export function UtilizationHomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col flex-wrap items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Utilization</h1>
           <p className="text-sm text-muted-foreground">
             Weekly time booking across client and internal work
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex w-full flex-wrap gap-3 sm:w-auto">
           <FilterSelect
             label="Hours Type"
             value={hoursType}

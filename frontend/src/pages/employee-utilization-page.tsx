@@ -198,8 +198,9 @@ function EmployeePickerPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-        <table className="w-full text-sm">
+      <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="sticky top-0 bg-muted/50">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>

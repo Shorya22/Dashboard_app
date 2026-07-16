@@ -21,6 +21,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
@@ -55,6 +56,10 @@ for handler in logging.getLogger().handlers:
 
 app = FastAPI(title=settings.app_name)
 app.state.limiter = limiter
+# Cheap, safe win for JSON payloads (e.g. /roster/employees,
+# /utilization/records with large limits) — only compresses responses
+# above the default 500-byte minimum, so small responses are untouched.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 @app.exception_handler(RateLimitExceeded)

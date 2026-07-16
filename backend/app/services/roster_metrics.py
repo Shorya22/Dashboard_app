@@ -29,6 +29,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.services.calendar import build_available_months
+from app.services.cache_utils import cache_on_df
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ def load_roster(path: str | Path = DEFAULT_ROSTER_PATH) -> pd.DataFrame:
     return df
 
 
+@cache_on_df
 def get_data_quality_warnings(df: pd.DataFrame) -> list[dict]:
     """
     Surface (not fix) known data-quality issues:
@@ -282,6 +284,7 @@ def _resolve_period(
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_active_employees(df: pd.DataFrame) -> int:
     """
     `Active Employees` = CALCULATE([Total Employees], Status = "Active")
@@ -295,6 +298,7 @@ def get_active_employees(df: pd.DataFrame) -> int:
     return get_total_employees(df[df["Status"] == "Active"])
 
 
+@cache_on_df
 def get_inactive_employees(df: pd.DataFrame) -> int:
     """
     `Inactive Employees` = CALCULATE([Total Employees], Status = "Inactive").
@@ -303,6 +307,7 @@ def get_inactive_employees(df: pd.DataFrame) -> int:
     return get_total_employees(df[df["Status"] == "Inactive"])
 
 
+@cache_on_df
 def get_total_employees(df: pd.DataFrame) -> int:
     """
     `Total Employees` = DISTINCTCOUNT('HR MASTER'[NEW_EMP_ID]).
@@ -320,6 +325,7 @@ def get_total_employees(df: pd.DataFrame) -> int:
     return int(df["NEW_EMP_ID"].nunique(dropna=True))
 
 
+@cache_on_df
 def get_active_pct(df: pd.DataFrame) -> float:
     """
     `Active %` — Active Employees / Total Employees * 100.
@@ -337,6 +343,7 @@ def get_active_pct(df: pd.DataFrame) -> float:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_closing_headcount(
     df: pd.DataFrame, period_month: pd.Timestamp | str | None = None
 ) -> int:
@@ -382,6 +389,7 @@ def get_closing_headcount(
     return get_total_employees(df[mask])
 
 
+@cache_on_df
 def get_opening_headcount(
     df: pd.DataFrame, period_month: pd.Timestamp | str | None = None
 ) -> int:
@@ -418,6 +426,7 @@ def get_opening_headcount(
     return get_total_employees(df[mask])
 
 
+@cache_on_df
 def get_joiners(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None) -> int:
     """
     `Joiners` =
@@ -456,6 +465,7 @@ def get_joiners(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None
     return get_total_employees(df[mask])
 
 
+@cache_on_df
 def get_exits(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None) -> int:
     """
     `Exits` =
@@ -483,6 +493,7 @@ def get_exits(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None) 
     return get_total_employees(df[mask])
 
 
+@cache_on_df
 def get_attrition_pct(
     df: pd.DataFrame, period_month: pd.Timestamp | str | None = None
 ) -> float:
@@ -509,6 +520,7 @@ def get_attrition_pct(
     return exits / denom * 100
 
 
+@cache_on_df
 def get_voluntary_leavers(df: pd.DataFrame) -> int:
     """
     `Voluntary Leavers` — count of Inactive rows where
@@ -521,6 +533,7 @@ def get_voluntary_leavers(df: pd.DataFrame) -> int:
     return int((inactive["Reason for Leaving"] == "Voluntary").sum())
 
 
+@cache_on_df
 def get_involuntary_leavers(df: pd.DataFrame) -> int:
     """
     `InVoluntary Leavers` — count of Inactive rows where
@@ -536,6 +549,7 @@ def get_involuntary_leavers(df: pd.DataFrame) -> int:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_gcc_employees(df: pd.DataFrame) -> int:
     """
     `GCC Employees` = CALCULATE([Total Employees], Type = "GCC").
@@ -548,6 +562,7 @@ def get_gcc_employees(df: pd.DataFrame) -> int:
     return get_total_employees(df[df["Type"] == "GCC"])
 
 
+@cache_on_df
 def get_non_gcc_employees(df: pd.DataFrame) -> int:
     """
     `Non GCC Employees` = CALCULATE([Total Employees], Type = "Non GCC").
@@ -561,6 +576,7 @@ def get_non_gcc_employees(df: pd.DataFrame) -> int:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_average_experience_yrs(df: pd.DataFrame) -> float:
     """
     `Average Experience (Yrs)` — mean of `Total Experience` over active
@@ -575,6 +591,7 @@ def get_average_experience_yrs(df: pd.DataFrame) -> float:
     return float(active["Total Experience"].mean())
 
 
+@cache_on_df
 def get_average_hexaware_experience(df: pd.DataFrame) -> float:
     """
     `Average Hexaware Experience` — mean of `Hexaware Experience (Years)`
@@ -593,6 +610,7 @@ def get_average_hexaware_experience(df: pd.DataFrame) -> float:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_pending_mapping_count(df: pd.DataFrame) -> int:
     """
     `Pending Mapping Count` =
@@ -647,6 +665,7 @@ def get_pending_mapping_count(df: pd.DataFrame) -> int:
     return get_total_employees(df[mask])
 
 
+@cache_on_df
 def get_clients_covered(df: pd.DataFrame) -> int:
     """
     `Clients Covered` =
@@ -668,6 +687,7 @@ def get_clients_covered(df: pd.DataFrame) -> int:
     return int(client[mask].nunique(dropna=True))
 
 
+@cache_on_df
 def get_projects(df: pd.DataFrame) -> int:
     """
     `Projects` (HR MASTER version) = DISTINCTCOUNT('HR MASTER'[Client as
@@ -687,6 +707,7 @@ def get_projects(df: pd.DataFrame) -> int:
     return int(df["Client as on June 2026"].nunique(dropna=True))
 
 
+@cache_on_df
 def get_senior_lead_employees(df: pd.DataFrame) -> int:
     """
     `Senior - Lead Employees` =
@@ -746,6 +767,7 @@ def get_senior_lead_employees(df: pd.DataFrame) -> int:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_strategic_pool(df: pd.DataFrame) -> int:
     """
     `Strategic Pool` =
@@ -775,6 +797,7 @@ def get_strategic_pool(df: pd.DataFrame) -> int:
     return get_total_employees(df[blank_mask])
 
 
+@cache_on_df
 def get_departments(df: pd.DataFrame) -> int:
     """
     `Departments` = DISTINCTCOUNT('HR MASTER'[Designation ])
@@ -808,6 +831,7 @@ def get_departments(df: pd.DataFrame) -> int:
     return int(normalized.nunique(dropna=True))
 
 
+@cache_on_df
 def get_skills_covered(df: pd.DataFrame) -> int:
     """
     NEWLY ADDED (2026-07-16).
@@ -836,6 +860,7 @@ def get_skills_covered(df: pd.DataFrame) -> int:
     return int(skill[mask].nunique())
 
 
+@cache_on_df
 def get_workforce_category_split(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the Main/Home page's "Workforce Category" donut (Active vs
@@ -863,6 +888,7 @@ def get_workforce_category_split(df: pd.DataFrame) -> dict[str, int]:
     }
 
 
+@cache_on_df
 def get_status_split(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the HR Portal Home "Status Split" donut — Active vs Inactive,
@@ -877,6 +903,7 @@ def get_status_split(df: pd.DataFrame) -> dict[str, int]:
     }
 
 
+@cache_on_df
 def get_workforce_by_type(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the "Workforce by Type" / "GCC vs Non-GCC" donuts (Main page
@@ -903,6 +930,7 @@ def get_workforce_by_type(df: pd.DataFrame) -> dict[str, int]:
     }
 
 
+@cache_on_df
 def get_headcount_by_region(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the HR Portal Home "Headcount by Region" bar chart — distinct
@@ -924,6 +952,7 @@ def get_headcount_by_region(df: pd.DataFrame) -> dict[str, int]:
     }
 
 
+@cache_on_df
 def get_workforce_by_working_entity(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the HR Portal Home "Workforce by Working Entity" donut —
@@ -974,6 +1003,7 @@ def _normalize_designation_label(value: str) -> str:
     return _normalize_seniority_label(value)
 
 
+@cache_on_df
 def get_headcount_by_seniority(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the Workforce page "Headcount by Seniority" bar chart — distinct
@@ -1035,6 +1065,7 @@ def _experience_band(total_experience: float) -> str:
     return "8+ Years"
 
 
+@cache_on_df
 def get_workforce_by_experience_band(df: pd.DataFrame) -> dict[str, int]:
     """
     PROVISIONAL (see `_experience_band` docstring) — backs both the
@@ -1102,6 +1133,7 @@ def _seniority_category(seniorirty_level: str | float) -> str:
     return "Other"
 
 
+@cache_on_df
 def get_workforce_by_seniority_category(df: pd.DataFrame) -> dict[str, int]:
     """
     PROVISIONAL (see `_seniority_category` docstring) — backs any
@@ -1121,6 +1153,7 @@ def get_workforce_by_seniority_category(df: pd.DataFrame) -> dict[str, int]:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_month_wise_closing_headcount(df: pd.DataFrame) -> list[dict]:
     """
     Backs the Main/Home "Month wise Workforce Growth" line chart and the
@@ -1144,6 +1177,7 @@ def get_month_wise_closing_headcount(df: pd.DataFrame) -> list[dict]:
     ]
 
 
+@cache_on_df
 def get_monthly_joiners_vs_leavers(df: pd.DataFrame) -> list[dict]:
     """
     Backs the HR Analytics "Monthly Joiners vs Leavers" bar chart —
@@ -1166,6 +1200,7 @@ def get_monthly_joiners_vs_leavers(df: pd.DataFrame) -> list[dict]:
     ]
 
 
+@cache_on_df
 def get_month_wise_resignation(df: pd.DataFrame) -> list[dict]:
     """
     Backs the HR Analytics drill-down "Month-Wise Resignation" bar
@@ -1181,6 +1216,7 @@ def get_month_wise_resignation(df: pd.DataFrame) -> list[dict]:
     ]
 
 
+@cache_on_df
 def get_voluntary_involuntary_split(df: pd.DataFrame) -> dict[str, int]:
     """
     Backs the HR Analytics drill-down "Voluntary-Involuntary Split"
@@ -1211,6 +1247,7 @@ EXITS_TABLE_COLUMNS = {
 }
 
 
+@cache_on_df
 def get_exits_table(df: pd.DataFrame) -> list[dict]:
     """
     Backs the HR Analytics drill-down exits data table (NAME,
@@ -1273,6 +1310,7 @@ def _skill_crosstab(df: pd.DataFrame, dimension: pd.Series, dimension_name: str)
     ]
 
 
+@cache_on_df
 def get_skill_bifurcation_by_experience_band(df: pd.DataFrame) -> list[dict]:
     """
     PROVISIONAL (inherits `_experience_band`'s unconfirmed bucket
@@ -1284,6 +1322,7 @@ def get_skill_bifurcation_by_experience_band(df: pd.DataFrame) -> list[dict]:
     return _skill_crosstab(df, bands, "experience_band")
 
 
+@cache_on_df
 def get_skill_bifurcation_by_seniority_category(df: pd.DataFrame) -> list[dict]:
     """
     PROVISIONAL (inherits `_seniority_category`'s unconfirmed mapping) —
@@ -1295,6 +1334,7 @@ def get_skill_bifurcation_by_seniority_category(df: pd.DataFrame) -> list[dict]:
     return _skill_crosstab(df, categories, "seniority_category")
 
 
+@cache_on_df
 def get_skill_bifurcation_by_region(df: pd.DataFrame) -> list[dict]:
     """
     Backs the Skills & Experience "Skill Bifurcation by Region" stacked
@@ -1311,6 +1351,7 @@ def get_skill_bifurcation_by_region(df: pd.DataFrame) -> list[dict]:
 # --------------------------------------------------------------------------
 
 
+@cache_on_df
 def get_workforce_details_by_region(df: pd.DataFrame) -> list[dict]:
     """
     Backs the Workforce page "Workforce Details by Region" small
@@ -1367,6 +1408,7 @@ EMPLOYEE_DIRECTORY_COLUMNS = {
 }
 
 
+@cache_on_df
 def get_employee_directory(df: pd.DataFrame) -> list[dict]:
     """
     Backs the Employee Directory page's full searchable/paginated table.

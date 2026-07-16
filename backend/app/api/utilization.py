@@ -30,7 +30,11 @@ from app.models.utilization import (
     WeeklyHoursTrend,
 )
 from app.services import booking_metrics, utilization_metrics
-from app.services.data_loader import get_booking_df, get_utilization_ground_truth_df
+from app.services.data_loader import (
+    get_booking_df,
+    get_booking_df_prepared,
+    get_utilization_ground_truth_df,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +125,7 @@ def utilization_records(
     across fields. See `booking_metrics.get_filtered_records` docstring.
     """
     try:
-        df = get_booking_df()
+        df = get_booking_df_prepared()
         filtered = booking_metrics.get_filtered_records(
             df,
             week=week,

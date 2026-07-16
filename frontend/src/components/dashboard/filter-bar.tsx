@@ -15,9 +15,9 @@ interface FilterBarProps {
  * rule. */
 export function FilterBar({ filters, values, onChange }: FilterBarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card">
+    <div className="flex flex-col flex-wrap items-stretch gap-3 rounded-2xl border border-border bg-card p-3 shadow-card sm:flex-row sm:items-center">
       {filters.map((f) => (
-        <div key={f.key} className="flex items-center gap-2">
+        <div key={f.key} className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none sm:flex-row sm:items-center sm:gap-2">
           <label htmlFor={`filter-${f.key}`} className="text-xs font-medium text-muted-foreground">
             {f.label}
           </label>
@@ -25,7 +25,7 @@ export function FilterBar({ filters, values, onChange }: FilterBarProps) {
             id={`filter-${f.key}`}
             value={values[f.key] ?? ALL}
             onChange={(e) => onChange(f.key, e.target.value)}
-            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            className="w-full min-w-0 max-w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm sm:w-auto sm:max-w-[220px]"
           >
             {f.options.map((opt) => (
               <option key={opt.value} value={opt.value}>

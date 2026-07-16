@@ -448,6 +448,91 @@ DONE — Employee/Project Utilization now directly reachable
      continues correctly across pages (not restarting), search resets
      to page 1.
 
-=== NOT YET DONE ===
-   - Page 13 (Utilization Overview): passed earlier audit cleanly, not
-     yet re-checked with data-label standard (last remaining page)
+PAGE 13 — Utilization Overview (/utilization/overview-summary) — DONE
+   Final page in the 13-page sweep. Earlier audit said clean; deep
+   re-check found 2 real issues anyway (consistent with every other
+   page in this project).
+   FINDING: still using Tremor's default hover-only charts (last page
+   not yet converted to the permanent-label standard).
+   FIX: converted all 3 charts to CustomLineChart/CustomDonutChart/
+   CustomBarChart.
+   FINDING: 41-employee ranking chart — all 41 bars were technically
+   present in the DOM but rendered as ~11px unreadable slivers at
+   normal chart height (legibility bug, not a truncation bug).
+   FIX: wrapped in a scrollable container with fixed per-bar height,
+   verified all 41 bars now legible and reachable by scrolling.
+   FIX: applied truncate+tooltip to long employee names.
+   RE-CONFIRMED CLEAN: KPIs match API exactly (71.4%/41/69.1%, no
+   cross-wiring with roster's 47 or booking's 46), Utilization Split
+   thresholds still correctly flagged PROVISIONAL.
+
+=== ALL 13 PAGES COMPLETE — full reference-parity sweep done ===
+
+POST-SWEEP FEATURE — Employee/Project Utilization sidebar pickers
+   See "DONE — Employee/Project Utilization now directly reachable"
+   section above for full details (sidebar entries, searchable
+   consolidated summary tables, serial numbers, pagination).
+
+MOBILE RESPONSIVENESS — full pass across all pages
+   FINDING: app was built desktop-first; component-catalog.md already
+   specified "sidebar collapses to a drawer below ~1024px" but this
+   was never implemented.
+   FIX: sidebar now a proper off-canvas drawer below 1024px (slide
+   animation, backdrop, hamburger menu, auto-closes on nav). Most
+   other responsive patterns (KPI grids, tables, filter bars) were
+   already reasonably in place from earlier work.
+   BONUS FIND: Filters panel (Results/Employee/Project Utilization)
+   was genuinely broken on narrow screens — squeezed main content
+   into an overlapping, illegible state when opened. Fixed by
+   converting it to its own slide-in drawer at mobile widths, same
+   pattern as the sidebar.
+   VERIFIED at 375px/768px/1440px across all major pages: zero
+   horizontal overflow, sidebar drawer works, tables scroll within
+   their own container. Zero console errors, tsc clean.
+
+BACKEND PERFORMANCE OPTIMIZATION — evidence-based, measured
+   Profiled BEFORE optimizing (100 concurrent requests):
+   - /roster/skills: 514ms wall time
+   - /utilization/records (limit=500): 4093ms wall time (worst)
+   - /roster/employees: 453ms
+   - /utilization/overview: 471ms
+
+   REAL BUG FOUND: a genuine race condition in data_loader.py — two
+   concurrent requests hitting a cold cache could both trigger a
+   duplicate Excel re-read. Fixed with a threading.Lock.
+
+   FIX: added a cache_on_df decorator (~40 functions across roster/
+   booking/utilization_metrics) caching aggregation results keyed on
+   DataFrame identity. TRICKY BUG CAUGHT DURING TESTING: naive id(df)
+   keying broke 4 tests because Python can recycle a garbage-collected
+   object's memory address for a new unrelated DataFrame — fixed by
+   storing a strong reference alongside each cache entry and verifying
+   identity on lookup.
+
+   BIGGEST WIN: rewrote records_to_dicts from .iterrows() (measured as
+   ~25ms of the ~41ms response time — the single biggest hotspot) to
+   vectorized column-wise operations. /utilization/records went from
+   44.0ms mean to 17.5ms mean per request.
+
+   Also added: GZipMiddleware for large JSON payloads. Reviewed
+   SQLAlchemy/SQLite connection settings — already correct, no change
+   needed (SQLite is auth-only, not the main data path).
+
+   AFTER optimization (same 100-concurrent test):
+   - /roster/skills: 514ms -> 186ms (2.8x, 195->537 req/s)
+   - /utilization/records: 4093ms -> 1198ms (3.4x, biggest win)
+   - /roster/employees: 453ms -> 390ms
+   - /utilization/overview: 471ms -> 403ms
+   Mixed 100-concurrent-user simulation across all 4 endpoints: 459ms
+   total wall time.
+
+   REDIS DECISION: evaluated, NOT added. Reasoning: single uvicorn
+   process, no multi-worker/Docker deployment yet (Phase 7, still
+   local-dev), ~1600 total rows of cacheable data. In-process caching
+   gives sub-millisecond hits with zero network/serialization
+   overhead; Redis would add real operational complexity (separate
+   service to run/monitor/secure) for no measurable benefit at this
+   scale. Revisit only if a future phase introduces multi-worker/
+   multi-container deployment.
+
+   144/144 tests pass after all changes.

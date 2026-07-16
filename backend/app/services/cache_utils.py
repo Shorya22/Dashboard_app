@@ -24,10 +24,10 @@ Why this exists / caching-key strategy:
   calls needed on reload).
 - Trade-off accepted for this app's scale (three DataFrames, reloaded
   rarely, single process): stale entries from a since-replaced
-  DataFrame stay in the dict until process restart (a small, bounded
-  memory cost — not a correctness problem, since they're never looked
-  up again by the new object's id). Not worth a weakref/LRU eviction
-  scheme at this data size.
+  DataFrame stay in the dict (and keep that old DataFrame alive) until
+  process restart — a small, bounded memory cost, never a correctness
+  problem, since they're never looked up again by the new object's id.
+  Not worth a weakref/LRU eviction scheme at this data size.
 """
 
 from __future__ import annotations
@@ -50,18 +50,32 @@ def cache_on_df(fn: F) -> F:
     extra arguments (e.g. raw lists) without converting them to tuples
     first.
     """
-    cache: dict[tuple, Any] = {}
+    # Each entry stores (df_reference, result). Keeping a strong reference
+    # to the DataFrame alongside its cached result is required for
+    # correctness, not just a memory nicety: `id()` is only guaranteed
+    # unique among *currently alive* objects. If a DataFrame were allowed
+    # to be garbage-collected while its id() is still a cache key, Python
+    # can (and, empirically, quickly does — e.g. across pytest fixtures
+    # that build many short-lived small DataFrames) reuse that same
+    # address for an unrelated new DataFrame, which would then silently
+    # hit a stale cache entry belonging to different data. Storing the
+    # reference keeps the object alive for as long as its cache entry
+    # exists, so its id() can never be recycled out from under us; the
+    # `cached_df is df` check on lookup is a second, explicit guard
+    # against exactly that hazard.
+    cache: dict[tuple, tuple[Any, Any]] = {}
     lock = threading.Lock()
 
     @functools.wraps(fn)
     def wrapper(df, *args: Any, **kwargs: Any) -> Any:
         key = (id(df), args, tuple(sorted(kwargs.items())))
         with lock:
-            if key in cache:
-                return cache[key]
+            entry = cache.get(key)
+            if entry is not None and entry[0] is df:
+                return entry[1]
         result = fn(df, *args, **kwargs)
         with lock:
-            cache[key] = result
+            cache[key] = (df, result)
         return result
 
     def cache_clear() -> None:
