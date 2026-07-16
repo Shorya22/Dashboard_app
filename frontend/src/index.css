@@ -5,19 +5,23 @@
 @layer base {
   :root {
     /* DEPT | Hexaware confirmed brand hex (see dashboard-design/brand-colors.md):
-       orange #EE6C24 dominant, Hexaware blue #3C2CDA structural/secondary,
-       navy #040D43/#07125E, error #DA2D2C, silver #8088A7 muted text,
-       border light #CBD0E5. Converted to HSL so the rendered color matches
-       the hex exactly. */
+       Hexaware blue #3C2CDA is the DOMINANT color as of the 2026-07-16
+       design pass (primary chart series, KPI icon default, nav active
+       indicator, CTAs, header accent). DEPT orange #EE6C24 is now a
+       minimal, deliberate identity accent reserved for the DEPT logo
+       itself / at most one small badge — it is intentionally out of the
+       chart-series and repeated-chrome rotation. navy #040D43/#07125E,
+       error #DA2D2C, silver #8088A7 muted text, border light #CBD0E5.
+       Converted to HSL so the rendered color matches the hex exactly. */
     --background: 225 13% 94%; /* #EEEFF2 Light */
     --foreground: 231 89% 14%; /* #040D43 Black/navy */
     --card: 240 8% 97%; /* #F8F8F9 White (card surface) */
     --card-foreground: 231 89% 14%;
     --popover: 240 8% 97%;
     --popover-foreground: 231 89% 14%;
-    --primary: 246 70% 51%; /* #3C2CDA Hexaware blue — structural/secondary (sidebar active, links) */
+    --primary: 246 70% 51%; /* #3C2CDA Hexaware blue — DOMINANT (CTAs, primary chart series, header/nav accent) */
     --primary-foreground: 0 0% 100%;
-    --accent-orange: 21 86% 54%; /* #EE6C24 DEPT orange — dominant (CTAs, primary chart series, header accent) */
+    --accent-orange: 21 86% 54%; /* #EE6C24 DEPT orange — minimal identity accent (logo only / one small badge) */
     --accent-orange-foreground: 0 0% 100%;
     --secondary: 228 20% 93%;
     --secondary-foreground: 231 30% 16%;

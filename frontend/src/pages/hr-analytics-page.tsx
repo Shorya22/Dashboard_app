@@ -1,5 +1,5 @@
 import { Users, UserCheck, UserX, UserPlus, UserMinus, TrendingDown, Layers } from 'lucide-react'
-import { BarChart, DonutChart, Legend } from '@tremor/react'
+import { BarChart, Legend } from '@tremor/react'
 import {
   flexRender,
   getCoreRowModel,
@@ -12,10 +12,12 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomLineChart } from '@/components/dashboard/custom-line-chart'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
+import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
 import { FullLabelTooltip } from '@/components/dashboard/full-label-tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { type EmployeeRecord } from '@/lib/roster-api'
 import { VOLUNTARY_COLORS, colorsForLabels } from '@/lib/chart-colors'
+import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { applyEmployeeFilters } from '@/lib/employee-filters'
 import { useHrAnalyticsFilters } from '@/lib/use-hr-analytics-filters'
 
@@ -172,7 +174,7 @@ export function HrAnalyticsPage() {
           provisional
           provisionalNote="Attrition % measure is PROVISIONAL, see the data-model skill. Also not affected by the filters above — see in-code note."
           icon={TrendingDown}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Closing Headcount"
@@ -196,7 +198,7 @@ export function HrAnalyticsPage() {
             data={headcountData}
             index="month"
             category="Closing Headcount"
-            color="orange"
+            color="indigo"
             yAxisLabel="Employees"
             xAxisLabel="Month"
             className="h-full"
@@ -213,8 +215,8 @@ export function HrAnalyticsPage() {
             data={joinersLeaversData}
             index="month"
             series={[
-              { category: 'Joiners', color: 'orange' },
-              { category: 'Exits', color: 'blue' },
+              { category: 'Joiners', color: 'indigo' },
+              { category: 'Exits', color: 'slate' },
             ]}
             yAxisLabel="Employees"
             xAxisLabel="Month"
@@ -254,14 +256,10 @@ export function HrAnalyticsPage() {
             isEmpty={voluntaryData.length === 0}
           >
             <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-              <DonutChart
+              <CustomDonutChart
                 data={voluntaryData}
-                category="value"
-                index="name"
                 colors={voluntaryColors}
-                customTooltip={FullLabelTooltip}
-                showAnimation
-                animationDuration={1000}
+                totalLabel="Exits"
                 className="h-44"
               />
               <div className="flex w-full justify-center">
@@ -274,8 +272,7 @@ export function HrAnalyticsPage() {
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Employees</h2>
-        <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
+        <TableScrollContainer>
           <table className="w-full min-w-[720px] text-sm">
             <thead className="sticky top-0 bg-muted/50">
               {table.getHeaderGroups().map((hg) => (
@@ -324,7 +321,7 @@ export function HrAnalyticsPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScrollContainer>
       </div>
     </div>
   )

@@ -15,8 +15,6 @@ import {
 import { CommandMenu } from './command-menu'
 import { useAuth } from '@/lib/auth-context'
 import { apiClient } from '@/lib/api-client'
-import logoDept from '@/assets/logo-dept.svg'
-import logoHexaware from '@/assets/Blue Logo.png'
 
 export function Topbar({
   title,
@@ -26,7 +24,7 @@ export function Topbar({
   title: string
   /**
    * 'home' renders the reference PDF's distinctive full-width DEPT|HEXAWARE
-   * banner (navy bar + orange tagline bar) instead of the standard topbar
+   * banner (navy bar + primary-blue tagline bar) instead of the standard topbar
    * title. This is Home-route-only per the design gap fix — every other
    * route keeps the standard topbar. Functional controls (search,
    * notifications, user menu) stay identical in both variants.
@@ -95,7 +93,7 @@ export function Topbar({
         }
       >
         <Bell className="h-4 w-4" />
-        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-accent-orange" />
+        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary" />
       </Button>
 
       <div className={variant === 'home' ? 'mx-1 h-6 w-px bg-white/30' : 'mx-1 h-6 w-px bg-border'} />
@@ -148,20 +146,19 @@ export function Topbar({
   if (variant === 'home') {
     return (
       <header className="flex shrink-0 flex-col">
+        {/* Logo lockup intentionally omitted here — the sidebar already
+            renders the DEPT | Hexaware branding once per screen, so this
+            home-variant bar keeps only the tagline/actions row. */}
         <div className="flex items-center justify-between gap-2 bg-[#040D43] px-3 py-3 sm:gap-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {menuButton}
-            <img src={logoDept} alt="DEPT" className="h-6 w-6 shrink-0 invert" />
-            <img src={logoHexaware} alt="Hexaware" className="hidden h-6 w-auto shrink-0 sm:block" />
-            <span className="truncate text-base tracking-tight text-white sm:text-lg">
-              <span className="font-extrabold">DEPT</span>
-              <span className="mx-1 font-light text-white/50 sm:mx-2">|</span>
-              <span className="italic font-medium">HEXAWARE</span>
+            <span className="truncate text-base font-semibold tracking-tight text-white sm:text-lg">
+              {title}
             </span>
           </div>
           {controls}
         </div>
-        <div className="flex h-9 w-full items-center justify-center bg-accent-orange px-3 sm:px-6">
+        <div className="flex h-9 w-full items-center justify-center bg-primary px-3 sm:px-6">
           <p className="truncate text-[11px] font-medium tracking-wide text-white sm:text-sm">
             Connected People. Smarter Delivery Decisions.
           </p>
@@ -172,7 +169,7 @@ export function Topbar({
 
   return (
     <header className="flex shrink-0 flex-col border-b border-border bg-card/80 backdrop-blur">
-      <div className="h-1 w-full bg-accent-orange" />
+      <div className="h-1 w-full bg-primary" />
       <div className="flex h-[60px] items-center justify-between gap-2 px-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           {menuButton}

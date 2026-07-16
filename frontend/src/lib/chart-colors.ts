@@ -2,33 +2,38 @@
 // category (e.g. "EMEA", "GCC") always renders in the same color across
 // every chart on every page, per the dashboard-design skill's color rules.
 
-// DEPT orange is the confirmed DOMINANT brand color (main series, primary
-// donut segments); Hexaware blue/indigo is SECONDARY/structural (comparison
-// series, neutral counterpart). See dashboard-design/brand-colors.md.
+// Hexaware blue/indigo is the confirmed DOMINANT brand color as of the
+// 2026-07-16 design pass (main series, primary donut segments, KPI icon
+// default, nav/header accent). DEPT orange is now a minimal, deliberate
+// identity accent reserved for the DEPT logo itself / at most one small
+// badge — it is intentionally excluded from chart series and repeated
+// chrome. See dashboard-design/brand-colors.md.
 // Note: Tremor only accepts its own named Tailwind color tokens here (no
-// arbitrary hex), so 'orange' / 'indigo' are the closest built-in tokens to
-// the confirmed #EE6C24 / #3C2CDA hexes — CSS-variable-driven chrome (sidebar,
-// buttons, header) uses the exact hex, but chart series color is limited to
-// Tremor's palette.
-export const PRIMARY_COLOR = 'orange' // primary metric accent, reused everywhere
+// arbitrary hex), so 'indigo' is the closest built-in token to the
+// confirmed #3C2CDA hex — CSS-variable-driven chrome (sidebar, buttons,
+// header) uses the exact hex, but chart series color is limited to
+// Tremor's palette. Saturated tokens (orange, amber, fuchsia) are avoided
+// in category rotations in favor of softer blue-family tones for
+// readability, while keeping every category visually distinct.
+export const PRIMARY_COLOR = 'indigo' // primary metric accent, reused everywhere
 
 // Region colors — stable across Home / Workforce / Skills pages
 export const REGION_COLORS: Record<string, string> = {
-  AMER: 'orange',
-  EMEA: 'indigo',
-  APAC: 'amber',
-  Hexaware: 'cyan',
+  AMER: 'indigo',
+  EMEA: 'sky',
+  APAC: 'cyan',
+  Hexaware: 'violet',
   'Region TBD': 'gray',
 }
 
 export const TYPE_COLORS: Record<string, string> = {
-  GCC: 'orange',
-  'Non GCC': 'indigo',
+  GCC: 'indigo',
+  'Non GCC': 'slate',
 }
 
 export const WORKFORCE_CATEGORY_COLORS: Record<string, string> = {
-  Active: 'orange',
-  'Strategic Pool': 'indigo',
+  Active: 'indigo',
+  'Strategic Pool': 'sky',
 }
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -40,10 +45,10 @@ export const STATUS_COLORS: Record<string, string> = {
 // (a Power BI source-title/legend mismatch we replicate as-is, see
 // dashboard-design skill notes) and Workforce/Skills pages.
 export const SENIORITY_CATEGORY_COLORS: Record<string, string> = {
-  Senior: 'orange',
-  Lead: 'indigo',
-  Mid: 'amber',
-  Other: 'cyan',
+  Senior: 'indigo',
+  Lead: 'sky',
+  Mid: 'cyan',
+  Other: 'violet',
   TBD: 'gray',
 }
 
@@ -52,13 +57,13 @@ export const VOLUNTARY_COLORS: Record<string, string> = {
   Involuntary: 'red',
 }
 
-// Utilization portal — Client Hours is the dominant orange metric,
-// Internal Hours is the secondary/structural blue, stable everywhere.
+// Utilization portal — Client Hours is the dominant blue metric,
+// Internal Hours is the secondary/neutral slate, stable everywhere.
 export const HOURS_TYPE_COLORS: Record<string, string> = {
-  'Client Hours': 'orange',
-  'Internal Hours': 'indigo',
-  client_hours: 'orange',
-  internal_hours: 'indigo',
+  'Client Hours': 'indigo',
+  'Internal Hours': 'slate',
+  client_hours: 'indigo',
+  internal_hours: 'slate',
 }
 
 export const UTILIZATION_SPLIT_COLORS: Record<string, string> = {
@@ -68,16 +73,16 @@ export const UTILIZATION_SPLIT_COLORS: Record<string, string> = {
 }
 
 export const CATEGORY_COLORS = [
-  'orange',
   'indigo',
-  'amber',
-  'emerald',
+  'sky',
   'cyan',
-  'rose',
   'violet',
-  'lime',
-  'fuchsia',
+  'slate',
   'blue',
+  'emerald',
+  'rose',
+  'lime',
+  'gray',
 ] as const
 
 /** Deterministic color for an arbitrary category label not covered by a
@@ -111,6 +116,8 @@ export const TREMOR_HEX: Record<string, string> = {
   fuchsia: '#d946ef',
   blue: '#3b82f6',
   rose: '#f43f5e',
+  sky: '#0ea5e9',
+  slate: '#64748b',
 }
 
 export function tremorHex(token: string): string {

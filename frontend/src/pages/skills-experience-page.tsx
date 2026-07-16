@@ -190,7 +190,7 @@ export function SkillsExperiencePage() {
           value={isLoading ? '—' : departmentsCount}
           loading={isLoading}
           icon={Building2}
-          iconTone="orange"
+          iconTone="blue"
         />
       </div>
 
@@ -286,7 +286,7 @@ export function SkillsExperiencePage() {
             data={experienceBandData}
             index="name"
             categories={['value']}
-            colors={['orange']}
+            colors={['indigo']}
             yAxisLabel="Employees"
             xAxisLabel="Experience Band"
             showLegend={false}

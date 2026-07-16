@@ -133,7 +133,7 @@ export function HrPortalHomePage() {
           value={isLoading ? '—' : departmentsCount}
           loading={isLoading}
           icon={Building2}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Projects"
@@ -179,7 +179,7 @@ export function HrPortalHomePage() {
             data={regionData}
             index="name"
             category="value"
-            color="orange"
+            color="indigo"
             yAxisLabel="Employees"
             xAxisLabel="Region"
             className="h-full"
@@ -199,7 +199,7 @@ export function HrPortalHomePage() {
             data={entityData}
             index="name"
             category="value"
-            color="orange"
+            color="indigo"
             layout="vertical"
             yAxisLabel="Entity"
             xAxisLabel="Employees"
@@ -220,7 +220,7 @@ export function HrPortalHomePage() {
             data={experienceBandData}
             index="name"
             category="value"
-            color="orange"
+            color="indigo"
             yAxisLabel="Employees"
             xAxisLabel="Experience Band"
             className="h-full"

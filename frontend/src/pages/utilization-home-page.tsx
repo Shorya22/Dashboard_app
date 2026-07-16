@@ -88,7 +88,7 @@ export function UtilizationHomePage() {
             Weekly time booking across client and internal work
           </p>
         </div>
-        <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+        <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
           <FilterSelect
             label="Hours Type"
             value={hoursType}
@@ -129,14 +129,14 @@ export function UtilizationHomePage() {
           value={summary ? summary.total_hours.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
           loading={isLoading}
           icon={Clock}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Client Hours"
           value={summary ? summary.client_hours.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
           loading={isLoading}
           icon={Briefcase}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Internal Hours"
@@ -166,7 +166,7 @@ export function UtilizationHomePage() {
             data={weeklyData}
             index="week"
             categories={['Client Hours', 'Internal Hours']}
-            colors={['orange', 'indigo']}
+            colors={['indigo', 'slate']}
             yAxisLabel="Hours"
             xAxisLabel="Week"
             showLegend
@@ -188,7 +188,7 @@ export function UtilizationHomePage() {
             data={regionMarketData}
             index="name"
             category="value"
-            color="orange"
+            color="indigo"
             yAxisLabel="Hours"
             xAxisLabel="Region/Market"
             className="h-full"

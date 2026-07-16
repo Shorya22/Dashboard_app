@@ -107,7 +107,7 @@ export function HomePage() {
           value={breakdowns.data?.strategic_pool ?? '—'}
           loading={breakdowns.isLoading}
           icon={Target}
-          iconTone="orange"
+          iconTone="blue"
         />
       </div>
 
@@ -124,7 +124,7 @@ export function HomePage() {
           data={growthData}
           index="month"
           category="Closing Headcount"
-          color="orange"
+          color="indigo"
           yAxisLabel="Employees"
           xAxisLabel="Month"
           className="h-full"
@@ -146,6 +146,7 @@ export function HomePage() {
           <CustomDonutChart
             data={utilizationSplitData}
             colors={utilizationSplitColors}
+            totalLabel="Total Hours"
             className="h-full"
           />
         </ChartCard>
@@ -190,7 +191,7 @@ export function HomePage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-orange/10 text-accent-orange">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Building2 className="h-5 w-5" />
               </span>
               <div>
@@ -220,7 +221,7 @@ export function HomePage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-orange/10 text-accent-orange">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Clock className="h-5 w-5" />
               </span>
               <div>

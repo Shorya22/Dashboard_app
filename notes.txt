@@ -536,3 +536,47 @@ BACKEND PERFORMANCE OPTIMIZATION — evidence-based, measured
    multi-container deployment.
 
    144/144 tests pass after all changes.
+
+DOCKER + PUBLIC TUNNEL — done, on dev branch
+   Containerized backend (FastAPI) + frontend (React/Vite + nginx) via
+   docker-compose.yml, with a cloudflared service for a public testing
+   URL. Verified end-to-end: containers healthy, login works through
+   the tunnel, data persists across restart (SQLite volume-mounted).
+   Quick-tunnel mode works immediately but URL rotates on restart
+   (confirmed happened once already, mid-session). Named/stable tunnel
+   mode is built and documented (DOCKER.md) but needs the user's own
+   Cloudflare account token to activate — not something I can do for
+   them.
+   Local dev ports set to 3000 (frontend) / 5000 (backend), kept
+   separate from Docker's 8080/8000 so both can run simultaneously
+   without conflict. Saved to persistent memory (not just this
+   session) since it wasn't documented anywhere in the repo yet.
+   Committed to `dev` branch (new branch off master), pushed to
+   origin. All future work happens on `dev`, not master.
+
+MOBILE RESPONSIVENESS — round 2, real bugs found after "verified" round 1
+   FINDING: user found 2 real bugs via actual mobile screenshots that
+   the earlier automated scrollWidth-based verification completely
+   missed — a lesson that automated width checks aren't sufficient,
+   need real visual screenshot review too.
+   FINDING 1 (filter overflow): NOT actually on HR Analytics as
+   initially suspected — the real bug was on Utilization Home, where
+   a flex-wrap layout with min-w-0 let flex-shrink win over wrapping,
+   compressing all 4 filters onto one illegible truncated line instead
+   of stacking on mobile.
+   FIX: switched to a grid layout that properly stacks one filter per
+   row below the sm breakpoint.
+   FINDING 2 (table scroll affordance, much broader than reported):
+   a genuine copy-paste bug affecting 6 table instances across 5 pages
+   (Employee Directory, HR Analytics, Results, Employee Utilization,
+   Project Utilization x2). The "scroll for more" fade indicator was
+   nested INSIDE the scrolling container itself, so it was anchored to
+   the end of the scrolled content, not the visible screen edge —
+   invisible until the user had already scrolled all the way through.
+   Tables were actually functionally scrollable the whole time, just
+   had no visible hint that they were.
+   FIX: built a shared TableScrollContainer component (fade as a
+   sibling of the scroll container, tracks real scroll position via
+   listener + ResizeObserver) and applied it to all 6 instances.
+   Full 390px screenshot sweep across every page (not just automated
+   checks) found nothing else. tsc clean, zero console errors.

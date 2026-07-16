@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
+import { StatusFooter } from './status-footer'
 
 const pageTitles: Record<string, string> = {
   '/': 'Home',
@@ -45,6 +46,7 @@ export function AppLayout() {
             </motion.div>
           </AnimatePresence>
         </main>
+        <StatusFooter />
       </div>
     </div>
   )

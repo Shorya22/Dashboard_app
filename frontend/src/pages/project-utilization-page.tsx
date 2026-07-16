@@ -17,6 +17,7 @@ import { FiltersPanel } from '@/components/dashboard/filters-panel'
 import { Input } from '@/components/ui/input'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import { Skeleton } from '@/components/ui/skeleton'
+import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import {
   useProjectUtilization,
   useUtilizationRecordsAll,
@@ -140,7 +141,7 @@ function ProjectPickerPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-orange/10 text-accent-orange">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <FolderKanban className="h-5 w-5" />
         </span>
         <div>
@@ -178,8 +179,7 @@ function ProjectPickerPage() {
         </div>
       </div>
 
-      <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
+      <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
           <thead className="sticky top-0 bg-muted/50">
             {table.getHeaderGroups().map((hg) => (
@@ -237,7 +237,7 @@ function ProjectPickerPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableScrollContainer>
 
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">
@@ -428,14 +428,14 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
           value={query.data ? query.data.total_hours.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
           loading={query.isLoading}
           icon={Clock}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Client Hours"
           value={query.data ? query.data.client_hours.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
           loading={query.isLoading}
           icon={Briefcase}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Internal Hours"
@@ -457,7 +457,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
             data={employeeData}
             index="name"
             series={[
-              { category: 'Client Hours', color: 'orange' },
+              { category: 'Client Hours', color: 'indigo' },
               { category: 'Internal Hours', color: 'indigo' },
             ]}
             yAxisLabel="Hours"
@@ -478,7 +478,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
             data={weekData}
             index="week"
             series={[
-              { category: 'Client Hours', color: 'orange' },
+              { category: 'Client Hours', color: 'indigo' },
               { category: 'Internal Hours', color: 'indigo' },
             ]}
             yAxisLabel="Hours"
@@ -491,8 +491,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Detail</h2>
-        <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
+        <TableScrollContainer>
           <table className="w-full min-w-[720px] text-sm">
             <thead className="sticky top-0 bg-muted/50">
               {table.getHeaderGroups().map((hg) => (
@@ -541,7 +540,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScrollContainer>
       </div>
       </div>
 

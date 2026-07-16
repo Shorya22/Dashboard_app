@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FilterSelect } from '@/components/dashboard/filter-select'
 import { FiltersPanel } from '@/components/dashboard/filters-panel'
+import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { marketDisplayLabel } from '@/lib/chart-colors'
 import {
   useUtilizationRecords,
@@ -196,14 +197,14 @@ export function UtilizationResultsPage() {
           value={formatHours(records.data?.summary.total_hours)}
           loading={records.isLoading}
           icon={Clock}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Client Hours"
           value={formatHours(records.data?.summary.client_hours)}
           loading={records.isLoading}
           icon={Briefcase}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Internal Hours"
@@ -233,8 +234,7 @@ export function UtilizationResultsPage() {
         />
       </div>
 
-      <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
+      <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
           <thead className="sticky top-0 bg-muted/50">
             {table.getHeaderGroups().map((hg) => (
@@ -284,7 +284,7 @@ export function UtilizationResultsPage() {
           </tbody>
           {!records.isLoading && !records.isError && table.getRowModel().rows.length > 0 && (
             <tfoot>
-              <tr className="border-t-2 border-orange-600 bg-orange-500 font-semibold text-white">
+              <tr className="border-t-2 border-primary bg-primary font-semibold text-primary-foreground">
                 <td className="px-3 py-2" colSpan={columns.length - 1}>
                   Total
                 </td>
@@ -295,7 +295,7 @@ export function UtilizationResultsPage() {
             </tfoot>
           )}
         </table>
-      </div>
+      </TableScrollContainer>
 
       {!records.isLoading && total > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">

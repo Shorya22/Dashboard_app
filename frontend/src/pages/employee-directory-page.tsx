@@ -11,6 +11,7 @@ import { ArrowUpDown, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FilterBar } from '@/components/dashboard/filter-bar'
+import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { useRosterEmployeesAll, type EmployeeRecord } from '@/lib/roster-api'
 import {
   ALL,
@@ -196,8 +197,7 @@ export function EmployeeDirectoryPage() {
         </div>
       </div>
 
-      <div className="relative overflow-x-auto rounded-2xl border border-border bg-card shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" aria-hidden="true" />
+      <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
           <thead className="sticky top-0 bg-muted/50">
             {table.getHeaderGroups().map((hg) => (
@@ -255,7 +255,7 @@ export function EmployeeDirectoryPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </TableScrollContainer>
 
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">

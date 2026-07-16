@@ -151,7 +151,7 @@ export function WorkforcePage() {
           value={breakdowns.data?.strategic_pool ?? '—'}
           loading={breakdowns.isLoading}
           icon={Target}
-          iconTone="orange"
+          iconTone="blue"
           provisional
           provisionalNote="Not affected by the filters above — Strategic Pool is date-based (ISBLANK(DOJ (DEPT))) and DOJ (DEPT) isn't exposed by /roster/employees, so it can't be recomputed client-side. Shows the global, unfiltered value."
         />
@@ -185,7 +185,7 @@ export function WorkforcePage() {
             data={seniorityData}
             index="name"
             category="value"
-            color="orange"
+            color="indigo"
             layout="vertical"
             yAxisLabel="Seniority"
             xAxisLabel="Employees"
@@ -231,7 +231,7 @@ export function WorkforcePage() {
                   <div className="flex items-center gap-2">
                     <div className="h-6 flex-1 overflow-hidden rounded bg-tremor-background-subtle dark:bg-dark-tremor-background-subtle">
                       <div
-                        className="h-full rounded bg-orange-500 transition-all"
+                        className="h-full rounded bg-primary transition-all"
                         style={{ width: `${widthPct}%` }}
                       />
                     </div>

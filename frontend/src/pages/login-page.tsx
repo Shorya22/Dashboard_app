@@ -56,7 +56,7 @@ const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputProps>(
               'peer flex h-14 w-full rounded-md border border-input bg-white px-4 pt-4 pb-1.5 text-sm text-foreground',
               'transition-all duration-200 ease-out',
               'placeholder:text-transparent',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-orange/50 focus-visible:border-accent-orange/60',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:border-primary/60',
               error && 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/40',
               endAdornment && 'pr-11',
               className,
@@ -82,7 +82,7 @@ const FloatingInput = React.forwardRef<HTMLInputElement, FloatingInputProps>(
             htmlFor={id}
             className={cn(
               'pointer-events-none absolute left-4 origin-left text-muted-foreground transition-all duration-200 ease-out',
-              floated ? 'top-2 -translate-y-0 scale-75 text-accent-orange' : 'top-1/2 -translate-y-1/2 scale-100',
+              floated ? 'top-2 -translate-y-0 scale-75 text-primary' : 'top-1/2 -translate-y-1/2 scale-100',
               error && floated && 'text-destructive',
             )}
           >
@@ -158,7 +158,7 @@ export function LoginPage() {
         className="w-full max-w-md"
       >
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
-          <div className="h-1.5 w-full bg-accent-orange" />
+          <div className="h-1.5 w-full bg-primary" />
 
           <div className="space-y-6 px-8 pt-8 sm:px-10">
             <div className="flex items-center gap-3">
@@ -200,7 +200,7 @@ export function LoginPage() {
                   type="button"
                   tabIndex={0}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-orange/40"
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -216,7 +216,7 @@ export function LoginPage() {
               </label>
               <button
                 type="button"
-                className="text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-accent-orange hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-orange/40"
+                className="text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               >
                 Forgot password?
               </button>

@@ -46,7 +46,7 @@ export function CustomBarChart({
   data,
   index,
   category,
-  color = 'orange',
+  color = 'indigo',
   series,
   layout = 'horizontal',
   yAxisLabel,

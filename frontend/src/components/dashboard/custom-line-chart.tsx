@@ -31,7 +31,7 @@ export function CustomLineChart({
   data,
   index,
   category,
-  color = 'orange',
+  color = 'indigo',
   yAxisLabel,
   xAxisLabel,
   className,

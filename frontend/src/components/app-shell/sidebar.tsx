@@ -84,17 +84,14 @@ export function Sidebar({
         <div className="flex h-16 flex-col justify-center gap-1 border-b border-[#535983]/40 px-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
+              {/* DEPT is the foregrounded/primary mark (larger, first);
+                  Hexaware renders smaller as a "powered by" secondary credit.
+                  Rendered once — no duplicate responsive-breakpoint copies. */}
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto shrink-0 brightness-0 invert" />
               {!collapsed && (
                 <>
-                  <span className="hidden h-5 w-px bg-white/30 lg:inline-block" />
-                  <img
-                    src={hexawareLogo}
-                    alt="Hexaware"
-                    className="hidden h-6 w-auto shrink-0 lg:block"
-                  />
-                  <span className="h-5 w-px bg-white/30 lg:hidden" />
-                  <img src={hexawareLogo} alt="Hexaware" className="h-6 w-auto shrink-0 lg:hidden" />
+                  <span className="h-5 w-px bg-white/30" />
+                  <img src={hexawareLogo} alt="Hexaware" className="h-5 w-auto shrink-0 opacity-80" />
                 </>
               )}
             </div>
@@ -141,7 +138,7 @@ export function Sidebar({
                       <>
                         <span
                           className={cn(
-                            'absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent-orange transition-opacity',
+                            'absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[#1D86FF] transition-opacity',
                             isActive ? 'opacity-100' : 'opacity-0',
                           )}
                         />

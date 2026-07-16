@@ -49,7 +49,7 @@ export function UtilizationOverviewPage() {
           value={overview.data ? `${(overview.data.average_period_utilization_pct * 100).toFixed(1)}%` : '—'}
           loading={overview.isLoading}
           icon={Percent}
-          iconTone="orange"
+          iconTone="blue"
         />
         <KpiCard
           label="Total Employees"
@@ -78,7 +78,7 @@ export function UtilizationOverviewPage() {
             data={trendData}
             index="week"
             category="Avg Weekly Utilization %"
-            color="orange"
+            color="indigo"
             yAxisLabel="Utilization %"
             xAxisLabel="Week"
             className="h-full"
@@ -119,7 +119,7 @@ export function UtilizationOverviewPage() {
               data={rankingData}
               index="name"
               category="value"
-              color="orange"
+              color="indigo"
               layout="vertical"
               yAxisWidth={140}
               showLegend={false}
