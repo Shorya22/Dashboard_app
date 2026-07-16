@@ -12,6 +12,13 @@ const tremorColors = [
   'orange',
   'gray',
   'red',
+  // 'sky' and 'slate' are used throughout chart-colors.ts (REGION_COLORS,
+  // TYPE_COLORS, CATEGORY_COLORS hash fallback) but were missing here —
+  // their utility classes got purged, so any chart/category that resolved
+  // to one of these two tokens rendered solid black instead of its color
+  // (e.g. Skill Bifurcation by Seniority's "Lead"/"Mid" bars).
+  'sky',
+  'slate',
 ]
 
 export default {

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { preloadRoute } from '@/lib/route-preload'
 import deptLogo from '@/assets/logo-dept.svg'
 import hexawareLogo from '@/assets/Blue Logo.png'
 
@@ -124,6 +125,9 @@ export function Sidebar({
                     to={item.to}
                     end
                     onClick={onMobileClose}
+                    onMouseEnter={() => preloadRoute(item.to)}
+                    onFocus={() => preloadRoute(item.to)}
+                    onTouchStart={() => preloadRoute(item.to)}
                     className={({ isActive }) =>
                       cn(
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',

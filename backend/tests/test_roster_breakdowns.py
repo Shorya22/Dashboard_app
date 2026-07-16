@@ -286,20 +286,19 @@ def test_get_departments_real_file_returns_29():
 
 
 def test_get_data_quality_warnings_flags_designation_casing_mismatch():
-    # Regression test for the real file's SalesForce/Salesforce rows
-    # being surfaced as a named data-quality warning, not silently
-    # absorbed by get_departments()'s normalization.
+    # RESOLVED AT SOURCE (2026-07-16): the real roster file's
+    # "SalesForce Core Developer" rows were corrected to
+    # "Salesforce Core Developer" directly in the source Excel file (see
+    # backend/data/backups/ for the pre-fix backup), so this casing
+    # duplicate no longer exists in the data and the warning correctly
+    # no longer fires. The `_normalize_designation_label` normalization
+    # and this warning check remain in place as a harmless safety net.
     df = load_roster(DEFAULT_ROSTER_PATH)
     warnings = get_data_quality_warnings(df)
     designation_warnings = [
         w for w in warnings if w["type"] == "designation_casing_mismatch"
     ]
-    assert len(designation_warnings) == 4
-    details = {w["detail"] for w in designation_warnings}
-    assert any("SalesForce Core Developer" in d for d in details)
-    assert any(
-        "Salesforce Core Developer" in d and "SalesForce" not in d for d in details
-    )
+    assert len(designation_warnings) == 0
 
 
 # --------------------------------------------------------------------------

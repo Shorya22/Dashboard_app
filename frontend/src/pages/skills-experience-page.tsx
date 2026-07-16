@@ -9,7 +9,7 @@ import {
   FullLabelTooltip,
 } from '@/components/dashboard/full-label-tooltip'
 import { useRosterEmployeesAll, useRosterSummary, type EmployeeRecord } from '@/lib/roster-api'
-import { colorsForLabels } from '@/lib/chart-colors'
+import { colorsForLabels, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
@@ -234,7 +234,7 @@ export function SkillsExperiencePage() {
             data={bySeniority.data}
             index="primary_skill"
             categories={bySeniority.groups}
-            colors={colorsForLabels(bySeniority.groups)}
+            colors={colorsForLabels(bySeniority.groups, SENIORITY_CATEGORY_COLORS)}
             layout="vertical"
             yAxisWidth={110}
             xAxisLabel="Employees"

@@ -133,6 +133,77 @@ existing `seniority_level_casing_mismatch` warning. Regression tests:
 `test_get_departments_real_file_returns_29`,
 `test_get_data_quality_warnings_flags_designation_casing_mismatch`).
 
+**RESOLVED AT SOURCE (2026-07-16):** the `"SalesForce Core Developer"` /
+`"Salesforce Core Developer"` casing duplicate described above has since
+been corrected **directly in the source Excel file**
+(`backend/data/DEPT - Master Data(Sheet1).xlsx`) at the business owner's
+explicit direction — both rows previously spelled `"SalesForce Core
+Developer"` were changed to `"Salesforce Core Developer"` in place via
+`openpyxl`. Pre-fix backup:
+`backend/data/backups/DEPT - Master Data(Sheet1).xlsx.bak-20260716-182414`.
+This is different from the code-level workaround described above, which
+compensated for a real problem that still existed upstream at the time
+it was written — as of 2026-07-16 the source data itself no longer has
+this duplicate (`df["Designation"].unique()` no longer contains
+`"SalesForce Core Developer"`), and `get_departments()` returns **29**
+with or without the normalization step. `_normalize_designation_label`
+and the `designation_casing_mismatch` warning are kept in the code as a
+harmless safety net (per explicit instruction not to remove them), not
+because the source issue persists — the warning now correctly fires
+zero times on the real file (see the updated
+`test_get_data_quality_warnings_flags_designation_casing_mismatch`).
+
+## RESOLVED AT SOURCE (2026-07-16): `Seniorirty Level` casing duplicates, `Primary Skill` casing duplicate, ground-truth `Ankit Singh` typo, and a fully-blank booking row
+
+At the business owner's explicit direction, 5 mechanical data-quality
+issues were corrected directly in the 3 source Excel files (not just
+worked around in code). Backups of all 3 pre-fix files are kept in
+`backend/data/backups/` (timestamp `20260716-182414`):
+
+1. **Roster `Designation`** — see the `Departments` section immediately
+   above.
+2. **Roster `Seniorirty Level`** — every casing variant (`"Standard
+   senior"` -> `"Standard Senior"`, `"Premium lead"` -> `"Premium
+   Lead"`) was normalized in the source file using the exact same
+   transform as `_normalize_seniority_label` in
+   `backend/app/services/roster_metrics.py`
+   (`str(value).strip().title().replace("Tbd", "TBD")`), applied to the
+   actual cell values via `openpyxl`. Post-fix
+   `df["Seniorirty Level"].value_counts()`: `Standard Lead` (12),
+   `Standard Senior` (9, merged from 8+1), `Premium Senior` (8),
+   `Seniority TBD` (7), `Premium Lead` (6, merged from 1+5), `Premium
+   Mid` (4), `Standard Mid` (3), `Hexa Sr` (2), `Premium Technical
+   Service Delivery Manager` (1). This changes
+   `get_senior_lead_employees()` (case-sensitive `CONTAINSSTRING`
+   match) from **36** to **42** on the real file, since the previously
+   lowercase `"Premium lead"`/`"Standard senior"` rows are no longer
+   excluded by the case-sensitive match — see the updated
+   `test_real_roster_senior_lead_employees` in
+   `backend/tests/test_roster_metrics.py` for the full row-by-row
+   accounting. `_normalize_seniority_label` and the
+   `seniority_level_casing_mismatch` warning remain in the code as a
+   safety net, not because the source issue persists.
+3. **Roster `Primary Skill`** — `"React Js"` (1 row, the less common
+   casing per `value_counts()`) was corrected to `"React JS"` (2 rows,
+   the more common casing) directly in the source file, merging what
+   were 2 distinct `Primary Skill` values into 1. `Primary Skill`
+   `nunique()` on the real file is now **19** (was 20).
+4. **Ground-truth `Ankit Singh` typo** — see the dedicated section in
+   `known-name-variants.md` (search "RESOLVED AT SOURCE (2026-07-16)").
+5. **Booking file fully-blank row** — the one fully-blank row (raw
+   index 258, documented in `load_booking_data`'s docstring in
+   `backend/app/services/booking_metrics.py`) was deleted entirely from
+   `backend/data/UTILIZATION DATA SHEET.xlsx` via `openpyxl`'s
+   `delete_rows`, dropping the row count from 1523 to **1522**. The
+   `load_booking_data` blank-row detection/logging code is kept as a
+   harmless safety net (it now simply logs nothing on the clean file).
+
+**Not touched, per explicit instruction:** the 2 rows with `DOJ (DEPT) =
+"TBD"` (`Rahul Malhotra`, `Shorya Sharma`) — these remain exactly as
+documented in the "RESOLVED (2026-07-16): `DOJ (DEPT) = "TBD"`" section
+below; that is a separate, intentional data state, not a data-quality
+bug to fix.
+
 ## Multi-value fields — handling rule
 
 `Client as on June 2026` and `Project Manager` can each hold multiple
@@ -533,12 +604,20 @@ CALCULATE([Exits], 'HR Master'[Reason for Leaving] = "Voluntary")
   `backend/app/services/roster_metrics.py` is implemented against the
   real `Seniorirty Level` column as a confirmed proxy for the DAX's
   `Seniority Levels`, using CONTAINSSTRING's case-sensitive substring
-  match (result: 36 on the real file). Note the source data has a
-  casing-duplicate issue for this column (e.g. "Standard Senior" vs
-  "Standard senior", "Standard Lead" vs "Premium lead") — rows that only
-  match "senior"/"lead" in non-standard casing are excluded from this
-  case-sensitive count and instead surfaced as a
-  `seniority_level_casing_mismatch` data-quality warning.
+  match (result: **42** on the real file, updated 2026-07-16 — was 36
+  prior to the source-data fix below). **RESOLVED AT SOURCE (2026-07-16):**
+  the casing-duplicate issue this column previously had (e.g. "Standard
+  Senior" vs "Standard senior", "Premium Lead" vs "Premium lead") has
+  been corrected directly in the source Excel file (see the "RESOLVED AT
+  SOURCE" section earlier in this document) — the casing variants that
+  used to be silently excluded from this case-sensitive count (since
+  they only matched "senior"/"lead" in non-standard casing) are gone
+  from the source data, which is why the count moved from 36 to 42. The
+  `_normalize_seniority_label` normalization and the
+  `seniority_level_casing_mismatch` warning remain in the code as a
+  harmless safety net, not because the underlying casing inconsistency
+  still exists in the source — the warning now correctly fires zero
+  times on the real file.
 - **`Weekly Utilization %` and `Period Total Utilization %` are
   calculated columns on `UtilizationLongTable` whose formula bodies are
   still missing** — only measures were exported/provided, not

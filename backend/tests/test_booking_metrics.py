@@ -480,12 +480,14 @@ def test_real_bookings_filtered_records_and(real_bookings):
 
 
 def test_real_bookings_filtered_records_multi_value(real_bookings):
-    # region IN (EMEA, AMER) covers every non-blank Region (EC) value in
-    # the file -- one row less than the raw row count, since the file has
-    # exactly 1 fully-blank row (see load_booking_data docstring) whose
-    # NaN Region (EC) doesn't match either value.
+    # region IN (EMEA, AMER) covers every Region (EC) value in the file.
+    # UPDATED 2026-07-16: the source file's one fully-blank row (previously
+    # at raw index 258) was deleted at the source (see
+    # RESOLVED-AT-SOURCE note in load_booking_data's docstring / the
+    # data-model skill), so there is no longer a blank-row row to subtract
+    # -- both_regions now equals the full row count exactly.
     both_regions = get_filtered_records(real_bookings, region=["EMEA", "AMER"])
-    assert len(both_regions) == len(real_bookings) - 1
+    assert len(both_regions) == len(real_bookings)
     # market IN (BN, DACH) -- OR within field
     by_market = get_filtered_records(real_bookings, market=["BN", "DACH"])
     assert len(by_market) == len(
@@ -538,13 +540,15 @@ def test_real_bookings_records_to_dicts_includes_region_department_team(real_boo
 
 
 def test_real_bookings_filtered_records_excludes_blank_row(real_bookings):
-    # Regression for the ghost "--" row bug: the source file has exactly
-    # 1 fully-blank row (see load_booking_data docstring), which must be
-    # excluded from get_filtered_records' row-level output even when no
-    # filters are applied (previously it slipped through untouched since
-    # no column filter matches/excludes NaN either way).
+    # Regression for the ghost "--" row bug, now RESOLVED AT SOURCE
+    # (2026-07-16): the source file's 1 fully-blank row (previously at raw
+    # index 258) has been deleted from the source Excel file entirely (see
+    # load_booking_data docstring / the data-model skill), so
+    # get_filtered_records no longer needs to filter anything out here --
+    # this test now just confirms the row-level output matches the full
+    # (already-clean) row count and every row has a non-null employee.
     unfiltered = get_filtered_records(real_bookings)
-    assert len(unfiltered) == len(real_bookings) - 1
+    assert len(unfiltered) == len(real_bookings)
     assert len(unfiltered) == 1522
 
     records = records_to_dicts(unfiltered)

@@ -607,20 +607,28 @@ def test_real_roster_clients_covered_and_projects(real_roster):
 
 
 def test_real_roster_senior_lead_employees(real_roster):
-    # Computed via: df['Seniorirty Level'].value_counts() on the real file:
-    #   Standard Lead (12), Premium Senior (8), Standard Senior (8),
-    #   Seniority TBD (7), Premium lead (5), Premium Mid (4),
-    #   Standard Mid (3), Hexa Sr (2), Premium Lead (1),
-    #   Standard senior (1), Premium Technical Service Delivery Manager (1)
+    # UPDATED 2026-07-16: `Seniorirty Level` casing variants were
+    # normalized directly in the source Excel file (RESOLVED AT SOURCE),
+    # replicating `_normalize_seniority_label`'s
+    # str(value).strip().title().replace("Tbd", "TBD") transform on the
+    # actual cell values. df['Seniorirty Level'].value_counts() on the
+    # now-cleaned real file:
+    #   Standard Lead (12), Standard Senior (9) [was 8+1 "Standard senior"],
+    #   Premium Senior (8), Seniority TBD (7),
+    #   Premium Lead (6) [was 1+5 "Premium lead"], Premium Mid (4),
+    #   Standard Mid (3), Hexa Sr (2),
+    #   Premium Technical Service Delivery Manager (1)
     # Case-SENSITIVE CONTAINSSTRING match on "Senior"/"Lead" (matches
     # DAX's CONTAINSSTRING default, which is case-sensitive unlike SEARCH):
-    #   Standard Lead (12) + Premium Senior (8) + Standard Senior (8) +
+    #   Standard Lead (12) + Standard Senior (9) + Premium Senior (8) +
     #   Seniority TBD (7, "Senior" is a literal substring of "Seniority")
-    #   + Premium Lead (1) = 36, all distinct NEW_EMP_ID -> 36
-    # NOT matched: "Premium lead" (5, lowercase "lead"), "Standard senior"
-    # (1, lowercase "senior"), "Premium Mid" (4), "Standard Mid" (3),
-    # "Hexa Sr" (2), "Premium Technical Service Delivery Manager" (1).
-    assert get_senior_lead_employees(real_roster) == 36
+    #   + Premium Lead (6) = 42, all distinct NEW_EMP_ID -> 42
+    # NOT matched: "Premium Mid" (4), "Standard Mid" (3), "Hexa Sr" (2),
+    # "Premium Technical Service Delivery Manager" (1). The casing
+    # duplicates that previously caused a 36 vs 42 undercount are gone,
+    # since the source values are now normalized -- there is no longer a
+    # lowercase "Premium lead"/"Standard senior" variant to miss.
+    assert get_senior_lead_employees(real_roster) == 42
 
 
 def test_real_roster_no_experience_mismatches(real_roster):

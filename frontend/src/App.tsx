@@ -14,39 +14,65 @@ import { PageLoadingFallback } from '@/components/dashboard/page-loading-fallbac
 // eagerly-loaded bundle. LoginPage stays eager since it's the first thing
 // an unauthenticated user sees.
 import { LoginPage } from '@/pages/login-page'
-const HomePage = React.lazy(() => import('@/pages/home-page').then((m) => ({ default: m.HomePage })))
+// Route chunk importers are centralized in route-preload.ts so the sidebar
+// can kick off the same dynamic import() on link hover/focus, well before
+// the click — see that file for why.
+import { routeImporters, preloadRoute } from '@/lib/route-preload'
+const HomePage = React.lazy(() =>
+  routeImporters['/']().then((m) => ({ default: (m as typeof import('@/pages/home-page')).HomePage })),
+)
 const HrPortalHomePage = React.lazy(() =>
-  import('@/pages/hr-portal-home-page').then((m) => ({ default: m.HrPortalHomePage })),
+  routeImporters['/hr-portal']().then((m) => ({
+    default: (m as typeof import('@/pages/hr-portal-home-page')).HrPortalHomePage,
+  })),
 )
 const HrAnalyticsPage = React.lazy(() =>
-  import('@/pages/hr-analytics-page').then((m) => ({ default: m.HrAnalyticsPage })),
+  routeImporters['/hr-analytics']().then((m) => ({
+    default: (m as typeof import('@/pages/hr-analytics-page')).HrAnalyticsPage,
+  })),
 )
 const WorkforcePage = React.lazy(() =>
-  import('@/pages/workforce-page').then((m) => ({ default: m.WorkforcePage })),
+  routeImporters['/workforce']().then((m) => ({
+    default: (m as typeof import('@/pages/workforce-page')).WorkforcePage,
+  })),
 )
 const SkillsExperiencePage = React.lazy(() =>
-  import('@/pages/skills-experience-page').then((m) => ({ default: m.SkillsExperiencePage })),
+  routeImporters['/skills-experience']().then((m) => ({
+    default: (m as typeof import('@/pages/skills-experience-page')).SkillsExperiencePage,
+  })),
 )
 const EmployeeDirectoryPage = React.lazy(() =>
-  import('@/pages/employee-directory-page').then((m) => ({ default: m.EmployeeDirectoryPage })),
+  routeImporters['/employee-directory']().then((m) => ({
+    default: (m as typeof import('@/pages/employee-directory-page')).EmployeeDirectoryPage,
+  })),
 )
 const UtilizationHomePage = React.lazy(() =>
-  import('@/pages/utilization-home-page').then((m) => ({ default: m.UtilizationHomePage })),
+  routeImporters['/utilization']().then((m) => ({
+    default: (m as typeof import('@/pages/utilization-home-page')).UtilizationHomePage,
+  })),
 )
 const UtilizationSearchPage = React.lazy(() =>
-  import('@/pages/utilization-search-page').then((m) => ({ default: m.UtilizationSearchPage })),
+  routeImporters['/utilization/search']().then((m) => ({
+    default: (m as typeof import('@/pages/utilization-search-page')).UtilizationSearchPage,
+  })),
 )
 const UtilizationResultsPage = React.lazy(() =>
   import('@/pages/utilization-results-page').then((m) => ({ default: m.UtilizationResultsPage })),
 )
 const EmployeeUtilizationPage = React.lazy(() =>
-  import('@/pages/employee-utilization-page').then((m) => ({ default: m.EmployeeUtilizationPage })),
+  routeImporters['/utilization/employees']().then((m) => ({
+    default: (m as typeof import('@/pages/employee-utilization-page')).EmployeeUtilizationPage,
+  })),
 )
 const ProjectUtilizationPage = React.lazy(() =>
-  import('@/pages/project-utilization-page').then((m) => ({ default: m.ProjectUtilizationPage })),
+  routeImporters['/utilization/projects']().then((m) => ({
+    default: (m as typeof import('@/pages/project-utilization-page')).ProjectUtilizationPage,
+  })),
 )
 const UtilizationOverviewPage = React.lazy(() =>
-  import('@/pages/utilization-overview-page').then((m) => ({ default: m.UtilizationOverviewPage })),
+  routeImporters['/utilization/overview-summary']().then((m) => ({
+    default: (m as typeof import('@/pages/utilization-overview-page')).UtilizationOverviewPage,
+  })),
 )
 
 function AuthBridge() {
@@ -81,6 +107,29 @@ function AuthBridge() {
       cancelled = true
     }
   }, [accessToken, user, setAuth])
+
+  // Once authenticated, warm the chunk cache for the handful of pages users
+  // visit most (Home is eager-adjacent already; Workforce and Skills &
+  // Experience are the heaviest client-side-aggregation pages, and clicking
+  // into them cold is where the "stuck" feeling was most visible). Runs at
+  // browser idle time so it never competes with the current page's own
+  // data/render work.
+  React.useEffect(() => {
+    if (!accessToken) return
+    const idle =
+      'requestIdleCallback' in window
+        ? window.requestIdleCallback
+        : (cb: () => void) => window.setTimeout(cb, 1)
+    const handle = idle(() => {
+      void preloadRoute('/workforce')
+      void preloadRoute('/skills-experience')
+    })
+    return () => {
+      if ('cancelIdleCallback' in window && typeof handle === 'number') {
+        window.cancelIdleCallback(handle)
+      }
+    }
+  }, [accessToken])
 
   return null
 }

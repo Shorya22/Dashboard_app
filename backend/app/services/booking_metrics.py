@@ -41,20 +41,22 @@ INTERNAL_HOURS_LABEL = "Internal Hours"
 def load_booking_data(path: str | Path = DEFAULT_BOOKING_PATH) -> pd.DataFrame:
     """
     Read the booking sheet Excel file, keeping source column names as-is.
-    Row count is logged (1523 rows in the source file as of 2026-07-15,
-    up from 258/2-weeks in the prior export; now spans 7 distinct
+    Row count is logged (1522 rows in the source file as of 2026-07-16,
+    up from 258/2-weeks in the original export; now spans 7 distinct
     `Monday of Week` values, 2026-04-13 through 2026-05-25) so silent
     drops during later processing are detectable.
 
-    Data-quality note: the current file has exactly 1 row (index 258)
-    that is entirely blank (every column NaN, including `Employee` and
-    `Employee Booked Hours`) -- NOT dropped here, since dropping rows in
-    the read layer would violate the "never silently drop" rule. It is
-    logged as a warning instead; all aggregation functions in this module
-    naturally exclude it via pandas' default NaN-exclusion in `.sum()` /
-    `.nunique(dropna=True)`, so it does not skew any metric, but a caller
-    that iterates raw rows (e.g. building a per-row table) must handle it
-    explicitly.
+    Data-quality note (RESOLVED AT SOURCE, 2026-07-16): the file
+    previously had exactly 1 row (raw index 258) that was entirely blank
+    (every column NaN, including `Employee` and `Employee Booked Hours`).
+    Per explicit business-owner direction, that blank row has now been
+    deleted from the source Excel file itself (row count dropped from
+    1523 to 1522) -- see `backend/data/backups/` for the pre-fix backup.
+    The blank-row detection/logging code below is left in place as a
+    harmless safety net (it will simply log nothing and no-op on a clean
+    file) rather than removed, matching how the other source-data fixes
+    in this codebase keep their normalization/detection code as a safety
+    net rather than deleting it.
     """
     df = pd.read_excel(path)
     logger.info("load_booking_data: read %d rows from %s", len(df), path)

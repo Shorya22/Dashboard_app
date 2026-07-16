@@ -41,6 +41,14 @@ services:
       # DATABASE_URL=sqlite:///./app/data/app.db, resolved relative to
       # the backend/ working directory inside the container).
       - backend-data:/app/app/data
+      # Live bind-mount of the 3 source Excel files (roster/booking/
+      # utilization ground-truth). This is the ONLY place to drop
+      # updated data files — do NOT rely on rebuilding the image for
+      # this. After replacing a file here, restart the backend service
+      # (`docker compose restart backend`) so the in-memory DataFrame
+      # cache picks up the new file (it's cached at process start,
+      # not re-read per request). See DOCKER.md "Updating data files".
+      - ./backend/data:/app/data
     ports:
       - "8000:8000"
     healthcheck:

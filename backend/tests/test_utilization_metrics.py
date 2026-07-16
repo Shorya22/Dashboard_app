@@ -115,18 +115,31 @@ def real_ground_truth_long() -> pd.DataFrame:
 
 def test_reconciliation_confirms_formula_a(real_bookings, real_ground_truth_long):
     """
-    Confirmed 2026-07-15: Formula A (Client Hours / actual logged total)
-    matches the ground truth's `Weekly Utilization %` (within the
-    `tolerance=0.0006` default, i.e. ~half the sheet's 3-decimal rounding
-    step) for 143/152 (94.1%) of matched employee/weeks; Formula B (fixed
-    45hr capacity) only matches 122/152 (80.3%). This is the
-    reconciliation result that resolves data-model SKILL.md's "Confirmed
-    blocker: no overlapping week" and "Candidate formulas" sections.
+    Confirmed 2026-07-15, UPDATED 2026-07-16: Formula A (Client Hours /
+    actual logged total) matches the ground truth's `Weekly Utilization %`
+    (within the `tolerance=0.0006` default, i.e. ~half the sheet's
+    3-decimal rounding step) for 147/156 (94.2%) of matched employee/weeks;
+    Formula B (fixed 45hr capacity) only matches 124/156 (79.5%). This is
+    the reconciliation result that resolves data-model SKILL.md's
+    "Confirmed blocker: no overlapping week" and "Candidate formulas"
+    sections.
+
+    RESOLVED-AT-SOURCE UPDATE (2026-07-16): the ground-truth file's
+    "Ankit Singh" typo was corrected to "Amit Singh" directly in the
+    source Excel file (matching the roster's and booking sheet's
+    spelling), so the name now matches directly instead of relying on
+    the `known-name-variants` mapping for that one employee. This
+    resolves 4 additional employee/weeks that previously fell through as
+    unmatched due to the spelling mismatch (matched_employee_weeks:
+    152 -> 156), and all 4 are exact Formula A matches (formula_a_exact_
+    matches: 143 -> 147; formula_b_exact_matches: 122 -> 124), consistent
+    with this employee's 100%-Client-Hours pattern already documented in
+    the data-model skill.
     """
     result = reconcile_weekly_utilization(real_bookings, real_ground_truth_long)
-    assert result["matched_employee_weeks"] == 152
-    assert result["formula_a_exact_matches"] == 143
-    assert result["formula_b_exact_matches"] == 122
+    assert result["matched_employee_weeks"] == 156
+    assert result["formula_a_exact_matches"] == 147
+    assert result["formula_b_exact_matches"] == 124
     assert result["formula_a_match_rate"] > result["formula_b_match_rate"]
 
 

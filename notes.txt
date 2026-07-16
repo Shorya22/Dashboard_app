@@ -617,3 +617,51 @@ END-TO-END PERFORMANCE RE-CHECK
    Docker was first set up) — doesn't block builds since Vite doesn't
    require type-checking to succeed, but still an open item if full
    type-cleanliness is wanted.
+
+DOCKER DATA-FILE MOUNTING FIX
+   FINDING: the 3 source Excel files were baked into the Docker image
+   at build time (plain COPY), not live-mounted. Updating the files on
+   disk had zero effect on a running container — would have silently
+   served stale data indefinitely unless a full image rebuild was run.
+   FIX: added a live bind-mount (./backend/data:/app/data) in
+   docker-compose.yml. Now dropping updated files into backend/data/
+   takes effect after `docker compose restart backend` — no rebuild
+   needed. Documented clearly in DOCKER.md's new "Updating the source
+   Excel data files" section (exact filenames required, restart not
+   rebuild, re-run test suite after updating since some tests pin
+   exact values against the real files).
+
+SOURCE DATA CLEANED AT THE ROOT (not just worked around in code)
+   User asked to have known data-quality issues fixed directly in the
+   3 source Excel files (with explicit confirmation before editing —
+   these are real business files, not disposable fixtures). All 3
+   files backed up with timestamps before any edit
+   (backend/data/backups/).
+   FIXED AT SOURCE:
+   1. Designation casing duplicate (SalesForce/Salesforce) -> merged.
+   2. Seniorirty Level casing duplicates (6 rows) -> normalized.
+   3. Primary Skill casing duplicate (React Js -> React JS) -> merged.
+   4. Ankit Singh -> Amit Singh corrected across both data sheets in
+      the ground-truth file (5 cells total).
+   5. Fully-blank row in booking sheet -> deleted (1523->1522 rows).
+   DELIBERATELY NOT TOUCHED: the 2 employees with DOJ (DEPT)="TBD"
+   (Rahul Malhotra, Shorya Sharma) — no real replacement date
+   available, would be guessing.
+
+   REAL NUMBERS CHANGED as a result (all re-verified, not assumed):
+   Departments 30->29, Seniority Levels distinct 11->9, Senior-Lead
+   Employees 36->42 (was UNDERcounting before — casing duplicates were
+   invisible to the case-sensitive DAX match), Primary Skill distinct
+   20->19, booking rows 1523->1522 (totals unaffected, blank row
+   contributed nothing), Amit Singh's matched employee-weeks 152->156
+   (now reconciles by name directly instead of needing the alias
+   lookup).
+   Test suite expected values updated only where hand-verified correct
+   given the fix (not blindly copied from new output). 144/144 pass.
+   Code-level normalization workarounds (casing normalizers, the
+   Amit/Ankit alias) were LEFT IN PLACE as a safety net even though
+   now redundant for the current file — cheap insurance against this
+   class of issue recurring in a future data update.
+   Docs (data-model SKILL.md, known-name-variants.md) updated to mark
+   these RESOLVED AT SOURCE, distinct from the earlier "code
+   workaround" framing.

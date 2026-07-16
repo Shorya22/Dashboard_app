@@ -13,6 +13,30 @@ owner) before relying on these in production metrics, especially for
 | Saumyarajan Kanungo | SAUMYARANJAN  KANUNGO | High — single letter swap |
 | Suraj Kayade | SURAJ CHHATRAPATI KAVADE | Medium — surname spelling differs (Kayade vs Kavade), plus dropped middle name |
 
+## RESOLVED AT SOURCE (2026-07-16): `Ankit Singh` corrected to `Amit Singh` directly in the ground-truth Excel file
+
+Per explicit business-owner direction, the `Ankit Singh` typo documented as CONFIRMED below
+has now been corrected **directly in the source Excel file**
+(`backend/data/PowerBI_Ready_Utilization_May_2026.xlsx`), not just handled as a code-level
+mapping. Every occurrence of the string `"Ankit Singh"` was replaced with `"Amit Singh"`
+across all 3 sheets (`README`, `Employee_Weekly_Wide`, `Utilization_Long`) using `openpyxl`
+cell-level edits (row counts unchanged: 41 rows in `Employee_Weekly_Wide`, 164 rows in
+`Utilization_Long`). A pre-fix backup is kept at
+`backend/data/backups/PowerBI_Ready_Utilization_May_2026.xlsx.bak-20260716-182414`.
+
+This is **different from the earlier "known variant, handled via code-level mapping"
+status below** — that described a workaround for an upstream data problem that still
+existed in the source file. As of 2026-07-16 the upstream source itself is fixed: the
+ground-truth file now spells this employee's name `Amit Singh` everywhere, matching the
+roster and booking sheet. Any code-level name-mapping logic for this specific
+`Ankit Singh` → `Amit Singh` case is now redundant against the cleaned source and should
+be treated as a harmless safety net only, not as compensating for a live data issue. The
+`test_reconciliation_confirms_formula_a` regression test in
+`backend/tests/test_utilization_metrics.py` was updated accordingly: `matched_employee_weeks`
+rose from 152 to 156 (4 additional employee/weeks — this employee's 4 rows — now match by
+plain string equality instead of falling through as unmatched), and `formula_a_exact_matches`
+rose from 143 to 147 (all 4 newly-matched weeks are exact matches).
+
 ## CONFIRMED (2026-07-15): `Ankit Singh` (ground truth) = `Amit Singh` (booking sheet) = `AMIT KUMAR SINGH` (roster)
 
 This resolves the previously-open "`Ankit Singh` has no match at all" question and the
