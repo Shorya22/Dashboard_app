@@ -1,13 +1,9 @@
 import * as React from 'react'
-import { BarChart } from '@tremor/react'
 import { Users, BookOpen, Building2 } from 'lucide-react'
+import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
-import {
-  createFullLabelTooltip,
-  FullLabelTooltip,
-} from '@/components/dashboard/full-label-tooltip'
 import { useRosterEmployeesAll, useRosterSummary, type EmployeeRecord } from '@/lib/roster-api'
 import { colorsForLabels, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
@@ -25,8 +21,6 @@ import {
   normalizePrimarySkillLabel,
   type FilterValues,
 } from '@/lib/employee-filters'
-
-const employeesTooltip = createFullLabelTooltip('Employees')
 
 /** Pivots a filtered employee list into one row per Primary Skill with one
  * numeric column per distinct value of `groupFn`, the shape Tremor's
@@ -158,7 +152,7 @@ export function SkillsExperiencePage() {
     : distinctSkillsCoveredCount(filtered)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -191,23 +185,20 @@ export function SkillsExperiencePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={byExperience.data.length === 0}
-          height="h-96"
+          height="h-80"
           provisional
           provisionalNote="Experience Band bucket boundaries are PROVISIONAL, see the data-model skill."
         >
-          <BarChart
+          <CustomBarChart
             data={byExperience.data}
             index="primary_skill"
-            categories={byExperience.groups}
-            colors={colorsForLabels(byExperience.groups)}
+            series={byExperience.groups.map((category) => ({ category, color: 'blue' }))}
+            stack
             layout="vertical"
             yAxisWidth={110}
             xAxisLabel="Employees"
             showLegend
-            stack
-            customTooltip={FullLabelTooltip}
-            showAnimation
-            animationDuration={1000}
+            tooltipValueLabel="Employees"
             className="h-full"
           />
         </ChartCard>
@@ -217,23 +208,20 @@ export function SkillsExperiencePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={bySeniority.data.length === 0}
-          height="h-96"
+          height="h-80"
           provisional
           provisionalNote="Seniority Category mapping is PROVISIONAL, see the data-model skill."
         >
-          <BarChart
+          <CustomBarChart
             data={bySeniority.data}
             index="primary_skill"
-            categories={bySeniority.groups}
-            colors={colorsForLabels(bySeniority.groups, SENIORITY_CATEGORY_COLORS)}
+            series={bySeniority.groups.map((category) => ({ category, color: colorsForLabels([category], SENIORITY_CATEGORY_COLORS)[0] }))}
+            stack
             layout="vertical"
             yAxisWidth={110}
             xAxisLabel="Employees"
             showLegend
-            stack
-            customTooltip={FullLabelTooltip}
-            showAnimation
-            animationDuration={1000}
+            tooltipValueLabel="Employees"
             className="h-full"
           />
         </ChartCard>
@@ -245,21 +233,18 @@ export function SkillsExperiencePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={byRegion.data.length === 0}
-          height="h-96"
+          height="h-80"
         >
-          <BarChart
+          <CustomBarChart
             data={byRegion.data}
             index="primary_skill"
-            categories={byRegion.groups}
-            colors={colorsForLabels(byRegion.groups)}
+            series={byRegion.groups.map((category) => ({ category, color: 'blue' }))}
+            stack
             layout="vertical"
             yAxisWidth={110}
             xAxisLabel="Employees"
             showLegend
-            stack
-            customTooltip={FullLabelTooltip}
-            showAnimation
-            animationDuration={1000}
+            tooltipValueLabel="Employees"
             className="h-full"
           />
         </ChartCard>
@@ -269,21 +254,19 @@ export function SkillsExperiencePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={experienceBandData.length === 0}
-          height="h-96"
+          height="h-80"
           provisional
           provisionalNote="Experience Band bucket boundaries are PROVISIONAL, see the data-model skill."
         >
-          <BarChart
+          <CustomBarChart
             data={experienceBandData}
             index="name"
-            categories={['value']}
-            colors={['indigo']}
+            category="value"
+            color="blue"
             yAxisLabel="Employees"
             xAxisLabel="Experience Band"
             showLegend={false}
-            customTooltip={employeesTooltip}
-            showAnimation
-            animationDuration={1000}
+            tooltipValueLabel="Employees"
             className="h-full"
           />
         </ChartCard>

@@ -203,7 +203,7 @@ export function UtilizationSearchPage() {
   }, [filterOptions.data, holdingsProjects.data, byRegionMarket.data])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Card className="rounded-2xl border-border bg-card p-6 shadow-card">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

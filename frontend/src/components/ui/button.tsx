@@ -9,7 +9,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        // Use the exact HSL CSS variable so the button background matches
+        // the sidebar color precisely (uses `--primary` defined in index.css).
+        default: 'bg-[hsl(var(--primary))] text-primary-foreground hover:opacity-90',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:

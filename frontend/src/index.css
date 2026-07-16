@@ -19,7 +19,7 @@
     --card-foreground: 231 89% 14%;
     --popover: 240 8% 97%;
     --popover-foreground: 231 89% 14%;
-    --primary: 246 70% 51%; /* #3C2CDA Hexaware blue — DOMINANT (CTAs, primary chart series, header/nav accent) */
+    --primary: 215 69% 35%; /* #1C4F97 Sidebar primary blue — unified brand primary */
     --primary-foreground: 0 0% 100%;
     --accent-orange: 21 86% 54%; /* #EE6C24 DEPT orange — minimal identity accent (logo only / one small badge) */
     --accent-orange-foreground: 0 0% 100%;
@@ -33,7 +33,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 228 33% 85%; /* #CBD0E5 Border light */
     --input: 228 33% 85%;
-    --ring: 246 70% 51%;
+    --ring: 215 69% 35%;
     --radius: 1rem;
   }
 
@@ -42,6 +42,17 @@
 @layer base {
   * {
     @apply border-border;
+  }
+  /* Tailwind's entire spacing/typography scale is rem-based, so this one
+     value cascades through every component in the app — cards, gaps,
+     icons, text. At 100% browser zoom the dashboard read noticeably
+     larger than the equivalent enterprise tools (Power BI, Fabric,
+     Datadog) it's meant to match, to the point it only "looked right" at
+     70-80% browser zoom. Dropping the root size ~12.5% gets 100% zoom
+     back to that same effective density without hunting down every
+     individual padding/margin value by hand. */
+  html {
+    font-size: 14px;
   }
   body {
     @apply bg-background text-foreground antialiased;

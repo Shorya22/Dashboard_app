@@ -87,7 +87,7 @@ export function HomePage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard
           label="Active Employees"
@@ -125,7 +125,6 @@ export function HomePage() {
           data={growthData}
           index="month"
           category="Closing Headcount"
-          color="indigo"
           yAxisLabel="Employees"
           xAxisLabel="Month"
           className="h-full"
@@ -142,7 +141,7 @@ export function HomePage() {
           isLoading={booking.isLoading}
           isError={booking.isError}
           isEmpty={utilizationSplitData.length === 0}
-          height="h-64"
+          height="h-56"
         >
           <CustomDonutChart
             data={utilizationSplitData}
@@ -160,7 +159,7 @@ export function HomePage() {
           isEmpty={seniorityCategoryData.length === 0}
           provisional
           provisionalNote="Title/legend mismatch replicated from the source Power BI report as-is: this donut is titled 'GCC vs Non-GCC' but shows the Seniority Category split (Senior/Lead/Mid/Other/TBD), which is itself a PROVISIONAL mapping not confirmed against real DAX."
-          height="h-64"
+          height="h-56"
         >
           <CustomDonutChart
             data={seniorityCategoryData}
@@ -175,7 +174,7 @@ export function HomePage() {
           isLoading={breakdowns.isLoading}
           isError={breakdowns.isError}
           isEmpty={categoryData.length === 0}
-          height="h-64"
+          height="h-56"
         >
           <CustomDonutChart
             data={categoryData}
@@ -187,8 +186,16 @@ export function HomePage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card
-          className="group cursor-pointer rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+          className="group cursor-pointer rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          role="button"
+          tabIndex={0}
           onClick={() => navigate('/hr-portal')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              navigate('/hr-portal')
+            }
+          }}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -217,8 +224,16 @@ export function HomePage() {
         </Card>
 
         <Card
-          className="group cursor-pointer rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+          className="group cursor-pointer rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          role="button"
+          tabIndex={0}
           onClick={() => navigate('/utilization')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              navigate('/utilization')
+            }
+          }}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">

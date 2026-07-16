@@ -35,7 +35,7 @@ export function UtilizationOverviewPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
@@ -72,7 +72,6 @@ export function UtilizationOverviewPage() {
             data={trendData}
             index="week"
             category="Avg Weekly Utilization %"
-            color="indigo"
             yAxisLabel="Utilization %"
             xAxisLabel="Week"
             className="h-full"
@@ -98,7 +97,7 @@ export function UtilizationOverviewPage() {
         isLoading={overview.isLoading}
         isError={overview.isError}
         isEmpty={rankingData.length === 0}
-        height="h-[28rem]"
+        height="h-80"
       >
         {/* 41 employees at the page's normal chart height would squash
             every bar into an unreadable ~11px sliver, silently hiding most
@@ -113,7 +112,7 @@ export function UtilizationOverviewPage() {
               data={rankingData}
               index="name"
               category="value"
-              color="indigo"
+              tooltipValueLabel="Utilization %"
               layout="vertical"
               yAxisWidth={140}
               showLegend={false}

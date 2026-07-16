@@ -1,5 +1,4 @@
 import { Users, UserCheck, UserX, UserPlus, UserMinus, TrendingDown, Layers } from 'lucide-react'
-import { BarChart, Legend } from '@tremor/react'
 import {
   flexRender,
   getCoreRowModel,
@@ -13,7 +12,6 @@ import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomLineChart } from '@/components/dashboard/custom-line-chart'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
-import { FullLabelTooltip } from '@/components/dashboard/full-label-tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { type EmployeeRecord } from '@/lib/roster-api'
 import { VOLUNTARY_COLORS, colorsForLabels } from '@/lib/chart-colors'
@@ -117,7 +115,7 @@ export function HrAnalyticsPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
@@ -191,7 +189,6 @@ export function HrAnalyticsPage() {
             data={headcountData}
             index="month"
             category="Closing Headcount"
-            color="indigo"
             yAxisLabel="Employees"
             xAxisLabel="Month"
             className="h-full"
@@ -228,16 +225,14 @@ export function HrAnalyticsPage() {
             isError={attrition.isError}
             isEmpty={resignationData.length === 0}
           >
-            <BarChart
+            <CustomBarChart
               data={resignationData}
               index="month"
-              categories={['Exits']}
-              colors={['red']}
+              category="Exits"
+              color="red"
               yAxisLabel="Exits"
               xAxisLabel="Month"
-              customTooltip={FullLabelTooltip}
-              showAnimation
-              animationDuration={1000}
+              showLegend
               className="h-full"
             />
           </ChartCard>
@@ -248,17 +243,12 @@ export function HrAnalyticsPage() {
             isError={attrition.isError}
             isEmpty={voluntaryData.length === 0}
           >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-              <CustomDonutChart
-                data={voluntaryData}
-                colors={voluntaryColors}
-                totalLabel="Exits"
-                className="h-44"
-              />
-              <div className="flex w-full justify-center">
-                <Legend categories={voluntaryData.map((d) => d.name)} colors={voluntaryColors} className="max-w-full" />
-              </div>
-            </div>
+            <CustomDonutChart
+              data={voluntaryData}
+              colors={voluntaryColors}
+              totalLabel="Exits"
+              className="h-full"
+            />
           </ChartCard>
         </div>
       </div>

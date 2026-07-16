@@ -139,19 +139,7 @@ export function UtilizationResultsPage() {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  const weeklySummaries = React.useMemo(() => {
-    const totals = new Map<string, { total_hours: number; client_hours: number; internal_hours: number }>()
-    for (const item of records.data?.items ?? []) {
-      const row = totals.get(item.week_start) ?? { total_hours: 0, client_hours: 0, internal_hours: 0 }
-      row.total_hours += item.hours
-      if (item.hours_type === 'Client Hours') row.client_hours += item.hours
-      else if (item.hours_type === 'Internal Hours') row.internal_hours += item.hours
-      totals.set(item.week_start, row)
-    }
-    return Array.from(totals.entries())
-      .map(([week_start, row]) => ({ week_start, ...row }))
-      .sort((a, b) => a.week_start.localeCompare(b.week_start))
-  }, [records.data?.items])
+  
 
   const total = records.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -162,21 +150,7 @@ export function UtilizationResultsPage() {
     setSearchParams(next)
   }
 
-  const activeFilters = Object.entries({
-    Week: filters.week,
-    Region: filters.region,
-    Market: filters.market,
-    Department: filters.department,
-    Entity: filters.entity,
-    Holding: filters.holding,
-    'Hours Type': filters.hours_type,
-  })
-    .filter(([, v]) => v && v.length > 0)
-    .map(([k, v]) => {
-      const values = v as string[]
-      const display = k === 'Market' ? values.map(marketDisplayLabel) : values
-      return [k, display.join(', ')] as const
-    })
+  
 
   // Preserve the active filters when going back to the search page.
   const backToSearchParams = new URLSearchParams(searchParams)
@@ -186,7 +160,7 @@ export function UtilizationResultsPage() {
 
   return (
     <div className="flex items-start gap-4">
-      <div className="min-w-0 flex-1 space-y-6">
+      <div className="min-w-0 flex-1 space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label="Total Hours"

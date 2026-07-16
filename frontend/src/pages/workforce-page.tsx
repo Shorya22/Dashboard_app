@@ -1,12 +1,11 @@
 import * as React from 'react'
-import { Legend } from '@tremor/react'
 import { Users, UserCheck, UserX, Target, Building2, Briefcase } from 'lucide-react'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
-import { useRosterBreakdowns, useRosterEmployeesAll, useRosterSummary } from '@/lib/roster-api'
+import { useRosterBreakdowns, useRosterEmployeesAll } from '@/lib/roster-api'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import { TYPE_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import {
@@ -41,7 +40,7 @@ function normalizeSeniorityLabel(value: string): string {
 }
 
 export function WorkforcePage() {
-  const summary = useRosterSummary()
+  
   const breakdowns = useRosterBreakdowns()
   const employeesQuery = useRosterEmployeesAll()
   const employees = employeesQuery.data?.items ?? []
@@ -114,7 +113,7 @@ export function WorkforcePage() {
   }))
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -170,7 +169,7 @@ export function WorkforcePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={seniorityData.length === 0}
-          height="h-96"
+          height="h-80"
           provisional
           provisionalNote="Recomputed client-side from the raw Seniorirty Level field per selected filters, with the same casing-collapse normalization as the backend's /roster/breakdowns (title-case + TBD restore) applied, so all 9 seniority categories render as 9 distinct bars matching the unfiltered totals."
         >
@@ -178,7 +177,7 @@ export function WorkforcePage() {
             data={seniorityData}
             index="name"
             category="value"
-            color="indigo"
+            tooltipValueLabel="Employees"
             layout="vertical"
             yAxisLabel="Seniority"
             xAxisLabel="Employees"
@@ -193,12 +192,10 @@ export function WorkforcePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={typeData.length === 0}
-          height="h-96"
+          height="h-80"
         >
-          <div className="flex h-full flex-col items-center justify-center gap-4">
-            <CustomDonutChart data={typeData} colors={typeColors} className="h-64" />
-            <Legend categories={typeData.map((d) => d.name)} colors={typeColors} />
-          </div>
+          <CustomDonutChart data={typeData} colors={typeColors} className="h-full" />
+
         </ChartCard>
       </div>
 
@@ -209,7 +206,7 @@ export function WorkforcePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={regionCounts.every((r) => r.count === 0)}
-          height="h-96"
+          height="h-80"
         >
           <div className="grid h-full grid-cols-2 grid-rows-2 gap-3">
             {regionCounts.map(({ region, count }) => {

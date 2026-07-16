@@ -19,8 +19,9 @@ import {
 
 import { cn } from '@/lib/utils'
 import { preloadRoute } from '@/lib/route-preload'
+
 import deptLogo from '@/assets/logo-dept.svg'
-import hexawareLogo from '@/assets/Blue Logo.png'
+import hexawareLogo from '@/assets/White Logo.png'
 
 const navGroups = [
   {
@@ -73,44 +74,50 @@ export function Sidebar({
 
       <aside
         className={cn(
-          'flex h-screen shrink-0 flex-col border-r border-[#1c4f97] bg-[#1c4f97] text-white transition-[width] duration-200',
+          // Use the exact HSL CSS variable to ensure pixel-perfect color
+          // matching with buttons that use the same token.
+          'flex h-screen shrink-0 flex-col border-r border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white transition-[width] duration-200',
           // Desktop: normal flow, width toggles
           'lg:relative lg:z-auto lg:translate-x-0',
-          collapsed ? 'lg:w-16' : 'lg:w-72',
+          collapsed ? 'lg:w-16' : 'lg:w-64',
           // Mobile: fixed off-canvas drawer, slides in
-          'fixed inset-y-0 left-0 z-50 w-72 transition-transform duration-200 ease-out',
+          'fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-200 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-20 flex-col justify-center gap-2 border-b border-[#4C81FF] px-5 py-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3">
-              <img src={deptLogo} alt="DEPT" className="h-10 w-auto shrink-0 brightness-0 invert" />
-              {!collapsed && (
-                <span className="text-base font-semibold uppercase tracking-[0.15em] text-white">
-                  HEXAWARE
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={onMobileClose}
-              className="rounded-lg p-2 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
-              aria-label="Close menu"
-            >
-              <X className="h-5 w-5" />
-            </button>
+        <div className="relative flex flex-col items-center justify-center gap-2 border-b border-[hsl(var(--primary)/0.9)] px-5 py-5 text-center">
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="absolute right-3 top-3 rounded-lg p-2 text-white/70 hover:bg-white/10 hover:text-white lg:hidden"
+            aria-label="Close menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          <div className="flex max-w-full items-center gap-3 justify-center">
+            <img
+              src={deptLogo}
+              alt="DEPT"
+              className={cn(!collapsed ? 'h-10' : 'h-8', 'w-auto shrink-0 brightness-0 invert')}
+            />
+            {!collapsed && (
+              <img
+                src={hexawareLogo}
+                alt="HEXAWARE"
+                className="h-6 w-auto max-w-[140px] shrink-0 object-contain"
+              />
+            )}
           </div>
+
           {!collapsed && (
-            <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-[11px] uppercase tracking-[0.3em] text-white/70">
-                Workforce Analytics
-              </span>
-            </div>
+            <span className="whitespace-nowrap text-[11px] uppercase tracking-[0.15em] text-white/90">
+              Workforce Analytics
+            </span>
           )}
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-3 overflow-y-auto p-2.5 pt-4">
           {navGroups.map((group) => (
             <div key={group.label}>
               {!collapsed && (
@@ -130,9 +137,9 @@ export function Sidebar({
                     onTouchStart={() => preloadRoute(item.to)}
                     className={({ isActive }) =>
                       cn(
-                        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                        'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
                         isActive
-                          ? 'bg-[#1B6FFF]/25 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)]'
+                          ? 'bg-primary/25 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)]'
                           : 'text-white/80 hover:bg-white/10 hover:text-white',
                       )
                     }

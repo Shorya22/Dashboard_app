@@ -1,7 +1,8 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, type PieLabelRenderProps } from 'recharts'
+import { useState } from 'react'
+import { PieChart, Pie, Cell, Sector, ResponsiveContainer, type PieSectorDataItem } from 'recharts'
 import { tremorHex } from '@/lib/chart-colors'
 import { cn } from '@/lib/utils'
-import { FullLabelTooltip } from './full-label-tooltip'
+import { CustomLegend } from './custom-legend'
 
 interface DonutDatum {
   name: string
@@ -12,10 +13,12 @@ interface CustomDonutChartProps {
   data: DonutDatum[]
   colors: string[]
   className?: string
-  /** Label shown under the bold center total, e.g. "Total" or a metric
-   * name. Defaults to "Total". Pass `null` to omit the center overlay
-   * entirely (rare — every donut should show a total per the design pass
-   * on 2026-07-16 unless there's a specific reason not to). */
+  showLegend?: boolean
+  /** Accessible label for the center total (e.g. "Total Hours") — read by
+   * screen readers only. Earlier versions of this chart also showed this
+   * as small print under the center number, but that reads as visual
+   * clutter on a small donut and duplicates what the card's own title
+   * already says, so it's sr-only now rather than removed outright. */
   totalLabel?: string | null
 }
 
@@ -34,75 +37,100 @@ function formatPercent(value: number, total: number): string {
   return `${((value / total) * 100).toFixed(1)}%`
 }
 
-/** Recharts-based donut chart matching the Power BI reference: an external
- * callout label per slice showing "value (percent%)", plus a bold center
- * total + label overlay styled to match what Tremor's own `<DonutChart>`
- * center total looks like (Tremor's built-in version can't suppress that
- * total, so this custom component reimplements it deliberately instead).
- * Styled to sit next to Tremor's own charts: same tooltip, same color
- * tokens. */
-export function CustomDonutChart({ data, colors, className, totalLabel = 'Total' }: CustomDonutChartProps) {
+/** Renders the hovered slice a touch larger (outer radius nudged out) —
+ * a subtle, non-bouncy hover affordance in line with the rest of the
+ * dashboard's restrained motion, via Recharts' built-in active-shape hook
+ * rather than a CSS transition (Recharts redraws the arc path on hover,
+ * so CSS scale would distort from the wrong transform origin). */
+function renderActiveShape(props: PieSectorDataItem) {
+  const { outerRadius = 0, ...rest } = props
+  return <Sector {...rest} outerRadius={Number(outerRadius) + 6} />
+}
+
+/** Recharts-based donut chart: a clean ring with no permanent on-chart
+ * labels, and the legend below is swatch + name only. Name/value/percentage
+ * for a slice show by swapping the *center* display on hover, instead of a
+ * floating Recharts tooltip — a real tooltip near a small donut's own
+ * center inevitably lands on top of the ring/center total it's supposed to
+ * be detail for for, which reads as broken in a way no amount of tooltip
+ * repositioning fixes. This is the same pattern Highcharts/ECharts use for
+ * small donuts: hover a slice, the center swaps to that slice's detail;
+ * un-hover, it swaps back to the aggregate total. No overlap is possible
+ * because there's only ever one thing in that space at a time. Legend
+ * below is swatch + name only (no numbers, no on-chart labels) — two
+ * earlier approaches (external floating labels, then labels inside the
+ * ring) both fought the same problem: any *permanent* on-chart label needs
+ * guaranteed room a fluid, variously-sized-per-page donut can't always
+ * provide, especially at the small end of a 3-column grid. Dropping
+ * permanent labels entirely sidesteps that class of bug completely. */
+export function CustomDonutChart({ data, colors, className, showLegend = true, totalLabel = 'Total' }: CustomDonutChartProps) {
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
   const total = data.reduce((sum, d) => sum + d.value, 0)
-
-  const renderLabel = (props: PieLabelRenderProps) => {
-    const { cx, cy, midAngle, outerRadius, value, index } = props
-    const RADIAN = Math.PI / 180
-    const radius = Number(outerRadius) + 22
-    const angle = midAngle ?? 0
-    const x = Number(cx) + radius * Math.cos(-angle * RADIAN)
-    const y = Number(cy) + radius * Math.sin(-angle * RADIAN)
-    const numericValue = typeof value === 'number' ? value : Number(value)
-    const label = `${formatValue(numericValue)} (${formatPercent(numericValue, total)})`
-    const color = colors[index ?? 0] ? tremorHex(colors[index ?? 0]) : undefined
-
-    return (
-      <text
-        x={x}
-        y={y}
-        textAnchor={x > Number(cx) ? 'start' : 'end'}
-        dominantBaseline="central"
-        className="fill-tremor-content-strong text-[11px] font-semibold dark:fill-dark-tremor-content-strong"
-        fill={color}
-      >
-        {label}
-      </text>
-    )
-  }
+  const activeDatum = activeIndex !== undefined ? data[activeIndex] : undefined
 
   return (
-    <div className={cn('relative h-full w-full', className)}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius="55%"
-            outerRadius="70%"
-            paddingAngle={3}
-            isAnimationActive
-            animationDuration={1000}
-            label={renderLabel}
-            labelLine={false}
-          >
-            {data.map((d, i) => (
-              <Cell key={d.name} fill={tremorHex(colors[i] ?? 'slate')} stroke="transparent" />
-            ))}
-          </Pie>
-          <Tooltip content={<FullLabelTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
-      {totalLabel !== null && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-2xl font-semibold tracking-tight text-tremor-content-strong dark:text-dark-tremor-content-strong">
-            {formatValue(total)}
-          </span>
-          <span className="mt-1 text-xs uppercase tracking-[0.24em] text-tremor-content dark:text-dark-tremor-content">
-            {totalLabel}
-          </span>
-        </div>
+    <div className={cn('flex h-full w-full flex-col items-center gap-3', className)}>
+      <div className="relative aspect-square h-full max-h-full min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius="58%"
+              outerRadius="76%"
+              paddingAngle={3}
+              isAnimationActive
+              animationDuration={1000}
+              activeIndex={activeIndex}
+              activeShape={renderActiveShape}
+              onMouseEnter={(_, index) => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(undefined)}
+            >
+              {data.map((d, i) => (
+                <Cell key={d.name} fill={tremorHex(colors[i] ?? 'slate')} stroke="transparent" />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        {totalLabel !== null && (
+          // Constrained to the donut's inner hole (58% inner radius) so
+          // text never spills out past the ring. `truncate` +
+          // `whitespace-nowrap` keeps a large abbreviated total (e.g.
+          // "12.34K") on one line instead of wrapping. Content swaps
+          // between the aggregate total (idle) and the hovered slice's own
+          // name + value + percent (active) — see the component doc
+          // comment above for why this replaces a floating tooltip here.
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            <div className="flex max-w-[58%] flex-col items-center">
+              {activeDatum ? (
+                <>
+                  <span className="w-full truncate text-xs font-medium text-tremor-content dark:text-dark-tremor-content">
+                    {activeDatum.name}
+                  </span>
+                  <span className="w-full truncate text-xl font-semibold tracking-tight text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                    {formatValue(activeDatum.value)}
+                  </span>
+                  <span className="w-full truncate text-xs text-tremor-content dark:text-dark-tremor-content">
+                    {formatPercent(activeDatum.value, total)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="sr-only">{totalLabel}</span>
+                  <span className="w-full truncate text-2xl font-semibold tracking-tight text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                    {formatValue(total)}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      {showLegend && data.length > 0 && (
+        <CustomLegend data={data} colors={colors} showValues={false} layout="wrap" className="shrink-0 justify-center" />
       )}
     </div>
   )

@@ -24,9 +24,10 @@ export function StatusFooter() {
   })
 
   return (
-    <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-[#D6E6FF] bg-white/90 px-4 py-3 text-[11px] text-[#6F7E9B] backdrop-blur sm:px-6">
-      <span className="truncate">Dashboard loaded {formatted}</span>
-      <span className="hidden truncate sm:inline">All data as of the browser load time</span>
+    <footer className="shrink-0 px-4 py-2 text-center text-[11px] text-muted-foreground sm:px-6">
+      <span className="truncate">
+        All data as of {formatted} <span className="mx-1.5 text-border">|</span> Browser load time, not a live feed
+      </span>
     </footer>
   )
 }

@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { Legend } from '@tremor/react'
 import { Users, Briefcase, Building2, UserCheck } from 'lucide-react'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
@@ -110,7 +109,7 @@ export function HrPortalHomePage() {
   const isError = employeesQuery.isError
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -152,14 +151,7 @@ export function HrPortalHomePage() {
           isError={isError}
           isEmpty={statusData.length === 0}
         >
-          <div className="flex h-full flex-col items-center justify-center gap-4">
-            <CustomDonutChart
-              data={statusData}
-              colors={statusColors}
-              className="h-44"
-            />
-            <Legend categories={statusData.map((d) => d.name)} colors={statusColors} />
-          </div>
+          <CustomDonutChart data={statusData} colors={statusColors} className="h-full" />
         </ChartCard>
 
         <ChartCard
@@ -172,7 +164,7 @@ export function HrPortalHomePage() {
             data={regionData}
             index="name"
             category="value"
-            color="indigo"
+            tooltipValueLabel="Employees"
             yAxisLabel="Employees"
             xAxisLabel="Region"
             className="h-full"
@@ -192,7 +184,7 @@ export function HrPortalHomePage() {
             data={entityData}
             index="name"
             category="value"
-            color="indigo"
+            tooltipValueLabel="Employees"
             layout="vertical"
             yAxisLabel="Entity"
             xAxisLabel="Employees"
@@ -213,7 +205,7 @@ export function HrPortalHomePage() {
             data={experienceBandData}
             index="name"
             category="value"
-            color="indigo"
+            tooltipValueLabel="Employees"
             yAxisLabel="Employees"
             xAxisLabel="Experience Band"
             className="h-full"

@@ -95,7 +95,7 @@ export function colorsForLabels(labels: string[], known?: Record<string, string>
 // the Tremor charts next to them.
 export const TREMOR_HEX: Record<string, string> = {
   indigo: '#6366f1',
-  blue: '#3b82f6',
+  blue: '#1c4f97',
   sky: '#0ea5e9',
   cyan: '#06b6d4',
   violet: '#8b5cf6',

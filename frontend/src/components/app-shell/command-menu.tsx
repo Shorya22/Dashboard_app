@@ -1,10 +1,52 @@
 import { Command } from 'cmdk'
 import { useNavigate } from 'react-router-dom'
-import { Home, BarChart3, Users, GraduationCap, Table2, LogOut } from 'lucide-react'
+import {
+  Home,
+  BarChart3,
+  Users,
+  GraduationCap,
+  Table2,
+  LogOut,
+  Building2,
+  Clock,
+  Search,
+  User,
+  FolderKanban,
+  Gauge,
+} from 'lucide-react'
 
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useAuth } from '@/lib/auth-context'
 import { apiClient } from '@/lib/api-client'
+
+const navGroups = [
+  {
+    label: 'Overview',
+    items: [
+      { to: '/', label: 'Home', icon: Home },
+      { to: '/hr-portal', label: 'HR Home', icon: Building2 },
+      { to: '/hr-analytics', label: 'HR Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Workforce',
+    items: [
+      { to: '/workforce', label: 'Workforce', icon: Users },
+      { to: '/skills-experience', label: 'Skills & Experience', icon: GraduationCap },
+      { to: '/employee-directory', label: 'Employee Directory', icon: Table2 },
+    ],
+  },
+  {
+    label: 'Utilization',
+    items: [
+      { to: '/utilization', label: 'Utilization Home', icon: Clock },
+      { to: '/utilization/search', label: 'Search', icon: Search },
+      { to: '/utilization/employees', label: 'Employee Utilization', icon: User },
+      { to: '/utilization/projects', label: 'Project Utilization', icon: FolderKanban },
+      { to: '/utilization/overview-summary', label: 'Utilization Overview', icon: Gauge },
+    ],
+  },
+]
 
 export function CommandMenu({
   open,
@@ -23,7 +65,7 @@ export function CommandMenu({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0">
+      <DialogContent className="w-[92vw] max-w-lg overflow-hidden p-0 sm:w-full">
         <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground">
           <Command.Input
             placeholder="Type a command or search..."
@@ -33,24 +75,20 @@ export function CommandMenu({
             <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
               No results found.
             </Command.Empty>
-            <Command.Group heading="Navigation">
-              {[
-                { to: '/', label: 'Home', icon: Home },
-                { to: '/hr-analytics', label: 'HR Analytics', icon: BarChart3 },
-                { to: '/workforce', label: 'Workforce', icon: Users },
-                { to: '/skills-experience', label: 'Skills & Experience', icon: GraduationCap },
-                { to: '/employee-directory', label: 'Employee Directory', icon: Table2 },
-              ].map((item) => (
-                <Command.Item
-                  key={item.to}
-                  onSelect={() => run(() => navigate(item.to))}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Command.Item>
-              ))}
-            </Command.Group>
+            {navGroups.map((group) => (
+              <Command.Group key={group.label} heading={group.label}>
+                {group.items.map((item) => (
+                  <Command.Item
+                    key={item.to}
+                    onSelect={() => run(() => Promise.resolve(navigate(item.to)))}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            ))}
             <Command.Group heading="Account">
               <Command.Item
                 onSelect={() =>

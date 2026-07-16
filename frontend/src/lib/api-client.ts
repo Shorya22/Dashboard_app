@@ -25,10 +25,11 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use((config) => {
   if (authTokenStore.token) {
+    const headers = config.headers ?? {}
     config.headers = {
-      ...config.headers,
+      ...headers,
       Authorization: `Bearer ${authTokenStore.token}`,
-    }
+    } as any
   }
   return config
 })

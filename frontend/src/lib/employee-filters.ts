@@ -203,7 +203,7 @@ export function groupCount(values: string[]): Record<string, number> {
  * before comparing, so a merged dropdown option (e.g. Primary Skill's
  * "React Js") matches every raw casing variant instead of only an exact
  * string match. */
-export function applyEmployeeFilters<T extends Record<string, unknown>>(
+export function applyEmployeeFilters<T extends object>(
   employees: T[],
   filters: FilterValues,
   fieldMap: Record<string, keyof T>,

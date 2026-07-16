@@ -1,10 +1,8 @@
 import * as React from 'react'
-import { BarChart } from '@tremor/react'
 import { Users, Clock, Briefcase, Building2, FolderKanban } from 'lucide-react'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterSelect } from '@/components/dashboard/filter-select'
-import { FullLabelTooltip } from '@/components/dashboard/full-label-tooltip'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import {
   useUtilizationByRegionMarket,
@@ -80,7 +78,7 @@ export function UtilizationHomePage() {
   const summary = recordsAll.data?.summary
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
         <FilterSelect
           label="Hours Type"
@@ -154,17 +152,16 @@ export function UtilizationHomePage() {
           isError={recordsAll.isError}
           isEmpty={weeklyData.length === 0}
         >
-          <BarChart
+          <CustomBarChart
             data={weeklyData}
             index="week"
-            categories={['Client Hours', 'Internal Hours']}
-            colors={['indigo', 'slate']}
+            series={[
+              { category: 'Client Hours', color: 'blue' },
+              { category: 'Internal Hours', color: 'slate' },
+            ]}
             yAxisLabel="Hours"
             xAxisLabel="Week"
             showLegend
-            customTooltip={FullLabelTooltip}
-            showAnimation
-            animationDuration={1000}
             className="h-full"
           />
         </ChartCard>
@@ -180,7 +177,7 @@ export function UtilizationHomePage() {
             data={regionMarketData}
             index="name"
             category="value"
-            color="indigo"
+            tooltipValueLabel="Hours"
             yAxisLabel="Hours"
             xAxisLabel="Region/Market"
             className="h-full"

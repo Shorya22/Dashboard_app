@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import {
   flexRender,
   getCoreRowModel,
@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowLeft, ArrowUpDown, ChevronLeft, ChevronRight, Clock, Briefcase, Building2, FolderX, Users, FolderKanban, Search } from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, ChevronLeft, ChevronRight, Clock, Briefcase, Building2, FolderX, Users, Search } from 'lucide-react'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
@@ -21,7 +21,6 @@ import { TableScrollContainer } from '@/components/dashboard/table-scroll-contai
 import {
   useProjectUtilization,
   useUtilizationRecordsAll,
-  useUtilizationHoldingsProjects,
   type ProjectDetailRow,
 } from '@/lib/utilization-api'
 
@@ -43,7 +42,7 @@ const PAGE_SIZES = [25, 50, 100]
  * columns. Clicking a row navigates to the existing
  * `/utilization/projects/:holding` detail route. */
 function ProjectPickerPage() {
-  const navigate = useNavigate()
+  
   const recordsQuery = useUtilizationRecordsAll({})
   const [search, setSearch] = React.useState('')
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -139,7 +138,7 @@ function ProjectPickerPage() {
   }, [search, pageSize])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -364,7 +363,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
 
   if (!query.isLoading && !query.isError && query.data === null) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         <div className="flex items-center gap-4">
           <Link to="/utilization/results" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
@@ -387,7 +386,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
 
   return (
     <div className="flex items-start gap-4">
-      <div className="min-w-0 flex-1 space-y-6">
+      <div className="min-w-0 flex-1 space-y-5">
       <div className="flex items-center gap-4">
         <Link to="/utilization/results" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />

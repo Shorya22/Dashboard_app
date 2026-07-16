@@ -62,7 +62,7 @@ export function KpiCard({
 }: KpiCardProps) {
   if (loading) {
     return (
-      <Card className="rounded-2xl border-border bg-card p-5 shadow-card">
+      <Card className="rounded-2xl border-border bg-card p-4 shadow-card">
         <div className="flex items-center gap-3">
           <Skeleton className="h-10 w-10 rounded-xl" />
           <div className="flex-1 space-y-2">
@@ -78,7 +78,7 @@ export function KpiCard({
   const isGood = delta ? (delta.positiveIsGood ?? true) === isPositive : undefined
 
   return (
-    <Card className="rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
+    <Card className="rounded-2xl border-border bg-card p-4 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5">
@@ -97,12 +97,12 @@ export function KpiCard({
           )}
         </div>
         {Icon && (
-          <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', TONE_CLASSES[iconTone])}>
-            <Icon className="h-5 w-5" />
+          <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', TONE_CLASSES[iconTone])}>
+            <Icon className="h-4 w-4" />
           </span>
         )}
       </div>
-      <div className="mt-4 flex items-end justify-between gap-4">
+      <div className="mt-3 flex items-end justify-between gap-4">
         <AnimatedMetric value={value} />
         {delta !== undefined && (
           <span
