@@ -1,0 +1,17 @@
+P0:
+A. Data quality & format (highest priority).
+B. Add a data-validation step before ingestion.
+
+P1:
+Current: Google Sheets → manual Excel export → app reads Excel.
+New Flow: Google Sheets → ADF Copy Activity → raw SQL tables → ADF-triggered Python (validate/clean/join)
+
+P2:
+A. Google Sheets → Python sync + validation → Azure PostgreSQL (Flexible Server) → 
+→ FastAPI (data-access layer) → Azure Container Apps (backend + frontend) → Users.
+
+
+Others:
+A. PDF/Excel Report Generation
+B. More metrices we can add if required
+C. UI Enhancements

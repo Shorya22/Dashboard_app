@@ -1,0 +1,453 @@
+DASHBOARD_APP — FINDINGS & FIXES LOG
+(short, point-to-point. Updated as we go page by page.)
+
+=== DATA / BACKEND FIXES ===
+
+1. Amit Singh vs Ankit Singh — RESOLVED
+   - Booking sheet has "Amit Singh", ground-truth sheet has "Ankit Singh".
+   - Confirmed same person (typo in ground-truth sheet): full name "AMIT
+     KUMAR SINGH" in roster. 2 of 3 sources agree on "Amit". Hours/utilization
+     reconcile exactly across both spellings for the same 4 weeks.
+   - Reference PDF's "Ankit Singh 100%" is not independent proof — it's
+     generated from the same sheet carrying the typo.
+   - Canonical name = "Amit Singh", documented in known-name-variants.md.
+
+2. Departments count = 30 vs reference 29 — RESOLVED
+   - Root cause: casing duplicate in Designation column —
+     "SalesForce Core Developer" vs "Salesforce Core Developer" (capital F).
+   - Same bug class as already-fixed Seniorirty Level casing duplicates
+     (Standard Senior vs Standard senior, etc).
+   - Fix: normalize Designation casing before counting (title-case, same
+     pattern as seniority normalization). Backend now returns 29.
+   - Added designation_casing_mismatch data-quality warning.
+   - Frontend bug found after backend fix: 3 pages (HR Home, Workforce,
+     Skills & Experience) compute Departments client-side for filter
+     support and were NOT using the normalized count — still showed 30.
+     Fixed with shared distinctDepartmentsCount() helper in
+     employee-filters.ts. All 3 pages now correctly show 29.
+
+3. Strategic Pool showed 0, reference shows 2 — RESOLVED
+   - Root cause: get_strategic_pool was checking the raw DOJ (DEPT) string
+     column ("TBD") instead of the parsed date column — never matched.
+   - Separately: Closing Headcount showed 45 vs reference 47 — root cause
+     was pandas NaT always evaluating False on comparisons, but real DAX
+     treats BLANK() as epoch-zero, so BLANK() <= EndDate is TRUE in DAX.
+   - Fixed both: Strategic Pool now = 2, Closing Headcount now = 47,
+     Attrition % now = 9.62% (was 10.0%) — all now match reference.
+
+4. Utilization data — was blocked, now UNBLOCKED
+   - Booking sheet updated: grew from 258 rows/2 weeks to 1523 rows/7 weeks
+     (2026-04-13 to 2026-05-25) — now overlaps ground-truth sheet's weeks.
+   - Ran reconciliation on 152 real employee/week combos: Formula A
+     (Client Hours / actual logged weekly total) confirmed correct at
+     94.1% exact match. Formula B (fixed 45hr denominator) ruled out.
+   - Utilization % endpoints now built and live, values match reference
+     (71.43% avg period utilization, 69.09% latest week).
+
+5. Utilization Home "Total Employees" showed 47 instead of 46 — RESOLVED
+   - Was reading roster's Active Employees count instead of the booking
+     sheet's actual distinct employee count.
+   - Fixed to read /api/v1/utilization/summary's total_employees field (46).
+
+6. Utilization Home weekly trend chart — "Unknown" label bug — RESOLVED
+   - A record with null week_start was bucketed into a phantom "Unknown"
+     group, pushing a real week off the visible chart.
+   - Fixed: records with no week_start are now skipped in bucketing.
+     All 7 weeks now render correctly.
+
+7. File path bug — RESOLVED
+   - Source Excel files were renamed on disk (underscores -> spaces/parens)
+     after user updated them. Backend path constants were stale, breaking
+     data loading entirely. Fixed both roster and booking file paths.
+
+=== FRONTEND / UI FIXES (page by page) ===
+
+PAGE 1 — Home (/) — DONE
+   - Fixed: GCC vs Non-GCC donut had 5 segments (extra "TBD"), reference
+     has 4 (Senior/Lead/Mid/Other) — merged TBD into Other for display.
+   - Fixed: missing special DEPT|HEXAWARE banner header (unique to this
+     page only, other pages keep normal topbar).
+   - Fixed: line chart had no visible value labels (reference shows them
+     permanently above each point) — built custom Recharts-based line
+     chart component since Tremor doesn't support this.
+   - Fixed: donut layout order wrong — reference has line chart alone in
+     its own row, then all 3 donuts in ONE row (Internal v Client
+     Utilization -> GCC vs Non-GCC -> Workforce Category).
+   - Fixed: donuts had no value/percentage labels, just a plain legend —
+     built custom donut component with external "value (%)" callouts.
+   - Fixed: donuts showed a center total number not present in reference
+     — removed for these 3 donuts only.
+
+PAGE 2 — HR Home (/hr-portal) — DONE
+   - Verified 3 filters (Region/Market, Status, Department) are genuinely
+     functional (tested: Status=Inactive correctly updates all 4 KPIs +
+     all 4 charts).
+   - Added permanent value/percentage labels to all charts (Status Split
+     donut, Headcount by Region bar, Working Entity bar, Experience Band
+     bar) — reused/extended custom chart components from Page 1.
+   - Departments KPI fixed to 29 (see backend fix #2 above).
+
+PAGE 3+4 — HR Analytics (/hr-analytics) — DONE (merged into ONE page)
+   FINDING: was missing 7th KPI card "Closing Headcount" (reference has
+   7, app had 6).
+   FIX: added, with a "not filter-reactive" tooltip note since it can't
+   be recomputed client-side per-filter like the others.
+
+   FINDING: line chart + grouped bar chart had no value labels.
+   FIX: added permanent labels; extended custom bar chart component to
+   support multi-series grouped bars (Joiners vs Exits).
+
+   FINDING: bottom table showed only 5 exited/inactive employees, but
+   reference shows the FULL employee roster (~52 rows) sorted
+   alphabetically by name, mostly Active with blank LWD/Reason.
+   ROOT CAUSE: table was sourced from exits_table (attrition-detail
+   endpoint, exits-only) instead of the full employee list.
+   FIX: switched base data to the full filtered employee list, sorted
+   by name; LWD/Reason for Leaving looked up per-row from exits_table
+   only where present (null for everyone else). Filtering to
+   Status=Inactive still correctly narrows to just the exited employees.
+
+   DECISION CHANGE: originally split HR Analytics into 2 separate routed
+   pages (/hr-analytics, /hr-analytics-2) because the reference Power
+   BI's own sidebar showed 4 flat nav items. User clarified: that split
+   in Power BI was only due to limited screen space, not meant to be 2
+   separate pages in a web app that can scroll.
+   FIX: merged back into ONE continuously-scrolling page. Removed Next/
+   Back buttons, removed /hr-analytics-2 route (deleted the page file),
+   removed "HR Analytics 2" from sidebar (Overview group back to 3
+   items: Home/HR Home/HR Analytics), one shared filter row now drives
+   everything on the page (KPIs, both trend charts, resignation chart,
+   voluntary/involuntary donut, exits table).
+   BONUS FIND: merge surfaced a real React infinite-render-loop bug
+   (Tremor Legend + ResizeObserver issue, only triggered once page grew
+   taller than viewport) — found and fixed during verification.
+
+PAGE 5 — Workforce (/workforce) — DONE
+   - Fixed: "Workforce by Type" (GCC/Non-GCC) donut was missing entirely
+     — restored with value+percentage labels.
+   - Fixed: "Headcount by Seniority" only showed 6 of 9 categories.
+     Root cause was two compounding bugs: (a) frontend's client-side
+     filter recompute wasn't applying the same casing-normalization the
+     backend already does, and (b) Tremor's chart was silently thinning
+     axis labels to avoid overlap. Fixed both — all 9 categories now show.
+   - Added permanent labels to all charts (seniority bars, new donut,
+     region small-multiples panel).
+   - Confirmed 6 KPIs correct including Strategic Pool = 2.
+   - Departments KPI fixed to 29 (see backend fix #2 above).
+
+   RE-AUDIT (skeptical pass, checking for "looks right, wrong data"
+   bugs like the HR Analytics exits-table issue):
+   FINDING: "Headcount by Seniority" bars not sorted — reference sorts
+   strictly descending by value, app rendered raw/insertion order.
+   FIX: sort descending by value, verified correct both unfiltered and
+   filtered.
+
+   FINDING: "Workforce by Type" donut legend order swapped — reference
+   shows GCC before Non GCC, app showed the reverse.
+   FIX: reordered legend, GCC first.
+
+   FINDING: "Workforce Details by Region" 2x2 panel — checked carefully
+   in case it was structurally different data (like the HR Analytics
+   bug). CONFIRMED CORRECT: genuinely 4 independent single-value
+   quadrants (AMER/APAC/EMEA/Hexaware), not a stacked breakdown. No fix
+   needed.
+
+   INVESTIGATED: ~165 "Maximum update depth exceeded" React warnings
+   seen during session navigation — turned out to be a FALSE ALARM.
+   Root cause: stale/frozen browser console buffer from earlier Vite
+   HMR module-replacement during live file edits (buffer contained
+   ReferenceErrors for symbols that don't exist in current code). Not a
+   real runtime bug. Confirmed via full cold-navigation cycle with 0
+   live console messages at every step.
+
+PAGE 6 — Skills & Experience (/skills-experience) — DONE
+   FINDING: "Skills Covered" KPI showed 20, reference shows 16.
+   ROOT CAUSE: was counting distinct Primary Skill values (20) instead
+   of the real DAX-confirmed Skill column (16, excludes blank/TBD).
+   Not a casing-duplicate bug this time — genuinely the wrong column.
+   FIX: added Skill field to backend (EmployeeRecord + new
+   get_skills_covered() following real DAX exactly), exposed via
+   /roster/summary as skills_covered=16. Frontend now reads real value
+   unfiltered, recomputes correctly when filtered. Provisional badge
+   removed since this is now a confirmed real DAX measure.
+
+   FINDING: "Skill Bifurcation by X" charts rendered as vertical bars
+   (skill names on X-axis), reference + design spec require horizontal
+   stacked bars (skill names on Y-axis).
+   FIX: added layout="vertical" to all 3 charts, matching reference.
+
+   FINDING: casing duplicate in Primary Skill column — "React JS" vs
+   "React Js" (same bug class as Designation/Seniorirty Level).
+   ROOT CAUSE: chart data is pivoted client-side from the employee list,
+   not backend-computed, so fix belongs in frontend.
+   FIX: added normalizePrimarySkillLabel() (same pattern as other
+   normalizers), applied to chart grouping AND the filter dropdown AND
+   the filter matching logic (so selecting the merged option correctly
+   matches both raw casing variants) — closed the loop across all 3
+   places this data appears, not just the most visible one.
+
+PAGE 7 — Employee Directory (/employee-directory) — DONE
+   FINDING: NEW_EMP_ID column missing from table (reference shows it
+   as the first column).
+   FIX: added as leftmost column.
+
+   FINDING: sorting only reordered the current page (~25 rows), not the
+   full 52-employee result set.
+   ROOT CAUSE: table was built from the already-paginated slice instead
+   of the full filtered list.
+   FIX: sort now runs on the full filtered array, pagination slices
+   after sorting.
+
+   FINDING: GRADE column sorted alphabetically.
+   ROOT CAUSE: no custom sort — data model requires non-alphabetical
+   ordinal order (G3A < G4 < G5...), plain string sort is wrong.
+   FIX: added GRADE_ORDER + custom sortingFn, verified correct order.
+
+   FINDING: Department filter dropdown had the same casing-duplicate
+   bug as elsewhere (SalesForce/Salesforce).
+   FIX: normalized using the same distinctNormalizedValues pattern
+   already used on other pages.
+
+   CHECKED, CONFIRMED CORRECT (no bug): Allocation filter correctly
+   maps to Client/bench field; Department filter correctly maps to
+   Designation (matches real DAX); Region/Seniority Category filters
+   have no casing issues; pagination footer count is accurate.
+
+PAGE 8 — Utilization Home (/utilization) — DONE
+   FINDING: "Total Hours by Market(EC) and Region(EC)" chart only
+   showed Region dimension, missing Market(EC) entirely.
+   ROOT CAUSE: no backend aggregation combined both dimensions.
+   FIX: added get_hours_by_region_market() (backend), new endpoint
+   GET /api/v1/utilization/by-region-market, wired into chart with
+   permanent value labels (switched from Tremor BarChart to
+   CustomBarChart, same pattern as other pages).
+   DATA-QUALITY FINDING (surfaced, not hidden): real Market (EC) values
+   are Technology/BN/DACH/UKI — NOT AMER/BENO/DACH/UKI as the reference
+   screenshot's labels suggested. Rendered as real data, not remapped
+   to match the screenshot.
+   RE-CONFIRMED: 5 KPIs correct, weekly trend still shows all 7 weeks,
+   all 4 filters genuinely functional (tested Region=AMER cascades
+   correctly), no casing-duplicate issues on this page's filters.
+   KNOWN LIMITATION (flagged, not hidden): the region/market chart
+   itself doesn't respond to page filters yet since that endpoint
+   doesn't accept query params — same limitation the old region-only
+   chart had.
+
+CROSS-PAGE FIX — Utilization hours KPI formatting/values
+   FINDING: Utilization Home's hours KPIs showed 8,929/6,468/2,461
+   (rounded), reference shows 8,926.76/6,467.14/2,459.62 (2 decimals).
+   INVESTIGATED VALUE DRIFT: confirmed legitimate, not a bug. Backend
+   values (8928.6/6467.7/2460.9) are internally consistent (Client+
+   Internal=Total on both our side and reference's side). ~0.02% delta
+   fully explained by booking file growing from 258 to 1523 rows since
+   reference was captured. No calculation change made.
+   FIX (display only): switched from 0-decimal to 2-decimal formatting
+   on hours KPIs to match reference precision convention. Applied
+   consistently across Utilization Home, Employee Utilization, Project
+   Utilization, and Results (which had 2 separate formatting bugs — KPI
+   row + wrong-precision table footer). Utilization Overview correctly
+   left untouched (its KPIs are percentages, not hours).
+
+CROSS-PAGE INVESTIGATION — Total Employees 47 (roster) vs 46 (booking)
+   FINDING: HR pages show 47 Total/Active Employees, Utilization pages
+   show 46 Total Employees. Confirmed NOT a bug — two different data
+   sources measuring different things by design (matches reference's
+   own 46 on Utilization pages).
+   - 47 = roster's Active Employees (HR Master, Status=Active)
+   - 46 = booking sheet's DISTINCTCOUNT(Employee) across 1523 rows
+     (one row per employee/project/day/hours-type; 1 fully-blank row
+     naturally excluded by distinct-count, doesn't affect the number)
+   ROOT CAUSE OF THE GAP (fully reconciled, evidence-based):
+   - 6 active roster employees logged ZERO hours in the booking sheet
+     (genuinely absent, confirmed one-by-one): Sakshi Madan Agarwal,
+     Shweta Saurabh Srivastav, Ashvin Patel, Rahul Malhotra, Shorya
+     Sharma, Milind Vijay Mokashi.
+   - 5 booking-sheet employees are Inactive roster employees who still
+     logged hours before/around their departure (7-week extract):
+     Aman Jaiswal, Anchal Kumari Singh, Kuldeep Mehra, Nikita Sankpal,
+     Siraj Pathan.
+   - The "47 vs 46 = off by 1" pattern is COINCIDENTAL — it's really a
+     6-person gap and a 5-person gap netting to a 1-person difference,
+     not one specific missing person.
+   - Milind Vijay Mokashi specifically double-checked for a possible
+     spelling-variant match (token matcher flagged "Vijay Swami" as a
+     maybe) — CONFIRMED genuinely different, unrelated person (real
+     roster employee, NEW_EMP_ID 2000170189, shares only the token
+     "Vijay" with Milind's middle name). No metadata/hours evidence
+     supports treating them as the same person, unlike the earlier
+     confirmed Amit/Ankit Singh case. Not added to
+     known-name-variants.md since it's not a real match.
+
+PAGE 9 — Search (/utilization/search) — DONE
+   FINDING: "Back to Search" link from Results encodes filters in the
+   URL, but Search page's form never read them back — selections
+   silently reset to "All" even though the URL still showed them.
+   FIX: form now seeds initial state from URL search params on mount.
+
+   CHECKED, CONFIRMED CLEAN: no casing duplicates in any of the 6
+   filter dropdowns (first page to pass this check with zero findings).
+   Submit-to-Results navigation verified against real API data. Reset
+   button works correctly.
+
+   FLAGGED, NOT FIXED (backend gap): "Region(EC)/Market(EC)" filter
+   implies both dimensions but Market (EC) isn't exposed anywhere in
+   filter-options or records-filtering — no way to filter by Market at
+   all currently, on this page or Results. Same class of gap as the
+   Utilization Home region/market chart limitation.
+
+DECISION CHANGE — removed scoped Home/Search/Results sidebar
+   Earlier built a special narrow sidebar (just Home/Search/Results)
+   for Results/Employee Utilization/Project Utilization pages to match
+   the reference PDF's separate Utilization Portal nav. User decided:
+   keep ONE consistent global sidebar everywhere instead (Overview/
+   Workforce/Utilization groups, same as every other page).
+   FIX: removed the scoped sidebar variant entirely from sidebar.tsx
+   and app-layout.tsx. All pages now show the same full sidebar.
+   Filters panel, back-arrow, and Back to Search button on these pages
+   were NOT touched — those are separate features, kept as-is.
+
+DONE — hierarchical multi-select filter style
+   User wanted filter dropdowns (Search page: all 6) to match Power
+   BI's actual style: expandable checkbox tree with "Select all",
+   parent/child grouping, multi-select checkboxes instead of
+   single-select.
+   FIX: built reusable HierarchicalMultiSelect component (Radix
+   Checkbox + Popover, no new heavy dependency). Applied to all 6
+   filters: Week (grouped by month), Region/Market (flat, see blocker
+   below), Department/Entity/Hours Type (flat multi-select for visual
+   consistency), Holding/Project (grouped by holding, project derived
+   client-side). Verified live: expand/collapse, multi-select,
+   "Select all" cascading, and submit-to-results all work correctly.
+
+   ALL 3 BLOCKERS NOW RESOLVED:
+   1. Backend: added markets to filter-options + market param to
+      /records (multi-value, OR-within-field/AND-across-fields).
+   2. Backend: all filter params (week/region/market/department/
+      entity/holding/hours_type) now accept repeated query params
+      (?region=EMEA&region=AMER). Frontend updated to submit ALL
+      selected values, not just the first — verified live with a
+      real network-request cross-check against manual curl (identical
+      results: 528 records / 2,710.00 hours for AMER+DACH/Technology).
+   3. Backend: new GET /utilization/holdings-projects endpoint (43
+      holdings, lightweight groupby). Frontend switched from the
+      1523-record full-fetch workaround to this endpoint.
+
+   MARKET LABEL REMAPPING (business decision, confirmed 2026-07-16):
+   real Market (EC) values (BN, Technology) don't match reference
+   labels (BENO, AMER). Decision: remap for DISPLAY only — user sees
+   "BENO"/"AMER", but underlying filter/API calls still use the real
+   raw values (BN/Technology) so data stays correct. Applied
+   consistently: Search filter tree, Results filter/active-filter
+   summary, Utilization Home's region/market chart labels.
+
+PAGE 10 — Results (/utilization/results) — DONE
+   Fresh skeptical re-audit after all prior fix passes landed together
+   (integration check, not just individual pieces).
+   FINDING: per-row "Hours" table column showed raw unformatted float
+   (e.g. "1.3") while KPIs and Total row footer both used 2-decimal
+   formatting — an integration gap where the earlier formatting fix
+   never got wired into the row-level column definition.
+   FIX: added cell formatter using the existing formatHours helper.
+
+   CHECKED, CONFIRMED CLEAN (verified live against real API, not just
+   code review): multi-value filters read correctly via getAll();
+   Filters panel changes preserve untouched multi-value selections;
+   pagination correctly resets to page 1 on filter change; Total row
+   matches backend summary across the full filtered set; both Employee
+   and Holding drill-through links work; Market alias shown correctly
+   in filter panel; back-arrow and Back to Search both work (same
+   destination, redundant but not broken).
+
+PAGE 11 — Employee Utilization (/utilization/employees/:employee) — DONE
+   FINDING: "Total Hours by Project" chart's project-name axis labels
+   were illegibly truncated/wrapped mid-word.
+   FIX: applied the established truncate-with-tooltip pattern already
+   built elsewhere (withTruncatedLabels + full-label tooltip on hover).
+
+   FINDING (bigger catch, deep re-check): filters weren't actually
+   reaching both charts — Hours Type/Week only affected the week
+   chart, Project only affected the project chart.
+   ROOT CAUSE: the endpoint returns two separate pre-aggregated arrays
+   with no shared dimensions to cross-filter by.
+   FIX: rewired both charts to derive from raw booking records
+   (filtered client-side by employee) instead, so all 3 filters now
+   correctly update both charts together.
+
+   FIX: Week filter upgraded to the hierarchical multi-select style
+   (Select all, month groups, nested dates) per user request — reused
+   the HierarchicalMultiSelect component built for Search, no new
+   component needed. Verified multi-week selection updates both charts.
+
+   RE-CONFIRMED CLEAN: 2-decimal KPI formatting, 404/not-found state
+   for unknown employee names.
+
+   NOT FIXED (scoped out, flagged for follow-up): both charts on this
+   page still use Tremor's default hover-only tooltips instead of
+   permanent value labels — deliberately not converted solo since the
+   sibling Project Utilization page has the identical deviation and
+   should get the same treatment together, not piecemeal.
+
+CROSS-PAGE FIX — blank row leaking into utilization tables
+   FINDING: one fully-empty row (all "—") appeared in Results-style
+   tables between real data rows.
+   ROOT CAUSE: booking data has 1 genuinely blank row (all columns
+   NaN) — already handled correctly for SUM aggregations (NaN-safe
+   pandas .sum()), but was never excluded from row-level record
+   listings (get_filtered_records), so it leaked through as a ghost
+   row into any table consuming that endpoint (Results, and both
+   Employee/Project Utilization drill-throughs since they derive from
+   the same records).
+   FIX: excludes fully-blank rows before column filters run. New
+   regression test confirms 1522 records (not 1523) with zero null
+   Employee fields. 144/144 tests pass.
+
+PAGE 12 — Project Utilization (/utilization/projects/:holding) — DONE
+   FIX: converted all 4 charts across Employee Utilization AND Project
+   Utilization from Tremor's hover-only default to CustomBarChart
+   (permanent value labels), matching every other page's standard.
+   Applied truncate+tooltip to long employee/project name labels.
+
+   FINDING (same bug class as Page 11): Employee filter wasn't
+   reaching the Week chart, only the Employee chart + table.
+   ROOT CAUSE: same as Page 11 — pre-aggregated endpoint data has no
+   cross-dimension fields to filter by.
+   FIX: same solution — derive both charts from raw records filtered
+   client-side, KPI row stays on unfiltered holding totals (correct,
+   since those are holding-level not employee-level KPIs).
+
+   CHECKED, CONFIRMED CLEAN: no ghost row (blank-row fix verified here
+   too), Region correctly uses raw Region(EC) values not the Market
+   alias (different field, alias doesn't apply), 2-decimal formatting
+   correct, Total Employees KPI is a genuine distinct count, 404
+   handling works for invalid holding names.
+
+DONE — Employee/Project Utilization now directly reachable
+   User wanted these 2 pages accessible from the sidebar directly (not
+   only via drill-through from Results), with search to jump straight
+   to any employee or project.
+   FIX: added 2 sidebar items (Employee Utilization, Project
+   Utilization), new base routes (/utilization/employees,
+   /utilization/projects, no param) rendering a picker instead of the
+   detail view. Existing :employee/:holding drill-through routes from
+   Results kept fully unchanged (additive only). "Change employee"/
+   "Change project" links added on detail views to jump back to picker.
+
+   ITERATION — user feedback: first version (bare searchable name
+   list) "looked poor". Upgraded to proper consolidated summary
+   tables:
+   - Employee picker: TanStack Table, columns Employee Name/Total
+     Hours/Client Hours/Internal Hours/Total Projects, aggregated
+     client-side per employee. Spot-checked against real API (Abhishek
+     Modi: 234.00/198.00/36.00/2 projects — exact match).
+   - Project picker: same pattern, columns Holding-Project/Total
+     Employees/Total Hours. Spot-checked (Dept Holding BV: 23
+     employees/1,336.40 hours — exact match).
+   - Both: sortable columns, search filters by name, serial number (#)
+     column added per user request, 25/50/100 page-size pagination
+     matching Employee Directory's exact pattern, verified numbering
+     continues correctly across pages (not restarting), search resets
+     to page 1.
+
+=== NOT YET DONE ===
+   - Page 13 (Utilization Overview): passed earlier audit cleanly, not
+     yet re-checked with data-label standard (last remaining page)
