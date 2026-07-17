@@ -347,6 +347,44 @@ and `test_real_bookings_filtered_records_excludes_blank_row` in
 row counts (both now off-by-1 from what a fully-clean file would give)
 rather than silently dropping it.
 
+## RESOLVED AT SOURCE (2026-07-17): the partial-blank `Project URL`-only booking row, both at source and in the row-level filter logic
+
+The row flagged immediately above (only `Project URL` populated, every
+other column including `Employee` `NaN`) crashed the Employee
+Utilization and Project Utilization frontend pages: both pages group
+raw `/utilization/records` rows by `employee`/`holding` and sort with
+`.localeCompare()`, which throws on a `null` value, and the app had no
+React error boundary anywhere to catch it — so the crash blanked the
+entire page. Two fixes, at two layers:
+
+**1) Deleted at source.** The row (Excel row 1524, cell `I1524`) was
+removed directly from `backend/data/UTILIZATION DATA SHEET.xlsx` via
+`openpyxl`, after a backup (`backend/data/backups/UTILIZATION DATA
+SHEET.xlsx.bak-20260717-215507`). Row count drops from 1523 to
+**1522**. `test_real_bookings_filtered_records_multi_value` and
+`test_real_bookings_filtered_records_excludes_blank_row` updated to
+drop the "-1" / "1523" expectations that documented the old off-by-one.
+
+**2) Generalized the row-level filter, so a future refresh reintroducing
+a similar row won't require another manual hunt-and-delete.**
+`prepare_booking_df` (`backend/app/services/booking_metrics.py`) used to
+only drop *fully*-blank rows (`df.isna().all(axis=1)`) — which is why
+this partially-blank row slipped through it and into
+`get_filtered_records`/`records_to_dicts`, unlike every aggregate
+measure elsewhere in this module, which already excludes `NaN`
+`Employee` via `dropna=True`. It now drops any row with a `NaN`
+`Employee` instead, which is a superset that also covers the
+fully-blank case. `get_filtered_records`'s own idempotency-check
+fallback (for callers that pass an unprepared df directly) was updated
+to match. Also added a defensive `if (!r.employee) continue` /
+`if (!r.holding) continue` guard directly in
+`frontend/src/pages/employee-utilization-page.tsx` and
+`project-utilization-page.tsx`'s grouping loops, plus a
+`RouteErrorBoundary` around `<Outlet>` in
+`frontend/src/components/app-shell/app-layout.tsx` so any *other* future
+render crash shows a recoverable error card instead of a blank screen,
+app-wide — not specific to this one row.
+
 ## Multi-value fields — handling rule
 
 `Client as on June 2026` and `Project Manager` can each hold multiple

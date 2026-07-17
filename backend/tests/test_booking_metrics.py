@@ -486,17 +486,13 @@ def test_real_bookings_filtered_records_and(real_bookings):
 
 def test_real_bookings_filtered_records_multi_value(real_bookings):
     # region IN (EMEA, AMER) covers every real Region (EC) value in the
-    # file. UPDATE (2026-07-17): a newly-noticed, PRE-EXISTING (not
-    # introduced by any 2026-07-17 edit -- confirmed present in the
-    # backup taken before that day's changes) partial-blank row exists
-    # at the end of the file (only `Project URL` populated, every other
-    # column NaN -- see load_booking_data's blank-row detection, which
-    # doesn't catch this one since it's not *fully* blank). Its NaN
-    # `Region (EC)` means it's correctly excluded by this region filter,
-    # so both_regions is 1 less than the full row count, not equal to
-    # it. Flagged as an open data-quality item, not silently fixed here.
+    # file, RESOLVED AT SOURCE (2026-07-17): the partial-blank row (only
+    # `Project URL` populated, every other column NaN) that used to sit
+    # at the end of the file was removed directly from
+    # `UTILIZATION DATA SHEET.xlsx` (backup taken beforehand) -- see the
+    # data-model skill. both_regions now equals the full row count.
     both_regions = get_filtered_records(real_bookings, region=["EMEA", "AMER"])
-    assert len(both_regions) == len(real_bookings) - 1
+    assert len(both_regions) == len(real_bookings)
     # market IN (BN, DACH) -- OR within field
     by_market = get_filtered_records(real_bookings, market=["BN", "DACH"])
     assert len(by_market) == len(
@@ -554,29 +550,19 @@ def test_real_bookings_filtered_records_excludes_blank_row(real_bookings):
     # index 258, deleted from the source file -- see load_booking_data
     # docstring / the data-model skill).
     #
-    # UPDATE (2026-07-17): a DIFFERENT, newly-noticed row has since
-    # appeared at the end of the file with only `Project URL` populated
-    # (every other column, including `Employee`, is NaN) -- confirmed
-    # PRE-EXISTING as of the backup taken before that day's edits, not
-    # introduced by them. `get_filtered_records` with no filters doesn't
-    # drop it (it's not *fully* blank, so `prepare_booking_df`'s
-    # `isna().all(axis=1)` check doesn't catch it, and no filter args
-    # were given to exclude it on `Employee` or otherwise), so it's
-    # present in `unfiltered` with a null `Employee` -- the opposite of
-    # this test's original "every row has a non-null employee" claim.
-    # Flagged as an open data-quality item (see
-    # test_real_bookings_filtered_records_multi_value), not silently
-    # dropped here.
+    # RESOLVED AT SOURCE (2026-07-17): a DIFFERENT partial-blank row (only
+    # `Project URL` populated, every other column including `Employee`
+    # NaN) had appeared at the end of the file -- confirmed PRE-EXISTING
+    # as of the backup taken before that day's edits. It has now been
+    # deleted directly from `UTILIZATION DATA SHEET.xlsx` (backup taken
+    # first) rather than carried forward as an open item -- see the
+    # data-model skill. Every row now has a non-null `Employee`.
     unfiltered = get_filtered_records(real_bookings)
     assert len(unfiltered) == len(real_bookings)
-    assert len(unfiltered) == 1523
-    assert unfiltered["Employee"].isna().sum() == 1
+    assert len(unfiltered) == 1522
+    assert unfiltered["Employee"].isna().sum() == 0
 
-    # records_to_dicts does NOT drop the partial-blank row -- it converts
-    # NaN -> None per-field and passes every row through, so the one
-    # None-employee record from the raw dataframe above is still present
-    # here. This is the same open data-quality item, now visible at the
-    # API-facing layer too, not silently absorbed by it.
+    # records_to_dicts passes every row through unchanged.
     records = records_to_dicts(unfiltered)
-    assert len(records) == 1523
-    assert sum(1 for r in records if r["employee"] is None) == 1
+    assert len(records) == 1522
+    assert sum(1 for r in records if r["employee"] is None) == 0

@@ -61,6 +61,11 @@ function ProjectPickerPage() {
   const summaryRows = React.useMemo<HoldingSummaryRow[]>(() => {
     const totals = new Map<string, { totalHours: number; employees: Set<string> }>()
     for (const r of recordsQuery.data?.items ?? []) {
+      // One booking row is a known, unfixed data-quality issue (see
+      // data-model skill) with every field but Project URL blank —
+      // `holding` is null there, which would otherwise crash the sort
+      // below (`.localeCompare` on null).
+      if (!r.holding) continue
       const row = totals.get(r.holding) ?? { totalHours: 0, employees: new Set<string>() }
       row.totalHours += r.hours
       row.employees.add(r.employee)

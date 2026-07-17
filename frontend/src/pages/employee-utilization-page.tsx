@@ -55,6 +55,11 @@ function EmployeePickerPage() {
       { totalHours: number; clientHours: number; internalHours: number; projects: Set<string> }
     >()
     for (const r of recordsQuery.data?.items ?? []) {
+      // One booking row is a known, unfixed data-quality issue (see
+      // data-model skill) with every field but Project URL blank —
+      // `employee` is null there, which would otherwise crash the sort
+      // below (`.localeCompare` on null).
+      if (!r.employee) continue
       const row = totals.get(r.employee) ?? {
         totalHours: 0,
         clientHours: 0,

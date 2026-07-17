@@ -41,22 +41,25 @@ INTERNAL_HOURS_LABEL = "Internal Hours"
 def load_booking_data(path: str | Path = DEFAULT_BOOKING_PATH) -> pd.DataFrame:
     """
     Read the booking sheet Excel file, keeping source column names as-is.
-    Row count is logged (1522 rows in the source file as of 2026-07-16,
+    Row count is logged (1522 rows in the source file as of 2026-07-17,
     up from 258/2-weeks in the original export; now spans 7 distinct
     `Monday of Week` values, 2026-04-13 through 2026-05-25) so silent
     drops during later processing are detectable.
 
-    Data-quality note (RESOLVED AT SOURCE, 2026-07-16): the file
-    previously had exactly 1 row (raw index 258) that was entirely blank
-    (every column NaN, including `Employee` and `Employee Booked Hours`).
-    Per explicit business-owner direction, that blank row has now been
-    deleted from the source Excel file itself (row count dropped from
-    1523 to 1522) -- see `backend/data/backups/` for the pre-fix backup.
+    Data-quality note: two separate fully/partially-blank rows have been
+    found and deleted from the source file so far, on two different
+    dates (2026-07-16, then a different row on 2026-07-17 -- see the
+    data-model skill for both). Each was removed directly from the Excel
+    file with a backup taken first (`backend/data/backups/`), rather
+    than left in and filtered downstream, so the row count above may
+    still shift if a future data refresh reintroduces something similar.
     The blank-row detection/logging code below is left in place as a
     harmless safety net (it will simply log nothing and no-op on a clean
     file) rather than removed, matching how the other source-data fixes
     in this codebase keep their normalization/detection code as a safety
-    net rather than deleting it.
+    net rather than deleting it. `prepare_booking_df` (below) is the
+    stronger, generalized guard — it drops any row with no `Employee`,
+    which is what actually protects row-level API responses.
     """
     df = pd.read_excel(path)
     logger.info("load_booking_data: read %d rows from %s", len(df), path)
@@ -75,8 +78,18 @@ def load_booking_data(path: str | Path = DEFAULT_BOOKING_PATH) -> pd.DataFrame:
 def prepare_booking_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     One-time cleanup shared by every row-level booking view
-    (`get_filtered_records`, `records_to_dicts`, ...): drop the fully-blank
-    row and parse `Monday of Week`/`Date` to real datetimes.
+    (`get_filtered_records`, `records_to_dicts`, ...): drop any row with no
+    `Employee` and parse `Monday of Week`/`Date` to real datetimes.
+
+    Data-quality note: a booking row with a blank `Employee` carries no
+    attributable data regardless of what else is populated (see the
+    2026-07-17 row that had only `Project URL` filled in — every
+    aggregation elsewhere in this module already excludes NaN `Employee`
+    via `dropna=True`, but the raw row-level views did not, which is what
+    let that row reach the frontend and crash pages that group by
+    `employee`/`holding` without a null guard). Filtering on `Employee`
+    here also covers the previously-separate fully-blank-row case, since
+    a fully-blank row has a NaN `Employee` too.
 
     Pulled out of `get_filtered_records` (which used to redo this --
     `.copy()` + two `pd.to_datetime` calls over the whole sheet -- on every
@@ -84,7 +97,14 @@ def prepare_booking_df(df: pd.DataFrame) -> pd.DataFrame:
     and cache it once per booking-DataFrame load. See
     `data_loader.get_booking_df_prepared`.
     """
-    out = df[~df.isna().all(axis=1)].copy()
+    dropped = df["Employee"].isna()
+    if dropped.any():
+        logger.warning(
+            "prepare_booking_df: dropping %d row(s) with no Employee at index %s",
+            int(dropped.sum()),
+            df.index[dropped].tolist(),
+        )
+    out = df[~dropped].copy()
     out["Monday of Week"] = pd.to_datetime(out["Monday of Week"])
     if "Date" in out.columns:
         out["Date"] = pd.to_datetime(out["Date"])
@@ -345,21 +365,19 @@ def get_filtered_records(
     Edge cases: any filter left as `None` or an empty list is not applied
     (no-op), so calling with no args returns every row unfiltered.
 
-    Also excludes the source file's fully-blank row(s) (every column NaN
-    -- see `load_booking_data`'s docstring) from the returned rows. That
-    row is already naturally excluded from SUM/nunique-based aggregations
-    elsewhere in this module, but row-level listing (this function, and
-    `records_to_dicts` downstream of it) needs an explicit exclusion or
-    it surfaces as a ghost all-blank record. `load_booking_data`'s own
-    blank-row logging is untouched -- this only affects what this
-    function returns, not whether the row's presence is logged.
+    Also excludes any row with no `Employee` (see `prepare_booking_df`'s
+    docstring) from the returned rows. Such a row is already naturally
+    excluded from SUM/nunique-based aggregations elsewhere in this module,
+    but row-level listing (this function, and `records_to_dicts`
+    downstream of it) needs an explicit exclusion or it surfaces as a
+    ghost record with a null `employee` field.
     """
     # `df` is normally already `data_loader.get_booking_df_prepared()`
-    # (blank row dropped, dates parsed) -- these checks make this function
-    # idempotent/cheap to call again on an already-prepared frame (e.g.
-    # from tests that pass the raw df), without redoing the parse on every
-    # request in the common case.
-    blank_mask = df.isna().all(axis=1)
+    # (no-Employee rows dropped, dates parsed) -- this check makes the
+    # function idempotent/cheap to call again on an already-prepared frame
+    # (e.g. from tests that pass the raw df), without redoing the parse on
+    # every request in the common case.
+    blank_mask = df["Employee"].isna()
     out = df[~blank_mask] if blank_mask.any() else df
     if not pd.api.types.is_datetime64_any_dtype(out["Monday of Week"]):
         out = out.copy()

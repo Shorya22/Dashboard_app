@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { StatusFooter } from './status-footer'
+import { RouteErrorBoundary } from './route-error-boundary'
 import { installGlobalTooltipDismissal } from '@/lib/chart-tooltip-touch-store'
 
 const pageTitles: Record<string, string> = {
@@ -82,7 +83,9 @@ export function AppLayout() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
             >
-              <Outlet />
+              <RouteErrorBoundary key={location.pathname}>
+                <Outlet />
+              </RouteErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </main>
