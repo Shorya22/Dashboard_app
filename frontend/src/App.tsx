@@ -14,6 +14,7 @@ import { PageLoadingFallback } from '@/components/dashboard/page-loading-fallbac
 // eagerly-loaded bundle. LoginPage stays eager since it's the first thing
 // an unauthenticated user sees.
 import { LoginPage } from '@/pages/login-page'
+import { RegisterPage } from '@/pages/register-page'
 // Route chunk importers are centralized in route-preload.ts so the sidebar
 // can kick off the same dynamic import() on link hover/focus, well before
 // the click — see that file for why.
@@ -143,6 +144,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         path="/"
         element={

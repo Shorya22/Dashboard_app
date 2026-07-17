@@ -3,8 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, Users, TrendingUp } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle2, Users, TrendingUp } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
@@ -33,7 +33,22 @@ export function LoginPage() {
   const { setAuth } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: Location })?.from?.pathname ?? '/'
+  const locationState = location.state as
+    | { from?: Location; registeredEmail?: string }
+    | null
+  const from = locationState?.from?.pathname ?? '/'
+  // One-shot flash message set by RegisterPage after a successful signup.
+  // Captured into local state so it survives the history.replaceState
+  // below (which clears it from location.state so a refresh doesn't
+  // re-show the banner).
+  const [registeredEmail] = React.useState<string | null>(
+    locationState?.registeredEmail ?? null,
+  )
+  React.useEffect(() => {
+    if (registeredEmail) {
+      window.history.replaceState({}, '')
+    }
+  }, [registeredEmail])
 
   const [showPassword, setShowPassword] = React.useState(false)
   const [shake, setShake] = React.useState(false)
@@ -226,6 +241,18 @@ export function LoginPage() {
                 Use your DEPT | Hexaware account to continue
               </p>
 
+              {registeredEmail && !serverError && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  role="status"
+                  className="mb-4 flex items-center gap-2.5 rounded-md border border-primary/30 bg-primary/10 px-3.5 py-2.5 text-sm text-primary"
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>Account created. Sign in with <strong>{registeredEmail}</strong> to continue.</span>
+                </motion.div>
+              )}
+
               {serverError && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
@@ -301,6 +328,16 @@ export function LoginPage() {
                   {loginMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
                 </Button>
+
+                <p className="pt-2 text-center text-sm text-muted-foreground">
+                  Don&apos;t have an account?{' '}
+                  <Link
+                    to="/register"
+                    className="font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:underline"
+                  >
+                    Create one
+                  </Link>
+                </p>
               </form>
             </div>
           </div>

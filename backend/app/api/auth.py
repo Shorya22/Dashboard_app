@@ -27,8 +27,19 @@ from app.core.security import (
 )
 from app.db.models import User
 from app.db.session import get_db
-from app.models.auth import AccessTokenResponse, CurrentUser, LoginRequest, LogoutResponse
-from app.services.user_service import get_user_by_email
+from app.models.auth import (
+    AccessTokenResponse,
+    CurrentUser,
+    LoginRequest,
+    LogoutResponse,
+    RegisterRequest,
+    RegisterResponse,
+)
+from app.services.user_service import (
+    EmailAlreadyRegisteredError,
+    create_user,
+    get_user_by_email,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +56,29 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
         path="/api/auth",
     )
+
+
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
+def register(
+    request: Request,
+    body: RegisterRequest,
+    db: Session = Depends(get_db),
+) -> RegisterResponse:
+    """Self-serve account creation. Returns the new user (never any
+    tokens) — the client must POST to /login next. Rate-limited on the
+    same 5/minute budget as /login so this endpoint isn't a signup-spam
+    vector or a side channel for email enumeration."""
+    try:
+        user = create_user(db, email=body.email, plain_password=body.password)
+    except EmailAlreadyRegisteredError:
+        logger.info("register: email already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        )
+
+    return RegisterResponse(id=user.id, email=user.email)
 
 
 @router.post("/login", response_model=AccessTokenResponse)

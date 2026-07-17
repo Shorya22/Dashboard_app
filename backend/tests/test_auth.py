@@ -40,7 +40,10 @@ import pytest
 # app.* that could trigger app.db.session's module-level engine creation.
 _tmp_dir = tempfile.mkdtemp(prefix="dashboard_app_test_db_")
 _tmp_db_path = os.path.join(_tmp_dir, "test_app.db")
-os.environ["DATABASE_URL"] = f"sqlite:////{_tmp_db_path.lstrip('/')}"
+# sqlite URL wants forward slashes and 3 leading slashes for an absolute
+# path (Windows: `sqlite:///C:/tmp/x.db`; POSIX: `sqlite:////tmp/x.db`).
+# Normalize backslashes so the same code path works on both.
+os.environ["DATABASE_URL"] = "sqlite:///" + _tmp_db_path.replace("\\", "/")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -193,6 +196,75 @@ def test_logout_clears_cookie_and_invalidates_subsequent_refresh(client):
     # that logout is meant to produce.
     refresh_resp = client.post("/api/auth/refresh")
     assert refresh_resp.status_code == 401
+
+
+def test_register_creates_user_and_allows_login(client):
+    resp = client.post(
+        "/api/auth/register",
+        json={"email": "new.user@example.com", "password": "correct-horse-9"},
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["email"] == "new.user@example.com"
+    assert "id" in body and body["id"]
+    # Registration must never leak tokens or the password hash.
+    assert "access_token" not in body
+    assert "hashed_password" not in body
+    assert "password" not in body
+
+    login_resp = client.post(
+        "/api/auth/login",
+        json={"email": "new.user@example.com", "password": "correct-horse-9"},
+    )
+    assert login_resp.status_code == 200
+
+
+def test_register_normalizes_email_and_login_is_case_insensitive(client):
+    resp = client.post(
+        "/api/auth/register",
+        json={"email": "Mixed.Case@Example.COM", "password": "correct-horse-9"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["email"] == "mixed.case@example.com"
+
+    # Same casing the user typed at register should also work at login.
+    login_resp = client.post(
+        "/api/auth/login",
+        json={"email": "Mixed.Case@Example.COM", "password": "correct-horse-9"},
+    )
+    assert login_resp.status_code == 200
+
+
+def test_register_duplicate_email_returns_409(client):
+    first = client.post(
+        "/api/auth/register",
+        json={"email": "dup@example.com", "password": "correct-horse-9"},
+    )
+    assert first.status_code == 201
+
+    second = client.post(
+        "/api/auth/register",
+        json={"email": "dup@example.com", "password": "another-pass-7"},
+    )
+    assert second.status_code == 409
+    assert "detail" in second.json()
+
+
+def test_register_rejects_weak_password(client):
+    # Too short — Pydantic min_length=8 rejects before it hits the handler.
+    resp = client.post(
+        "/api/auth/register",
+        json={"email": "weak@example.com", "password": "abc12"},
+    )
+    assert resp.status_code == 422
+
+    # Letters only, no digit — custom validator rejects.
+    resp = client.post(
+        "/api/auth/register",
+        json={"email": "weak2@example.com", "password": "abcdefghij"},
+    )
+    assert resp.status_code == 422
 
 
 def test_login_rate_limited_after_repeated_bad_attempts(client):
