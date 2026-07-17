@@ -138,7 +138,7 @@ export function LoginPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={shake ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, -3, 3, 0] } : { opacity: 1, y: 0 }}
         transition={shake ? { x: { duration: 0.4, ease: 'easeInOut' } } : { duration: 0.3, ease: 'easeOut' }}
-        className="relative z-10 grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_90px_-24px_rgba(28,79,151,0.38)] lg:w-[90vw] lg:max-w-[1180px] lg:grid-cols-2 lg:bg-[linear-gradient(160deg,hsl(216,43%,95.5%)_0%,hsl(216,50%,91%)_100%)]"
+        className="relative z-10 grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_90px_-24px_rgba(28,79,151,0.38)] lg:w-[90vw] lg:max-w-[1300px] lg:grid-cols-2 lg:bg-[linear-gradient(160deg,hsl(216,43%,95.5%)_0%,hsl(216,50%,91%)_100%)]"
       >
         {/* dotted texture across the whole card interior — lg only */}
         <div
@@ -151,7 +151,7 @@ export function LoginPage() {
         />
 
         {/* Left panel — branding + a peek at the dashboard. Hidden below lg. */}
-        <div className="relative z-10 hidden flex-col overflow-hidden p-10 lg:flex xl:p-14">
+        <div className="relative z-10 hidden flex-col overflow-hidden p-12 lg:flex xl:p-16">
           {/* soft brand blob, a light accent behind the bottom-left card —
               kept light + low so it never washes out the value-prop text */}
           <div
@@ -166,26 +166,26 @@ export function LoginPage() {
             <img src={hexawareLogo} alt="Hexaware" className="h-7 w-auto object-contain" />
           </div>
 
-          <div className="relative z-10 mt-6 max-w-md">
-            <div className="mb-3.5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm">
+          <div className="relative z-10 mt-8 max-w-md">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm">
               <Sparkles className="h-3.5 w-3.5" />
               GCC Cockpit
             </div>
-            <h1 className="mb-2.5 text-[34px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[38px]">
+            <h1 className="mb-3 text-[38px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[42px]">
               Welcome back!
             </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-[15px] leading-relaxed text-muted-foreground">
               Sign in to your DEPT | Hexaware GCC workforce cockpit — headcount, utilization, skills,
               and attrition, all in one place.
             </p>
           </div>
 
           {/* Value-prop highlights — what you're signing into */}
-          <ul className="relative z-10 mt-5 space-y-2.5">
+          <ul className="relative z-10 mt-8 space-y-4">
             {VALUE_PROPS.map((v) => (
-              <li key={v.title} className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-card text-primary shadow-[0_4px_12px_-2px_rgba(28,79,151,0.2)] ring-1 ring-black/[0.03]">
-                  <v.icon className="h-[18px] w-[18px]" />
+              <li key={v.title} className="flex items-center gap-3.5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-primary shadow-[0_4px_12px_-2px_rgba(28,79,151,0.2)] ring-1 ring-black/[0.03]">
+                  <v.icon className="h-5 w-5" />
                 </div>
                 <div>
                   <p className="text-sm font-bold leading-tight text-foreground">{v.title}</p>
@@ -197,31 +197,31 @@ export function LoginPage() {
 
           {/* Decorative "at a glance" card — illustrative shapes only, no
               invented figures (this is a public, pre-auth page). */}
-          <div className="relative z-10 mt-6 w-[330px] max-w-full rounded-2xl border border-white/60 bg-card p-4 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_10px_20px_-6px_rgba(28,79,151,0.14),0_24px_48px_-16px_rgba(28,79,151,0.30)]">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+          <div className="relative z-10 mt-8 w-[350px] max-w-full rounded-2xl border border-white/60 bg-card p-5 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_10px_20px_-6px_rgba(28,79,151,0.14),0_24px_48px_-16px_rgba(28,79,151,0.30)]">
+            <div className="mb-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
                   <Users className="h-4 w-4 text-primary" />
                 </div>
-                <span className="text-[13px] font-bold text-foreground">Workforce at a glance</span>
+                <span className="text-sm font-bold text-foreground">Workforce at a glance</span>
               </div>
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-                <TrendingUp className="h-3.5 w-3.5 text-primary" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                <TrendingUp className="h-4 w-4 text-primary" />
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-y border-border py-3">
-              <svg width="46" height="46" viewBox="0 0 64 64" aria-hidden="true">
+            <div className="flex items-center justify-between gap-3 border-y border-border py-4">
+              <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
                 <circle cx="32" cy="32" r="30" fill="hsl(215 25% 88%)" />
                 <path d="M32 32 L32 2 A30 30 0 0 1 60 42 Z" fill="hsl(215 70% 40%)" />
                 <path d="M32 32 L60 42 A30 30 0 0 1 20 60 Z" fill="hsl(215 78% 62%)" />
               </svg>
-              <div className="flex h-10 items-end gap-1.5">
-                <div className="h-4 w-2.5 rounded-sm" style={{ background: 'hsl(215 60% 80%)' }} />
-                <div className="h-7 w-2.5 rounded-sm" style={{ background: 'hsl(215 70% 62%)' }} />
-                <div className="h-9 w-2.5 rounded-sm bg-primary" />
+              <div className="flex h-12 items-end gap-2">
+                <div className="h-5 w-3 rounded-sm" style={{ background: 'hsl(215 60% 80%)' }} />
+                <div className="h-8 w-3 rounded-sm" style={{ background: 'hsl(215 70% 62%)' }} />
+                <div className="h-11 w-3 rounded-sm bg-primary" />
               </div>
-              <svg width="66" height="36" viewBox="0 0 80 44" className="shrink-0" aria-hidden="true">
+              <svg width="76" height="40" viewBox="0 0 80 44" className="shrink-0" aria-hidden="true">
                 <polyline
                   points="2,34 18,26 34,30 50,14 64,20 78,6"
                   fill="none"
@@ -233,7 +233,7 @@ export function LoginPage() {
               </svg>
             </div>
 
-            <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">
+            <p className="mt-3.5 text-center text-xs font-medium text-muted-foreground">
               Headcount, utilization, and attrition — all in one view
             </p>
           </div>
