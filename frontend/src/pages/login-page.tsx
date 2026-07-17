@@ -112,24 +112,34 @@ export function LoginPage() {
     // — gradient + soft radial glows + dot texture — so login, landing, and the
     // dashboard read as one continuous product. No dark: variants: the app has
     // no dark-mode palette (see welcome-page.tsx note).
-    <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 bg-[linear-gradient(180deg,#F8FAFC_0%,#EAF3FF_45%,#F8FAFC_100%)] text-foreground">
-      {/* Decorative background, clipped by this wrapper's own overflow-hidden */}
+    <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 bg-[linear-gradient(160deg,hsl(216,54%,93%)_0%,hsl(215,56%,87%)_55%,hsl(216,52%,91%)_100%)] text-foreground">
+      {/* Decorative page background — same blue tone + dot texture + soft wave
+          as the card's branding panel, so the whole surface reads as one
+          premium system. Clipped by this wrapper's own overflow-hidden. */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         <div
-          className="absolute -left-40 -top-40 h-[520px] w-[520px] rounded-full opacity-60 blur-3xl"
-          style={{ background: 'radial-gradient(circle, hsl(215 80% 60% / 0.28), transparent 70%)' }}
+          className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full opacity-70 blur-3xl"
+          style={{ background: 'radial-gradient(circle, hsl(215 80% 62% / 0.30), transparent 70%)' }}
         />
         <div
-          className="absolute -bottom-40 -right-32 h-[460px] w-[460px] rounded-full opacity-50 blur-3xl"
-          style={{ background: 'radial-gradient(circle, hsl(217 90% 65% / 0.22), transparent 70%)' }}
+          className="absolute -bottom-40 -right-32 h-[500px] w-[500px] rounded-full opacity-60 blur-3xl"
+          style={{ background: 'radial-gradient(circle, hsl(217 90% 66% / 0.24), transparent 70%)' }}
         />
         <div
-          className="absolute inset-0 opacity-[0.4]"
+          className="absolute inset-0 opacity-60"
           style={{
-            backgroundImage: 'radial-gradient(circle, hsl(215 40% 55% / 0.12) 1px, transparent 1px)',
-            backgroundSize: '26px 26px',
+            backgroundImage: 'radial-gradient(circle, hsl(215 42% 52% / 0.2) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
           }}
         />
+        <svg
+          className="absolute inset-x-0 bottom-0 h-[36vh] w-full"
+          viewBox="0 0 1440 400"
+          preserveAspectRatio="none"
+        >
+          <path d="M0,180 C240,280 480,80 720,130 C960,180 1200,320 1440,220 L1440,400 L0,400 Z" fill="hsl(215 65% 55% / 0.10)" />
+          <path d="M0,240 C260,320 520,160 760,200 C1000,240 1220,360 1440,280 L1440,400 L0,400 Z" fill="hsl(215 68% 48% / 0.12)" />
+        </svg>
       </div>
 
       {/* Unified card: left branding panel + right form panel. The shake
@@ -142,12 +152,12 @@ export function LoginPage() {
             ? { x: { duration: 0.4, ease: 'easeInOut' } }
             : { duration: 0.3, ease: 'easeOut' }
         }
-        className="relative z-10 grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-2xl lg:grid-cols-2"
+        className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_80px_-24px_rgba(28,79,151,0.35)] lg:min-h-[660px] lg:grid-cols-2"
       >
         {/* Left panel — premium branding + value props. Hidden below lg. No
             dashboard mockup here: that peek-at-the-cockpit treatment lives on
             the (post-auth) landing page, not on this public sign-in surface. */}
-        <div className="relative hidden flex-col overflow-hidden p-10 lg:flex xl:p-12 bg-[linear-gradient(160deg,hsl(215,44%,96%)_0%,hsl(216,62%,87%)_100%)]">
+        <div className="relative hidden flex-col overflow-hidden p-12 lg:flex xl:p-14 bg-[linear-gradient(160deg,hsl(215,44%,96%)_0%,hsl(216,62%,87%)_100%)]">
           {/* layered accent glows for depth */}
           <div
             className="pointer-events-none absolute -right-24 -top-28 h-[360px] w-[360px] rounded-full opacity-70"
@@ -190,7 +200,7 @@ export function LoginPage() {
               <Sparkles className="h-3.5 w-3.5" />
               GCC Cockpit
             </div>
-            <h1 className="mb-3 text-[36px] font-extrabold leading-[1.1] tracking-tight text-foreground">
+            <h1 className="mb-3 text-[38px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[44px]">
               Welcome back!
             </h1>
             <p className="text-base leading-relaxed text-muted-foreground">
@@ -222,8 +232,8 @@ export function LoginPage() {
         </div>
 
         {/* Right panel — sign-in form, sitting directly on the white card. */}
-        <div className="relative flex items-center justify-center p-6 sm:p-10 lg:p-12">
-          <div className="w-full max-w-sm">
+        <div className="relative flex items-center justify-center p-8 sm:p-12 lg:p-14">
+          <div className="w-full max-w-md">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
@@ -231,7 +241,7 @@ export function LoginPage() {
               <img src={hexawareLogo} alt="Hexaware" className="h-6 w-auto object-contain" />
             </div>
 
-            <h2 className="mb-1.5 text-[26px] font-extrabold tracking-tight text-foreground">Sign in</h2>
+            <h2 className="mb-1.5 text-[28px] font-extrabold tracking-tight text-foreground">Sign in</h2>
             <p className="mb-7 text-sm text-muted-foreground">
               Use your DEPT | Hexaware account to continue
             </p>
