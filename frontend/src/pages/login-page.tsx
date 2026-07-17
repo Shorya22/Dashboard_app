@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle2, Users, TrendingUp } from 'lucide-react'
+import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle2, Users, TrendingUp, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
@@ -146,17 +146,22 @@ export function LoginPage() {
           </div>
 
           <div className="relative z-10 mt-10 max-w-md">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              GCC Cockpit
+            </div>
             <h1 className="mb-3 text-[40px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[46px]">
               Welcome back!
             </h1>
             <p className="text-base leading-relaxed text-muted-foreground">
-              Sign in to access your workforce analytics dashboard.
+              Sign in to your DEPT | Hexaware GCC workforce cockpit — headcount, utilization, skills,
+              and attrition, all in one place.
             </p>
           </div>
 
           {/* Decorative "at a glance" card — illustrative shapes only, no
               invented figures (this is a public, pre-auth page). */}
-          <div className="relative z-10 mt-auto w-[350px] max-w-full rounded-2xl border border-border/60 bg-card p-5 shadow-[0_20px_44px_-14px_rgba(28,79,151,0.28)]">
+          <div className="relative z-10 mt-auto w-[350px] max-w-full rounded-2xl border border-white/60 bg-card p-5 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_10px_20px_-6px_rgba(28,79,151,0.14),0_24px_48px_-16px_rgba(28,79,151,0.30)]">
             <div className="mb-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
@@ -202,7 +207,7 @@ export function LoginPage() {
             elevated white card on the dotted surface; on mobile it stays
             flat/clean, where it's the only visible panel. */}
         <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:p-12">
-          <div className="w-full max-w-md lg:rounded-2xl lg:border lg:border-border/60 lg:bg-card lg:px-9 lg:py-12 lg:shadow-[0_28px_56px_-16px_rgba(28,79,151,0.25)]">
+          <div className="w-full max-w-md lg:rounded-2xl lg:border lg:border-white/60 lg:bg-card lg:px-9 lg:py-12 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_14px_28px_-8px_rgba(28,79,151,0.16),0_38px_70px_-20px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.02]">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
