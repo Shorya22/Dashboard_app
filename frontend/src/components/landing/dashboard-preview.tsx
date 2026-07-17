@@ -39,16 +39,7 @@ const SENIORITY_BARS = ['w-[88%]', 'w-[62%]', 'w-[40%]']
  * snapshot for KPIs — no live data wiring). Entrance/float motion is applied
  * by the parent.
  */
-export function DashboardPreview({
-  className,
-  showValues = true,
-}: {
-  className?: string
-  // Login is a PUBLIC (pre-auth) page, so it passes showValues={false} to
-  // render abstract bars instead of the real KPI snapshot — the landing
-  // page is post-auth and shows the values.
-  showValues?: boolean
-}) {
+export function DashboardPreview({ className }: { className?: string }) {
   return (
     <div
       className={cn(
@@ -105,11 +96,7 @@ export function DashboardPreview({
                   </p>
                   <kpi.icon className="h-3 w-3 shrink-0 text-primary/60" />
                 </div>
-                {showValues ? (
-                  <p className="text-lg font-extrabold leading-none text-foreground">{kpi.value}</p>
-                ) : (
-                  <div className="h-2.5 w-9 rounded-full bg-primary/25" />
-                )}
+                <p className="text-lg font-extrabold leading-none text-foreground">{kpi.value}</p>
               </div>
             ))}
           </div>

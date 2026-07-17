@@ -4,7 +4,20 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle2, Sparkles, ArrowRight } from 'lucide-react'
+import {
+  Loader2,
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  AlertCircle,
+  CheckCircle2,
+  Sparkles,
+  ArrowRight,
+  BarChart3,
+  Clock,
+  TrendingUp,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
@@ -13,9 +26,17 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { apiClient, extractErrorMessage } from '@/lib/api-client'
 import { useAuth } from '@/lib/auth-context'
-import { DashboardPreview } from '@/components/landing/dashboard-preview'
 import deptLogo from '@/assets/dept-logo-cropped.png'
 import hexawareLogo from '@/assets/Blue Logo.png'
+
+// What the user is signing into — grounded in real cockpit modules, no
+// numbers (this is a public page). Replaces the dashboard-preview mockup,
+// which belongs on the (post-auth) landing page, not here.
+const VALUE_PROPS = [
+  { icon: BarChart3, title: 'Workforce analytics', sub: 'Headcount, growth & composition' },
+  { icon: Clock, title: 'Utilization insights', sub: 'Client vs internal hours' },
+  { icon: TrendingUp, title: 'Attrition & retention', sub: 'Joiners, exits & resignation trends' },
+]
 
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -123,14 +144,40 @@ export function LoginPage() {
         }
         className="relative z-10 grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-2xl lg:grid-cols-2"
       >
-        {/* Left panel — branding + a peek at the cockpit. Hidden below lg. */}
-        <div className="relative hidden flex-col overflow-hidden p-10 lg:flex xl:p-12 bg-[linear-gradient(160deg,hsl(215,40%,96%)_0%,hsl(216,58%,89%)_100%)]">
-          {/* soft blue accent glow */}
+        {/* Left panel — premium branding + value props. Hidden below lg. No
+            dashboard mockup here: that peek-at-the-cockpit treatment lives on
+            the (post-auth) landing page, not on this public sign-in surface. */}
+        <div className="relative hidden flex-col overflow-hidden p-10 lg:flex xl:p-12 bg-[linear-gradient(160deg,hsl(215,44%,96%)_0%,hsl(216,62%,87%)_100%)]">
+          {/* layered accent glows for depth */}
           <div
-            className="pointer-events-none absolute -bottom-32 -left-24 h-[420px] w-[520px] rounded-full opacity-70"
-            style={{ background: 'radial-gradient(circle at 30% 30%, hsl(215 75% 70% / 0.5), transparent 70%)' }}
+            className="pointer-events-none absolute -right-24 -top-28 h-[360px] w-[360px] rounded-full opacity-70"
+            style={{ background: 'radial-gradient(circle at 40% 40%, hsl(215 80% 72% / 0.55), transparent 70%)' }}
             aria-hidden="true"
           />
+          <div
+            className="pointer-events-none absolute -bottom-24 -left-20 h-[380px] w-[440px] rounded-full opacity-60"
+            style={{ background: 'radial-gradient(circle at 30% 30%, hsl(215 75% 66% / 0.45), transparent 70%)' }}
+            aria-hidden="true"
+          />
+          {/* fine dot texture */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-50"
+            style={{
+              backgroundImage: 'radial-gradient(circle, hsl(215 45% 50% / 0.16) 1px, transparent 1px)',
+              backgroundSize: '24px 24px',
+            }}
+            aria-hidden="true"
+          />
+          {/* soft brand wave anchoring the bottom edge */}
+          <svg
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-28 w-full"
+            viewBox="0 0 600 120"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path d="M0,58 C150,110 300,18 450,52 C525,68 570,82 600,72 L600,120 L0,120 Z" fill="hsl(215 70% 55% / 0.12)" />
+            <path d="M0,82 C160,120 320,50 470,82 C540,96 580,102 600,94 L600,120 L0,120 Z" fill="hsl(215 70% 45% / 0.16)" />
+          </svg>
 
           <div className="relative z-10 flex items-center gap-3.5">
             <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
@@ -138,12 +185,12 @@ export function LoginPage() {
             <img src={hexawareLogo} alt="Hexaware" className="h-6 w-auto object-contain" />
           </div>
 
-          <div className="relative z-10 mt-9 max-w-md">
+          <div className="relative z-10 mt-10 max-w-md">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary">
               <Sparkles className="h-3.5 w-3.5" />
               GCC Cockpit
             </div>
-            <h1 className="mb-3 text-[34px] font-extrabold leading-tight tracking-tight text-foreground">
+            <h1 className="mb-3 text-[36px] font-extrabold leading-[1.1] tracking-tight text-foreground">
               Welcome back!
             </h1>
             <p className="text-base leading-relaxed text-muted-foreground">
@@ -152,11 +199,26 @@ export function LoginPage() {
             </p>
           </div>
 
-          {/* Decorative cockpit preview — same component as the landing, with
-              KPI numbers hidden (this is a public, pre-auth page). */}
-          <div className="relative z-10 mt-auto pt-10">
-            <DashboardPreview showValues={false} />
-          </div>
+          {/* Value-prop highlights — what you're signing into */}
+          <ul className="relative z-10 mt-auto space-y-3.5 pt-12">
+            {VALUE_PROPS.map((v, i) => (
+              <motion.li
+                key={v.title}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35, delay: 0.15 + i * 0.08, ease: 'easeOut' }}
+                className="flex items-center gap-3.5"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-primary shadow-sm ring-1 ring-primary/10">
+                  <v.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">{v.title}</p>
+                  <p className="text-xs text-muted-foreground">{v.sub}</p>
+                </div>
+              </motion.li>
+            ))}
+          </ul>
         </div>
 
         {/* Right panel — sign-in form, sitting directly on the white card. */}
