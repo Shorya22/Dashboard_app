@@ -225,7 +225,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
                 className="fill-tremor-content dark:fill-dark-tremor-content"
                 axisLine={false}
                 tickLine={false}
-                width={yAxisWidth}
+                width={effectiveYAxisWidth}
                 label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13 } : undefined}
               />
             </>

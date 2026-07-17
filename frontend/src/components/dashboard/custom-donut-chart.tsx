@@ -90,7 +90,10 @@ export const CustomDonutChart = memo(function CustomDonutChart({
 
   return (
     <div className={cn('flex h-full w-full flex-col items-center gap-3', className)}>
-      <div className="relative aspect-square h-full max-h-full min-h-0 flex-1">
+      <div
+        className="relative aspect-square h-full max-h-full min-h-0 flex-1"
+        onMouseLeave={() => setActiveIndex(undefined)}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
             <Pie

@@ -236,7 +236,7 @@ export function WorkforcePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={regionCounts.every((r) => r.count === 0)}
-          height="h-80"
+          height="h-96 sm:h-80"
         >
           {/* Single column on mobile — a hard-coded 2x2 grid squeezed each
               region's label + progress bar + count into a ~150px-wide

@@ -49,7 +49,7 @@ export const STATUS_COLORS: Record<string, string> = {
   'Strategic Pool': 'teal',
 }
 
-// Seniority Category — used on the Home page's "GCC vs Non-GCC" donut
+// Seniority Category — used on the Home page's "Workforce by Seniority" donut
 // and other workforce breakdowns.
 export const SENIORITY_CATEGORY_COLORS: Record<string, string> = {
   Senior: 'blue',

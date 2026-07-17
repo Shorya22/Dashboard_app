@@ -154,7 +154,7 @@ export function Topbar({
   if (variant === 'home') {
     return (
       <header className="flex shrink-0 flex-col border-b border-[#D7E4FF] bg-[#F3F7FF]/90 backdrop-blur">
-        <div className="h-1 w-full bg-[#4C82FF]" />
+        <div className="h-1 w-full bg-[hsl(var(--primary))]" />
         <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-2 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             {menuButton}
@@ -175,7 +175,7 @@ export function Topbar({
 
   return (
     <header className="flex shrink-0 flex-col border-b border-[#D7E4FF] bg-[#F3F7FF]/90 backdrop-blur">
-      <div className="h-1 w-full bg-[#4C82FF]" />
+      <div className="h-1 w-full bg-[hsl(var(--primary))]" />
       {/* `min-h-14` (not a fixed `h-14`) + `line-clamp-2` on the subtitle:
           a fixed height fighting a subtitle long enough to wrap on a narrow
           phone is exactly what pushed the icons out of alignment with the

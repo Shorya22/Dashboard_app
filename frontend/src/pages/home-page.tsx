@@ -42,10 +42,6 @@ export function HomePage() {
     [trends.data],
   )
 
-  // NOTE: this donut is titled "GCC vs Non-GCC" but actually renders the
-  // Seniority Category breakdown — a title/legend mismatch present in the
-  // source Power BI report itself, replicated here intentionally rather
-  // than "fixed" to a literal GCC/Non-GCC split, per the parity audit.
   // Seniority Category mapping is PROVISIONAL (not confirmed against real
   // DAX). The reference PDF's legend for this donut shows exactly 4
   // segments (Senior/Lead/Mid/Other) with no separate "TBD" slice, so we
@@ -163,7 +159,7 @@ export function HomePage() {
       </ChartCard>
 
       {/* All 3 donuts side-by-side in one row, left-to-right order matching
-          the reference: Internal v Client Utilization, GCC vs Non-GCC,
+          the reference: Internal v Client Utilization, Workforce by Seniority,
           Workforce Category. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ChartCard
@@ -183,13 +179,13 @@ export function HomePage() {
         </ChartCard>
 
         <ChartCard
-          title="GCC vs Non-GCC"
+          title="Workforce by Seniority"
           subtitle="Seniority Category"
           isLoading={breakdowns.isLoading}
           isError={breakdowns.isError}
           isEmpty={seniorityCategoryData.length === 0}
           provisional
-          provisionalNote="Title/legend mismatch replicated from the source Power BI report as-is: this donut is titled 'GCC vs Non-GCC' but shows the Seniority Category split (Senior/Lead/Mid/Other/TBD), which is itself a PROVISIONAL mapping not confirmed against real DAX."
+          provisionalNote="Seniority Category mapping is PROVISIONAL, not confirmed against real DAX."
           height="h-56"
         >
           <CustomDonutChart
