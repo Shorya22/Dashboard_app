@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import axios from 'axios'
 
 import { useAuth } from '@/lib/auth-context'
@@ -14,7 +14,6 @@ import { authTokenStore } from '@/lib/auth-context'
  */
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { accessToken, setAuth, isInitializing, setIsInitializing } = useAuth()
-  const location = useLocation()
   const [checked, setChecked] = React.useState(false)
 
   React.useEffect(() => {
@@ -63,7 +62,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!accessToken) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    return <Navigate to="/login" replace />
   }
 
   return <>{children}</>

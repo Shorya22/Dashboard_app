@@ -33,10 +33,7 @@ export function LoginPage() {
   const { setAuth } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const locationState = location.state as
-    | { from?: Location; registeredEmail?: string }
-    | null
-  const from = locationState?.from?.pathname ?? '/welcome'
+  const locationState = location.state as { registeredEmail?: string } | null
   // One-shot flash message set by RegisterPage after a successful signup.
   // Captured into local state so it survives the history.replaceState
   // below (which clears it from location.state so a refresh doesn't
@@ -72,7 +69,9 @@ export function LoginPage() {
     onSuccess: (data) => {
       setServerError(null)
       setAuth(data.access_token)
-      navigate(from, { replace: true })
+      // Always land on the welcome page after login, regardless of what
+      // page (if any) the user was redirected here from.
+      navigate('/welcome', { replace: true })
     },
     onError: (error) => {
       setServerError(extractErrorMessage(error, 'Unable to sign in. Please try again.'))
