@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
+import { useChartTheme } from '@/lib/chart-theme-store'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
@@ -33,7 +34,7 @@ interface CustomLineChartProps {
  * below the plot rather than Recharts' own in-SVG `<Legend>`) so all three
  * chart types share one consistent legend look instead of each having its
  * own slightly different styling. */
-export function CustomLineChart({
+export const CustomLineChart = React.memo(function CustomLineChart({
   data,
   index,
   category,
@@ -42,15 +43,25 @@ export function CustomLineChart({
   xAxisLabel,
   className,
 }: CustomLineChartProps) {
+  // See custom-bar-chart.tsx — subscribes this chart to theme changes.
+  useChartTheme()
   const stroke = tremorHex(color)
+
+  // Stable for this chart's whole lifetime — see chart-tooltip-portal.tsx /
+  // chart-tooltip-touch-store.ts.
+  const ownerId = React.useId()
 
   // See custom-bar-chart.tsx: the tooltip portal needs this chart
   // instance's own wrapper rect to translate Recharts' in-chart cursor
   // coordinate into a viewport position.
   const containerRef = React.useRef<HTMLDivElement>(null)
   const tooltipContent = React.useMemo(
-    () => createFullLabelTooltip({ getContainerRect: () => containerRef.current?.getBoundingClientRect() ?? null }),
-    [],
+    () =>
+      createFullLabelTooltip({
+        getContainerRect: () => containerRef.current?.getBoundingClientRect() ?? null,
+        ownerId,
+      }),
+    [ownerId],
   )
 
   // Permanent per-point value labels (below) match the Power BI reference
@@ -140,4 +151,4 @@ export function CustomLineChart({
       />
     </div>
   )
-}
+})

@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { PieChart, Pie, Cell, Sector, ResponsiveContainer, type PieSectorDataItem } from 'recharts'
+import { memo, useEffect, useState } from 'react'
+import { PieChart, Pie, Cell, Sector, ResponsiveContainer, type SectorProps } from 'recharts'
 import { tremorHex } from '@/lib/chart-colors'
+import { useChartTheme } from '@/lib/chart-theme-store'
+import { useDismissSignal } from '@/lib/chart-tooltip-touch-store'
 import { cn } from '@/lib/utils'
 import { CustomLegend } from './custom-legend'
 
@@ -42,7 +44,7 @@ function formatPercent(value: number, total: number): string {
  * dashboard's restrained motion, via Recharts' built-in active-shape hook
  * rather than a CSS transition (Recharts redraws the arc path on hover,
  * so CSS scale would distort from the wrong transform origin). */
-function renderActiveShape(props: PieSectorDataItem) {
+function renderActiveShape(props: SectorProps) {
   const { outerRadius = 0, ...rest } = props
   return <Sector {...rest} outerRadius={Number(outerRadius) + 6} />
 }
@@ -63,10 +65,28 @@ function renderActiveShape(props: PieSectorDataItem) {
  * guaranteed room a fluid, variously-sized-per-page donut can't always
  * provide, especially at the small end of a 3-column grid. Dropping
  * permanent labels entirely sidesteps that class of bug completely. */
-export function CustomDonutChart({ data, colors, className, showLegend = true, totalLabel = 'Total' }: CustomDonutChartProps) {
+export const CustomDonutChart = memo(function CustomDonutChart({
+  data,
+  colors,
+  className,
+  showLegend = true,
+  totalLabel = 'Total',
+}: CustomDonutChartProps) {
+  // See custom-bar-chart.tsx — subscribes this chart to theme changes.
+  useChartTheme()
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
   const total = data.reduce((sum, d) => sum + d.value, 0)
   const activeDatum = activeIndex !== undefined ? data[activeIndex] : undefined
+
+  // Touch has no `mouseleave`, so tapping a slice on mobile could leave
+  // `activeIndex` stuck set indefinitely — the center display would keep
+  // showing that slice's detail instead of reverting to the total. Reset
+  // on the same signals the bar/line tooltips dismiss on (scroll,
+  // touch-drag, tap outside every chart) — see chart-tooltip-touch-store.ts.
+  const dismissSignal = useDismissSignal()
+  useEffect(() => {
+    setActiveIndex(undefined)
+  }, [dismissSignal])
 
   return (
     <div className={cn('flex h-full w-full flex-col items-center gap-3', className)}>
@@ -134,4 +154,4 @@ export function CustomDonutChart({ data, colors, className, showLegend = true, t
       )}
     </div>
   )
-}
+})

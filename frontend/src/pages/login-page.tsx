@@ -200,7 +200,7 @@ export function LoginPage() {
               seam down the middle — the sign-in card itself is what
               separates from the background now, via its own shadow, not a
               panel-to-panel color/border split. */}
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden px-8 py-10 sm:px-12 bg-[linear-gradient(180deg,hsl(215,30%,97%)_0%,hsl(216,55%,90%)_100%)] dark:bg-[linear-gradient(180deg,#0E1B5E_0%,#081040_100%)]">
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden px-5 py-10 sm:px-12 bg-[linear-gradient(180deg,hsl(215,30%,97%)_0%,hsl(216,55%,90%)_100%)] dark:bg-[linear-gradient(180deg,#0E1B5E_0%,#081040_100%)]">
             <div
               className="pointer-events-none absolute inset-0 opacity-60 dark:opacity-20"
               style={{
@@ -213,7 +213,7 @@ export function LoginPage() {
                 surrounding tinted panel with a pronounced shadow and a
                 slight upward offset, rather than the form sitting flush
                 in the panel with no separation of its own. */}
-            <div className="relative w-full max-w-[360px] -translate-y-3 rounded-2xl border border-border/50 bg-card px-7 py-14 shadow-[0_24px_48px_-12px_rgba(28,79,151,0.28)] sm:px-8 sm:py-24">
+            <div className="relative w-full max-w-[360px] -translate-y-3 rounded-2xl border border-border/50 bg-card px-5 py-14 shadow-[0_24px_48px_-12px_rgba(28,79,151,0.28)] sm:px-8 sm:py-24">
               {/* Logos shown here on small screens where left panel is hidden */}
               <div className="mb-6 flex items-center gap-3.5 lg:hidden">
                 <img src={deptLogo} alt="DEPT" className="h-14 w-auto dark:invert" />

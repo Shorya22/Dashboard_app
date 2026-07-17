@@ -21,6 +21,7 @@ export const routeImporters: Record<string, () => Promise<unknown>> = {
   '/utilization/employees': () => import('@/pages/employee-utilization-page'),
   '/utilization/projects': () => import('@/pages/project-utilization-page'),
   '/utilization/overview-summary': () => import('@/pages/utilization-overview-page'),
+  '/settings': () => import('@/pages/settings-page'),
 }
 
 const preloaded = new Set<string>()

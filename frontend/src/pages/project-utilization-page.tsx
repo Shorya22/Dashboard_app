@@ -25,6 +25,14 @@ import {
   type ProjectDetailRow,
 } from '@/lib/utilization-api'
 
+// Hoisted to module scope so its array reference is stable across renders,
+// matching CustomBarChart's React.memo (values are constant, not derived
+// from any state) — reused by both charts below.
+const HOURS_TYPE_SERIES = [
+  { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
+  { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
+]
+
 const fmtHours = (v: number) =>
   v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -171,7 +179,7 @@ function ProjectPickerPage() {
 
       <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 bg-muted/50">
+          <thead className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
@@ -229,7 +237,7 @@ function ProjectPickerPage() {
         </table>
       </TableScrollContainer>
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">
           Page {clampedPageIndex + 1} of {pageCount} {recordsQuery.isFetching && '· updating…'}
         </span>
@@ -439,10 +447,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
           <CustomBarChart
             data={employeeData}
             index="name"
-            series={[
-              { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
-              { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
-            ]}
+            series={HOURS_TYPE_SERIES}
             yAxisLabel="Hours"
             layout="vertical"
             yAxisWidth={160}
@@ -460,10 +465,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
           <CustomBarChart
             data={weekData}
             index="week"
-            series={[
-              { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
-              { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
-            ]}
+            series={HOURS_TYPE_SERIES}
             yAxisLabel="Hours"
             xAxisLabel="Week"
             showLegend
@@ -476,7 +478,7 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
         <h2 className="mb-3 text-lg font-semibold">Detail</h2>
         <TableScrollContainer>
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 bg-muted/50">
+            <thead className="sticky top-0 z-10 bg-muted">
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id}>
                   {hg.headers.map((header) => (

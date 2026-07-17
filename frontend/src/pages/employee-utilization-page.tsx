@@ -192,7 +192,7 @@ function EmployeePickerPage() {
 
       <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 bg-muted/50">
+          <thead className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
@@ -250,7 +250,7 @@ function EmployeePickerPage() {
         </table>
       </TableScrollContainer>
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">
           Page {clampedPageIndex + 1} of {pageCount} {recordsQuery.isFetching && '· updating…'}
         </span>
@@ -355,7 +355,11 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
     )
   }, [filteredRecords])
 
-  const weekCategories = hoursType ? [hoursType] : HOURS_TYPES
+  const weekCategories = React.useMemo(() => (hoursType ? [hoursType] : HOURS_TYPES), [hoursType])
+  const weekSeries = React.useMemo(
+    () => weekCategories.map((c) => ({ category: c, color: colorsForLabels([c], HOURS_TYPE_COLORS)[0] })),
+    [weekCategories],
+  )
 
   const weekData = React.useMemo(() => {
     const totals = new Map<string, { 'Client Hours': number; 'Internal Hours': number }>()
@@ -471,7 +475,7 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
           <CustomBarChart
             data={weekData}
             index="week"
-            series={weekCategories.map((c) => ({ category: c, color: colorsForLabels([c], HOURS_TYPE_COLORS)[0] }))}
+            series={weekSeries}
             yAxisLabel="Hours"
             xAxisLabel="Week"
             showLegend

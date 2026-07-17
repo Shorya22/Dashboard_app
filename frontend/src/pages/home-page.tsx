@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Card } from '@tremor/react'
 import { Users, Target, Building2, Clock, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -26,12 +27,20 @@ export function HomePage() {
   const trends = useRosterTrends()
   const booking = useBookingSummary()
 
-  const headcountTrend = trends.data?.month_wise_closing_headcount ?? []
-
-  const growthData = headcountTrend.map((m) => ({
-      month: m.month,
-      'Closing Headcount': m.closing_headcount,
-    })) ?? []
+  // Memoized, keyed on each query's `.data` rather than the whole query
+  // object: react-query re-renders this component on background-refetch
+  // state changes (isFetching/dataUpdatedAt) even when `data` itself hasn't
+  // changed, which would otherwise recreate these arrays and force the
+  // now-React.memo'd charts (custom-line-chart.tsx / custom-donut-chart.tsx)
+  // to redraw for no reason.
+  const growthData = useMemo(
+    () =>
+      (trends.data?.month_wise_closing_headcount ?? []).map((m) => ({
+        month: m.month,
+        'Closing Headcount': m.closing_headcount,
+      })),
+    [trends.data],
+  )
 
   // NOTE: this donut is titled "GCC vs Non-GCC" but actually renders the
   // Seniority Category breakdown — a title/legend mismatch present in the
@@ -43,47 +52,69 @@ export function HomePage() {
   // merge TBD into Other client-side for THIS donut's display only — the
   // underlying `workforce_by_seniority_category` breakdown from the API is
   // left untouched since other pages may rely on TBD being distinct.
-  const seniorityCategoryData = breakdowns.data
-    ? Object.entries(breakdowns.data.workforce_by_seniority_category).reduce<
-        { name: string; value: number }[]
-      >((acc, [name, value]) => {
-        const mergedName = name === 'TBD' ? 'Other' : name
-        const existing = acc.find((d) => d.name === mergedName)
-        if (existing) {
-          existing.value += value
-        } else {
-          acc.push({ name: mergedName, value })
-        }
-        return acc
-      }, [])
-    : []
-  const seniorityCategoryColors = colorsForLabels(
-    seniorityCategoryData.map((d) => d.name),
-    SENIORITY_CATEGORY_COLORS,
+  const seniorityCategoryData = useMemo(
+    () =>
+      breakdowns.data
+        ? Object.entries(breakdowns.data.workforce_by_seniority_category).reduce<
+            { name: string; value: number }[]
+          >((acc, [name, value]) => {
+            const mergedName = name === 'TBD' ? 'Other' : name
+            const existing = acc.find((d) => d.name === mergedName)
+            if (existing) {
+              existing.value += value
+            } else {
+              acc.push({ name: mergedName, value })
+            }
+            return acc
+          }, [])
+        : [],
+    [breakdowns.data],
+  )
+  const seniorityCategoryColors = useMemo(
+    () =>
+      colorsForLabels(
+        seniorityCategoryData.map((d) => d.name),
+        SENIORITY_CATEGORY_COLORS,
+      ),
+    [seniorityCategoryData],
   )
 
-  const utilizationSplitData = booking.data
-    ? [
-        { name: 'Client Hours', value: booking.data.client_hours },
-        { name: 'Internal Hours', value: booking.data.internal_hours },
-      ]
-    : []
-  const utilizationSplitColors = colorsForLabels(
-    utilizationSplitData.map((d) => d.name),
-    HOURS_TYPE_COLORS,
+  const utilizationSplitData = useMemo(
+    () =>
+      booking.data
+        ? [
+            { name: 'Client Hours', value: booking.data.client_hours },
+            { name: 'Internal Hours', value: booking.data.internal_hours },
+          ]
+        : [],
+    [booking.data],
+  )
+  const utilizationSplitColors = useMemo(
+    () =>
+      colorsForLabels(
+        utilizationSplitData.map((d) => d.name),
+        HOURS_TYPE_COLORS,
+      ),
+    [utilizationSplitData],
   )
 
-  const categoryData = breakdowns.data
-    ? Object.entries(breakdowns.data.workforce_category_split).map(
-        ([name, value]) => ({
-          name,
-          value,
-        }),
-      )
-    : []
-  const categoryColors = colorsForLabels(
-    categoryData.map((d) => d.name),
-    WORKFORCE_CATEGORY_COLORS,
+  const categoryData = useMemo(
+    () =>
+      breakdowns.data
+        ? Object.entries(breakdowns.data.workforce_category_split).map(([name, value]) => ({
+            name,
+            value,
+          }))
+        : [],
+    [breakdowns.data],
+  )
+  const categoryColors = useMemo(
+    () =>
+      colorsForLabels(
+        categoryData.map((d) => d.name),
+        WORKFORCE_CATEGORY_COLORS,
+      ),
+    [categoryData],
   )
 
   return (

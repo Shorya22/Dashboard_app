@@ -43,7 +43,7 @@ export function WorkforcePage() {
   
   const breakdowns = useRosterBreakdowns()
   const employeesQuery = useRosterEmployeesAll()
-  const employees = employeesQuery.data?.items ?? []
+  const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
   const [filters, setFilters] = React.useState<FilterValues>({
     region: ALL,
@@ -73,12 +73,19 @@ export function WorkforcePage() {
     },
   ]
 
-  const filtered = applyEmployeeFilters(employees, filters, {
-    region: 'region',
-    grade: 'grade',
-    department: 'designation',
-    skill: 'primary_skill',
-  })
+  // Memoized: this page's charts are now React.memo'd (custom-bar-chart.tsx
+  // / custom-donut-chart.tsx), so keeping stable references here means an
+  // unrelated re-render doesn't force every chart to redraw.
+  const filtered = React.useMemo(
+    () =>
+      applyEmployeeFilters(employees, filters, {
+        region: 'region',
+        grade: 'grade',
+        department: 'designation',
+        skill: 'primary_skill',
+      }),
+    [employees, filters],
+  )
   const isLoading = employeesQuery.isLoading
   const isError = employeesQuery.isError
 
@@ -88,23 +95,35 @@ export function WorkforcePage() {
   const departmentsCount = distinctDepartmentsCount(filtered)
   const projectsCount = distinctValues(filtered, 'client').length
 
-  const seniorityData = withTruncatedLabels(
-    Object.entries(
-      groupCount(
-        filtered.map((e) => normalizeSeniorityLabel(e.seniority_level ?? 'Seniority TBD')),
+  const seniorityData = React.useMemo(
+    () =>
+      withTruncatedLabels(
+        Object.entries(
+          groupCount(
+            filtered.map((e) => normalizeSeniorityLabel(e.seniority_level ?? 'Seniority TBD')),
+          ),
+        )
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value),
+        'name',
       ),
-    )
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value),
-    'name',
+    [filtered],
   )
 
-  const typeData = Object.entries(groupCount(filtered.map((e) => e.type ?? 'Type TBD')))
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => (a.name === 'GCC' ? -1 : b.name === 'GCC' ? 1 : 0))
-  const typeColors = colorsForLabels(
-    typeData.map((d) => d.name),
-    TYPE_COLORS,
+  const typeData = React.useMemo(
+    () =>
+      Object.entries(groupCount(filtered.map((e) => e.type ?? 'Type TBD')))
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => (a.name === 'GCC' ? -1 : b.name === 'GCC' ? 1 : 0)),
+    [filtered],
+  )
+  const typeColors = React.useMemo(
+    () =>
+      colorsForLabels(
+        typeData.map((d) => d.name),
+        TYPE_COLORS,
+      ),
+    [typeData],
   )
 
   const regionCounts = REGION_QUADRANTS.map((region) => ({
@@ -173,18 +192,28 @@ export function WorkforcePage() {
           provisional
           provisionalNote="Recomputed client-side from the raw Seniorirty Level field per selected filters, with the same casing-collapse normalization as the backend's /roster/breakdowns (title-case + TBD restore) applied, so all 9 seniority categories render as 9 distinct bars matching the unfiltered totals."
         >
-          <CustomBarChart
-            data={seniorityData}
-            index="name"
-            category="value"
-            color="emerald"
-            tooltipValueLabel="Employees"
-            layout="vertical"
-            yAxisLabel="Seniority"
-            xAxisLabel="Employees"
-            yAxisWidth={220}
-            className="h-full"
-          />
+          {/* 9 rows in a fixed h-80 box already reads a bit tight on
+              desktop and gets worse once the 220px yAxisWidth
+              self-clamps down on a narrow mobile card (see
+              custom-bar-chart.tsx) — same scroll-viewport pattern as the
+              skills-experience charts and the utilization-overview ranked
+              list. */}
+          <div className="h-full overflow-y-auto">
+            <div style={{ height: `${Math.max(seniorityData.length * 32, 288)}px` }}>
+              <CustomBarChart
+                data={seniorityData}
+                index="name"
+                category="value"
+                color="emerald"
+                tooltipValueLabel="Employees"
+                layout="vertical"
+                yAxisLabel="Seniority"
+                xAxisLabel="Employees"
+                yAxisWidth={220}
+                className="h-full"
+              />
+            </div>
+          </div>
         </ChartCard>
 
         <ChartCard
@@ -209,7 +238,14 @@ export function WorkforcePage() {
           isEmpty={regionCounts.every((r) => r.count === 0)}
           height="h-80"
         >
-          <div className="grid h-full grid-cols-2 grid-rows-2 gap-3">
+          {/* Single column on mobile — a hard-coded 2x2 grid squeezed each
+              region's label + progress bar + count into a ~150px-wide
+              column on a narrow phone, the one non-adaptive layout on this
+              page. `sm:grid-rows-2` (not a bare `grid-rows-2`) matters
+              too: locking 2 rows while still `grid-cols-1` below `sm`
+              would push the 3rd/4th items into implicit rows the fixed
+              card height can't account for. */}
+          <div className="grid h-full grid-cols-1 gap-3 sm:grid-cols-2 sm:grid-rows-2">
             {regionCounts.map(({ region, count }) => {
               const maxCount = Math.max(...regionCounts.map((r) => r.count), 1)
               const widthPct = Math.max((count / maxCount) * 100, count > 0 ? 6 : 0)

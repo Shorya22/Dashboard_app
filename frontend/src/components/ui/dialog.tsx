@@ -32,7 +32,15 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-popover p-0 shadow-lg animate-in fade-in-0 zoom-in-95',
+        // `position: fixed` + `left-1/2` means `w-full` here resolves
+        // against the *viewport*, not a parent with side padding — with no
+        // margin/inset fallback a consumer that doesn't override width
+        // would render edge-to-edge on a narrow phone. `calc(100%-2rem)`
+        // guarantees a 1rem gutter on each side by default; callers that
+        // need a specific width (e.g. command-menu.tsx's `w-[92vw]`) still
+        // override this via `className`, which tailwind-merge resolves in
+        // their favor.
+        'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-popover p-0 shadow-lg animate-in fade-in-0 zoom-in-95',
         className,
       )}
       {...props}

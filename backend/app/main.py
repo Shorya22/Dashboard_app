@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 import uuid
 from contextvars import ContextVar
 from pathlib import Path
@@ -20,6 +21,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import anyio.to_thread
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -78,15 +80,41 @@ def _startup_create_db_and_seed() -> None:
         db.close()
 
 
+@app.on_event("startup")
+async def _startup_raise_thread_limit() -> None:
+    # Every route handler in this app is a plain `def` (not `async def`) by
+    # design — see api-conventions SKILL.md — so Starlette runs all of them
+    # in anyio's worker thread pool, whose default cap is 40. Under 100
+    # concurrent requests that cap would queue the 41st+ request behind
+    # threads freed by earlier ones, adding latency that has nothing to do
+    # with the actual (fast, in-memory) work each request does. Raise the
+    # ceiling once at startup so concurrent load maps ~1:1 to worker threads
+    # instead of queuing.
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 100
+
+
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
     token = request_id_ctx.set(request_id)
+    start = time.perf_counter()
     try:
-        logger.info("%s %s started", request.method, request.url.path)
         response = await call_next(request)
-        logger.info("%s %s finished status=%s", request.method, request.url.path, response.status_code)
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "%s %s status=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
         response.headers["X-Request-ID"] = request_id
+        if request.method == "GET" and request.url.path.startswith(settings.api_v1_prefix):
+            # Read-only dashboard aggregations backed by the in-memory,
+            # rarely-reloaded DataFrames in data_loader.py — short TTL lets
+            # the browser skip a redundant round-trip on back/forward nav
+            # within a session without risking noticeably stale data.
+            response.headers["Cache-Control"] = "private, max-age=60"
         return response
     finally:
         request_id_ctx.reset(token)

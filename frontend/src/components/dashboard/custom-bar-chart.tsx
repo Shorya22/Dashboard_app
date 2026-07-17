@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
+import { useChartTheme } from '@/lib/chart-theme-store'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
@@ -52,7 +53,7 @@ interface CustomBarChartProps {
  * shown) is the same `CustomLegend` used by the line and donut charts —
  * plain HTML below the plot, not Recharts' own in-SVG `<Legend>` — so all
  * three chart types share one consistent legend look. */
-export function CustomBarChart({
+export const CustomBarChart = React.memo(function CustomBarChart({
   data,
   index,
   category,
@@ -67,8 +68,18 @@ export function CustomBarChart({
   showLegend,
   className,
 }: CustomBarChartProps) {
+  // Subscribes this chart to the user's chosen color theme (Settings page)
+  // — tremorHex() below always reads the live theme, but this component
+  // still needs a reason to re-render when it changes elsewhere in the app.
+  useChartTheme()
+
   const isVertical = layout === 'vertical'
   const bars: BarSeries[] = series ?? (category ? [{ category, color }] : [])
+
+  // Stable for this chart's whole lifetime — see chart-tooltip-portal.tsx /
+  // chart-tooltip-touch-store.ts for why the touch-dismissal fix needs a
+  // per-chart id, not one generated fresh per tooltip activation.
+  const ownerId = React.useId()
 
   // The tooltip portal needs this chart instance's own wrapper rect to
   // translate Recharts' in-chart cursor coordinate into a viewport
@@ -80,9 +91,30 @@ export function CustomBarChart({
       createFullLabelTooltip({
         valueLabel: tooltipValueLabel,
         getContainerRect: () => containerRef.current?.getBoundingClientRect() ?? null,
+        ownerId,
       }),
-    [tooltipValueLabel],
+    [tooltipValueLabel, ownerId],
   )
+
+  // `yAxisWidth` is a raw SVG pixel width handed straight to Recharts —
+  // unlike a Tailwind class, it can't respond to the viewport on its own.
+  // Callers pass a value sized for a full desktop card (up to 220px for a
+  // long category list); on a ~340px-wide mobile card that leaves almost
+  // no room for the bars themselves. Track the chart's actual rendered
+  // width and cap the category-label column to a fraction of it, so a
+  // horizontal bar chart self-corrects on narrow screens instead of
+  // silently squeezing every bar into a sliver.
+  const [containerWidth, setContainerWidth] = React.useState(0)
+  React.useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width) setContainerWidth(width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const stackId = stack ? 'stack' : undefined
 
@@ -96,6 +128,18 @@ export function CustomBarChart({
   const totalBarCount = data.length * Math.max(bars.length, 1)
   const showBarLabels = totalBarCount <= 24
 
+  // Effective category-axis width for THIS render: the caller's prop,
+  // clamped to at most ~42% of the chart's actual current width once it's
+  // been measured (see the ResizeObserver above) — keeps a majority of a
+  // narrow mobile card's width for the bars themselves instead of letting
+  // a desktop-sized label column dominate it. Before the first measurement
+  // (containerWidth is still 0), fall back to the raw prop so there's no
+  // flash of an incorrectly tiny axis.
+  const effectiveYAxisWidth =
+    isVertical && containerWidth > 0
+      ? Math.max(56, Math.min(yAxisWidth, Math.round(containerWidth * 0.42)))
+      : yAxisWidth
+
   // Safety-net truncation for the category axis: callers are expected to
   // pre-truncate long labels via `withTruncatedLabels` (chart-labels.ts),
   // but when they don't, a long raw label rendered at a fixed axis width
@@ -103,10 +147,10 @@ export function CustomBarChart({
   // overflows into the plot area and collides with bars/gridlines. This
   // formatter re-truncates defensively so that never happens, regardless
   // of what the caller passed in. In vertical layout the available width
-  // is `yAxisWidth`, so the char budget scales with it instead of using
-  // the wider default (~16 chars) meant for a full-width x-axis.
+  // is `effectiveYAxisWidth` (not the raw prop — see above), so the char
+  // budget scales down with it on mobile instead of overflowing.
   const categoryTickFormatter = isVertical
-    ? (value: string) => truncateLabel(value, Math.max(4, Math.floor(yAxisWidth / 6)))
+    ? (value: string) => truncateLabel(value, Math.max(4, Math.floor(effectiveYAxisWidth / 6)))
     : (value: string) => truncateLabel(value)
 
   return (
@@ -157,7 +201,7 @@ export function CustomBarChart({
                 className="fill-tremor-content dark:fill-dark-tremor-content"
                 axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
                 tickLine={false}
-                width={yAxisWidth}
+                width={effectiveYAxisWidth}
                 label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13 } : undefined}
               />
             </>
@@ -256,4 +300,4 @@ export function CustomBarChart({
       )}
     </div>
   )
-}
+})

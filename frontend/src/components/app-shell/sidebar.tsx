@@ -20,8 +20,7 @@ import {
 import { cn } from '@/lib/utils'
 import { preloadRoute } from '@/lib/route-preload'
 
-import deptLogo from '@/assets/logo-dept.svg'
-import hexawareLogo from '@/assets/White Logo.png'
+import deptLogo from '@/assets/dept-logo-white.png'
 
 const navGroups = [
   {
@@ -99,15 +98,8 @@ export function Sidebar({
             <img
               src={deptLogo}
               alt="DEPT"
-              className={cn(!collapsed ? 'h-10' : 'h-8', 'w-auto shrink-0 brightness-0 invert')}
+              className={cn(!collapsed ? 'h-11' : 'h-8', 'w-auto shrink-0')}
             />
-            {!collapsed && (
-              <img
-                src={hexawareLogo}
-                alt="HEXAWARE"
-                className="h-6 w-auto max-w-[140px] shrink-0 object-contain"
-              />
-            )}
           </div>
 
           {!collapsed && (

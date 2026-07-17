@@ -189,7 +189,7 @@ export function HierarchicalMultiSelect({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[--radix-popover-trigger-width] min-w-[240px] p-0"
+        className="w-[--radix-popover-trigger-width] min-w-[240px] max-w-[calc(100vw-2rem)] p-0"
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Checkbox

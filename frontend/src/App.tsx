@@ -74,6 +74,11 @@ const UtilizationOverviewPage = React.lazy(() =>
     default: (m as typeof import('@/pages/utilization-overview-page')).UtilizationOverviewPage,
   })),
 )
+const SettingsPage = React.lazy(() =>
+  routeImporters['/settings']().then((m) => ({
+    default: (m as typeof import('@/pages/settings-page')).SettingsPage,
+  })),
+)
 
 function AuthBridge() {
   const { accessToken, user, setAuth } = useAuth()
@@ -255,6 +260,14 @@ function AppRoutes() {
           element={
             <React.Suspense fallback={<PageLoadingFallback />}>
               <UtilizationOverviewPage />
+            </React.Suspense>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <SettingsPage />
             </React.Suspense>
           }
         />

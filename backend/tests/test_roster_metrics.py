@@ -445,11 +445,16 @@ def test_get_skills_covered_hand_built_fixture():
 
 
 def test_get_skills_covered_real_file(real_roster):
-    # Confirmed on the real roster file: 16 distinct `Skill` values, no
-    # blanks, no "TBD" substrings present today. Matches the Power BI
-    # reference exactly (unlike naively counting `Primary Skill`, which
-    # returns 20 and is the wrong column per the real DAX).
-    assert get_skills_covered(real_roster) == 16
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster (see test_real_roster_headcount);
+    # both had a `Skill` value not shared by any other row (internal
+    # roles -- Operations Manager / DGM-HR -- with no other employee in
+    # the same skill category), so the distinct count drops by 2.
+    # 14 distinct `Skill` values remain, no blanks, no "TBD" substrings.
+    # This moves away from the Power BI reference PDF's 16 (which
+    # predates today's roster edit), same as the attrition% test above --
+    # expected, not a regression.
+    assert get_skills_covered(real_roster) == 14
 
 
 # --------------------------------------------------------------------------
@@ -465,11 +470,20 @@ def real_roster() -> pd.DataFrame:
 
 
 def test_real_roster_headcount(real_roster):
-    # Computed via: df['Status'].value_counts() -> Active 47, Inactive 5
-    assert get_total_employees(real_roster) == 52
-    assert get_active_employees(real_roster) == 47
+    # UPDATED (2026-07-17, two changes same day):
+    # 1) at the business owner's direction, the 2 employees with
+    #    blank/TBD `DOJ (DEPT)` (NEW_EMP_ID 2000194634, 2000195658 --
+    #    the same 2 counted by `get_strategic_pool`) were reclassified
+    #    from Status "Active" to "Strategic Pool" in the source file.
+    # 2) at the business owner's direction, 2 more employees (`Milind
+    #    Vijay Mokashi` NEW_EMP_ID 2000125883, `Sakshi Madan Agarwal`
+    #    NEW_EMP_ID 2000186338) were removed from the roster entirely.
+    # Computed via: df['Status'].value_counts() -> Active 43, Inactive 5,
+    # Strategic Pool 2 (total 50, was 52).
+    assert get_total_employees(real_roster) == 50
+    assert get_active_employees(real_roster) == 43
     assert get_inactive_employees(real_roster) == 5
-    assert get_active_pct(real_roster) == pytest.approx(90.3846, abs=0.01)
+    assert get_active_pct(real_roster) == pytest.approx(86.0, abs=0.01)
 
 
 def test_real_roster_date_based_headcount_explicit_june_2026(real_roster):
@@ -490,9 +504,16 @@ def test_real_roster_date_based_headcount_explicit_june_2026(real_roster):
     #       blank-as-zero semantics either, same as before)
     #   Exits (LWD in [2026-06-01, 2026-06-30]) = 1 (NEW_EMP_ID 2000172791,
     #       LWD=15-Jun-26) -- unaffected, no LWD is blank/TBD
+    #
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` were removed from the roster (see test_real_roster_headcount).
+    # Both had a real, non-TBD `DOJ (DEPT)` before June 2026 and no `LWD`,
+    # so both were counted in Closing AND Opening Headcount for this
+    # period -- removing them drops both by 2 (47->45, 46->44). Joiners
+    # and Exits are unaffected, neither employee joined or left in June.
     june = pd.Timestamp("2026-06-01")
-    assert get_closing_headcount(real_roster, period_month=june) == 47
-    assert get_opening_headcount(real_roster, period_month=june) == 46
+    assert get_closing_headcount(real_roster, period_month=june) == 45
+    assert get_opening_headcount(real_roster, period_month=june) == 44
     assert get_joiners(real_roster, period_month=june) == 2
     assert get_exits(real_roster, period_month=june) == 1
 
@@ -524,20 +545,31 @@ def test_real_roster_date_based_headcount_default_full_range(real_roster):
     #   Joiners (DOJ in [2025-07-01, 2026-06-30]) = 50 (unaffected -- blank
     #       DOJ (DEPT) never satisfies `>= StartDate`)
     #   Exits (LWD in [2025-07-01, 2026-06-30]) = 5 (unaffected)
-    assert get_closing_headcount(real_roster) == 47
+    #
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster (see test_real_roster_headcount).
+    # Both had a real DOJ (DEPT) within the full range and no LWD, so
+    # both counted in Closing Headcount and in Joiners (their DOJ falls
+    # within [2025-07-01, 2026-06-30]) -- removing them drops Closing
+    # Headcount by 2 (47->45) and Joiners by 2 (50->48). Neither was one
+    # of the 2 blank-DOJ rows, so Opening Headcount (2) is unaffected;
+    # neither had an LWD, so Exits (5) is unaffected.
+    assert get_closing_headcount(real_roster) == 45
     assert get_opening_headcount(real_roster) == 2
-    assert get_joiners(real_roster) == 50
+    assert get_joiners(real_roster) == 48
     assert get_exits(real_roster) == 5
 
 
 def test_real_roster_attrition_explicit_june_2026(real_roster):
     # Attrition % = Exits / (Closing Headcount + Exits) * 100
-    # FIXED (2026-07-16, DAX BLANK() semantics bug): Closing Headcount for
-    # June 2026 is now 47 (was 45), so recomputed:
-    #             = 1 / (47 + 1) * 100 = 2.0833%
+    # UPDATED (2026-07-17): Closing Headcount for June 2026 is now 45
+    # (was 47, see test_real_roster_date_based_headcount_explicit_june_2026
+    # -- the 2 removed employees, `Milind Vijay Mokashi`/`Sakshi Madan
+    # Agarwal`, both counted in June's Closing Headcount), Exits
+    # unaffected at 1, so recomputed: 1 / (45 + 1) * 100 = 2.1739%
     june = pd.Timestamp("2026-06-01")
     assert get_attrition_pct(real_roster, period_month=june) == pytest.approx(
-        2.0833, abs=0.01
+        2.1739, abs=0.01
     )
     # Reason for Leaving among the 5 inactive rows: Involuntary=3, Voluntary=2
     assert get_involuntary_leavers(real_roster) == 3
@@ -545,15 +577,17 @@ def test_real_roster_attrition_explicit_june_2026(real_roster):
 
 
 def test_real_roster_attrition_default_full_range(real_roster):
-    # DEFAULT (no period_month) = full range. FIXED (2026-07-16, DAX
-    # BLANK() semantics bug): Closing Headcount is now 47 (was 45, see
-    # test_real_roster_date_based_headcount_default_full_range) -> Exits=5
-    # -> 5 / (47 + 5) * 100 = 9.6154%.
-    # This now matches the Power BI reference PDF's ~9.6% Attrition
-    # closely (previously 10.0% vs ~9.6%, off because Closing Headcount
-    # was wrongly 45 instead of 47 -- see data-model SKILL.md "Known open
-    # data gap", now resolved).
-    assert get_attrition_pct(real_roster) == pytest.approx(9.6154, abs=0.01)
+    # DEFAULT (no period_month) = full range.
+    # UPDATED (2026-07-17): Closing Headcount is now 45 (was 47, see
+    # test_real_roster_date_based_headcount_default_full_range -- the 2
+    # removed employees both counted in the full-range Closing
+    # Headcount), Exits unaffected at 5 -> 5 / (45 + 5) * 100 = 10.0%.
+    # This moves slightly away from the Power BI reference PDF's ~9.6%
+    # figure (which predates today's roster edit) -- expected, since the
+    # reference reflects the roster before `Milind Vijay Mokashi` /
+    # `Sakshi Madan Agarwal` were removed at the business owner's
+    # direction, not a regression in the formula itself.
+    assert get_attrition_pct(real_roster) == pytest.approx(10.0, abs=0.01)
 
 
 def test_real_roster_doj_dept_unparseable_warning(real_roster):
@@ -568,16 +602,26 @@ def test_real_roster_doj_dept_unparseable_warning(real_roster):
 
 
 def test_real_roster_org_split(real_roster):
-    # Type value_counts(): GCC=48, Non GCC=4
-    assert get_gcc_employees(real_roster) == 48
-    assert get_non_gcc_employees(real_roster) == 4
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster (see test_real_roster_headcount);
+    # one of them was `Type` "GCC" (48->47), the other "Non GCC" (4->3).
+    # Type value_counts(): GCC=47, Non GCC=3
+    assert get_gcc_employees(real_roster) == 47
+    assert get_non_gcc_employees(real_roster) == 3
 
 
 def test_real_roster_experience(real_roster):
-    # active['Total Experience'].mean() == 9.17531914893617
-    assert get_average_experience_yrs(real_roster) == pytest.approx(9.1753, abs=0.001)
-    # active['Hexaware Experience (Years)'].mean() == 0.9321276595744681
-    assert get_average_hexaware_experience(real_roster) == pytest.approx(0.9321, abs=0.001)
+    # UPDATED (2026-07-17, two changes same day): both means are computed
+    # over Status=="Active" rows. First the 2 blank-DOJ(DEPT) employees
+    # were reclassified to Status "Strategic Pool" (47->45 active rows),
+    # then `Milind Vijay Mokashi` / `Sakshi Madan Agarwal` were removed
+    # from the roster entirely -- both were Status "Active", so the
+    # active-row count drops again, 45->43 -- see
+    # test_real_roster_headcount.
+    # active['Total Experience'].mean() == 9.971162790697676
+    assert get_average_experience_yrs(real_roster) == pytest.approx(9.9712, abs=0.001)
+    # active['Hexaware Experience (Years)'].mean() == 0.9611627906976744
+    assert get_average_hexaware_experience(real_roster) == pytest.approx(0.9612, abs=0.001)
 
 
 def test_real_roster_pending_mapping_count(real_roster):
@@ -596,14 +640,19 @@ def test_real_roster_pending_mapping_count(real_roster):
 
 
 def test_real_roster_clients_covered_and_projects(real_roster):
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster (see test_real_roster_headcount);
+    # both were Hexaware-internal staff with a distinct `Client as on
+    # June 2026` value not shared by any other row, so both counts drop
+    # by 1 each.
     # Clients Covered: distinct Client as on June 2026, excluding blanks
-    # and "Client TBD" -> 31 (computed by hand via
+    # and "Client TBD" -> 30 (computed by hand via
     # df.loc[mask, 'Client as on June 2026'].nunique())
-    assert get_clients_covered(real_roster) == 31
+    assert get_clients_covered(real_roster) == 30
     # Projects (HR MASTER): naive DISTINCTCOUNT of the same raw column,
-    # no exclusions -> 32 (one more than Clients Covered because
+    # no exclusions -> 31 (one more than Clients Covered because
     # "Client TBD" itself counts as one more distinct raw value)
-    assert get_projects(real_roster) == 32
+    assert get_projects(real_roster) == 31
 
 
 def test_real_roster_senior_lead_employees(real_roster):

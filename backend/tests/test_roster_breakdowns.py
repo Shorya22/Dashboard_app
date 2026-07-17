@@ -194,7 +194,11 @@ def test_get_workforce_category_split(sample_roster):
 
 
 def test_get_status_split(sample_roster):
-    assert get_status_split(sample_roster) == {"Active": 4, "Inactive": 2}
+    # UPDATED (2026-07-17): `get_status_split` now always enumerates all
+    # 3 Status buckets explicitly (see its docstring), so a fixture with
+    # no Strategic Pool rows still gets an explicit `0` rather than the
+    # key being absent.
+    assert get_status_split(sample_roster) == {"Active": 4, "Inactive": 2, "Strategic Pool": 0}
 
 
 def test_get_workforce_by_type(sample_roster):
@@ -277,12 +281,19 @@ def test_get_departments_collapses_casing_duplicates():
     assert get_departments(df) == 2
 
 
-def test_get_departments_real_file_returns_29():
+def test_get_departments_real_file_returns_27():
     # Regression test locking in the resolution: normalizing the
-    # SalesForce/Salesforce casing duplicate brings Departments from 30
-    # down to 29, matching the Power BI reference.
+    # SalesForce/Salesforce casing duplicate brought Departments from 30
+    # down to 29, matching the Power BI reference (at the time).
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` (Designation
+    # "Operations Manager") / `Sakshi Madan Agarwal` (Designation
+    # "DGM - HR") were removed from the roster at the business owner's
+    # direction -- neither Designation is shared by any other row, so
+    # the distinct count drops by 2, 29 -> 27. This moves away from the
+    # Power BI reference PDF's 29 (which predates today's roster edit),
+    # expected, not a regression.
     df = load_roster(DEFAULT_ROSTER_PATH)
-    assert get_departments(df) == 29
+    assert get_departments(df) == 27
 
 
 def test_get_data_quality_warnings_flags_designation_casing_mismatch():
@@ -520,23 +531,40 @@ def real_roster() -> pd.DataFrame:
 
 
 def test_real_roster_headcount_by_region_matches_reference(real_roster):
-    # Matches the reference PDF's reported breakdown exactly:
-    # 32 EMEA / 15 AMER / 2 Hexaware / 2 Region TBD / 1 APAC.
+    # Matched the reference PDF's reported breakdown exactly (at the
+    # time): 32 EMEA / 15 AMER / 2 Hexaware / 2 Region TBD / 1 APAC.
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` were both `Region` "Hexaware" (internal corporate staff)
+    # -- removing them at the business owner's direction drops that
+    # bucket to 0, which no longer appears as a key at all (the
+    # underlying groupby only returns buckets with at least 1 row).
+    # Every other region is unaffected.
     assert get_headcount_by_region(real_roster) == {
         "EMEA": 32,
         "AMER": 15,
-        "Hexaware": 2,
         "Region TBD": 2,
         "APAC": 1,
     }
 
 
 def test_real_roster_status_split(real_roster):
-    assert get_status_split(real_roster) == {"Active": 47, "Inactive": 5}
+    # UPDATED (2026-07-17, two changes same day): the 2 blank-DOJ(DEPT)
+    # employees are now Status "Strategic Pool" instead of "Active", and
+    # `Milind Vijay Mokashi` / `Sakshi Madan Agarwal` (both Status
+    # "Active") were removed from the roster entirely -- see
+    # test_real_roster_headcount in test_roster_metrics.py.
+    assert get_status_split(real_roster) == {
+        "Active": 43,
+        "Inactive": 5,
+        "Strategic Pool": 2,
+    }
 
 
 def test_real_roster_workforce_by_type(real_roster):
-    assert get_workforce_by_type(real_roster) == {"GCC": 48, "Non GCC": 4}
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster -- one was `Type` "GCC" (48->47),
+    # the other "Non GCC" (4->3).
+    assert get_workforce_by_type(real_roster) == {"GCC": 47, "Non GCC": 3}
 
 
 def test_real_roster_strategic_pool(real_roster):
@@ -554,12 +582,16 @@ def test_real_roster_strategic_pool(real_roster):
 
 def test_real_roster_working_entity(real_roster):
     # Computed via df['Working Entity'].value_counts() on the real file.
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` were both `Working Entity` "Hexaware" -- removing them at
+    # the business owner's direction drops that bucket to 0, which no
+    # longer appears as a key (same pattern as the region breakdown
+    # above). Every other entity is unaffected.
     assert get_workforce_by_working_entity(real_roster) == {
         "AMER": 15,
         "DTNL": 14,
         "DTIE": 12,
         "DTDE": 4,
-        "Hexaware": 2,
         "DTUK": 2,
         "Entity TBD": 2,
         "DTAU": 1,
@@ -568,9 +600,12 @@ def test_real_roster_working_entity(real_roster):
 
 def test_real_roster_experience_band(real_roster):
     # Computed via the provisional bucketing over Total Experience.
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster -- one was in the "0-1 Years"
+    # band (6->5), the other was the ONLY row in "1-3 Years" (1->0,
+    # bucket no longer appears as a key). Every other band unaffected.
     assert get_workforce_by_experience_band(real_roster) == {
-        "0-1 Years": 6,
-        "1-3 Years": 1,
+        "0-1 Years": 5,
         "3-5 Years": 2,
         "5-8 Years": 12,
         "8+ Years": 31,
@@ -590,9 +625,14 @@ def test_real_roster_headcount_by_seniority_collapses_casing(real_roster):
 
 
 def test_real_roster_seniority_category(real_roster):
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` (Designations "Operations Manager" / "DGM - HR") were both
+    # in the "Senior" seniority category -- removing them at the business
+    # owner's direction drops that bucket 19->17. Every other category
+    # unaffected.
     assert get_workforce_by_seniority_category(real_roster) == {
         "Lead": 18,
-        "Senior": 19,
+        "Senior": 17,
         "Mid": 7,
         "TBD": 7,
         "Other": 1,
@@ -604,10 +644,12 @@ def test_real_roster_month_wise_closing_headcount(real_roster):
     assert result[0]["month"] == "Jul 2025"
     assert result[-1]["month"] == "Jun 2026"
     # Jun 2026 Closing Headcount matches get_closing_headcount's own
-    # regression test value. FIXED (2026-07-16, DAX BLANK() semantics
-    # bug): was 45, now 47 -- see test_roster_metrics.py's
-    # test_real_roster_date_based_headcount_explicit_june_2026.
-    assert result[-1]["closing_headcount"] == 47
+    # regression test value. UPDATED (2026-07-17): was 47, now 45 -- see
+    # test_roster_metrics.py's
+    # test_real_roster_date_based_headcount_explicit_june_2026 for the
+    # full accounting (Milind Vijay Mokashi / Sakshi Madan Agarwal both
+    # counted in June's Closing Headcount before being removed).
+    assert result[-1]["closing_headcount"] == 45
 
 
 def test_real_roster_exits_table_count(real_roster):
@@ -619,6 +661,9 @@ def test_real_roster_exits_table_count(real_roster):
 
 
 def test_real_roster_employee_directory_count(real_roster):
+    # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
+    # Agarwal` removed from the roster at the business owner's direction
+    # -- see test_real_roster_headcount in test_roster_metrics.py.
     directory = get_employee_directory(real_roster)
-    assert len(directory) == 52
+    assert len(directory) == 50
     assert all("  " not in (r["name"] or "") for r in directory)

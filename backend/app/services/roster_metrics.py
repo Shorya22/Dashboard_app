@@ -84,7 +84,14 @@ def get_data_quality_warnings(df: pd.DataFrame) -> list[dict]:
             }
         )
 
-    expected_statuses = {"Active", "Inactive"}
+    # "Strategic Pool" added 2026-07-17 at the business owner's explicit
+    # direction: the 2 employees with a blank/TBD `DOJ (DEPT)` (already
+    # confirmed via `get_strategic_pool`'s ISBLANK(DOJ (DEPT)) filter —
+    # NEW_EMP_ID 2000194634, 2000195658) now also carry this Status value
+    # directly, so `Active Employees` (Status == "Active") correctly
+    # excludes them instead of double-counting them as both Active and
+    # Strategic Pool. See data-model SKILL.md for the full writeup.
+    expected_statuses = {"Active", "Inactive", "Strategic Pool"}
     unexpected_mask = ~df["Status"].isin(expected_statuses)
     for _, row in df[unexpected_mask].iterrows():
         warnings.append(
@@ -881,6 +888,18 @@ def get_workforce_category_split(df: pd.DataFrame) -> dict[str, int]:
     real calculated-column formula.
     Reads: (via get_active_employees) `Status`, `NEW_EMP_ID`;
            (via get_strategic_pool) `DOJ (DEPT)`, `NEW_EMP_ID`.
+
+    UPDATE (2026-07-17): as of this date these two numbers DO sum to
+    `Closing Headcount` (45 + 2 = 47) for the real roster file, because
+    the 2 blank-`DOJ (DEPT)` employees were also given
+    `Status = "Strategic Pool"` at the business owner's direction (see
+    `get_data_quality_warnings`'s `expected_statuses` set) — so
+    `get_active_employees` (Status == "Active") no longer double-counts
+    them. This is still not a *structural* guarantee, though: the two
+    measures remain independent filters (Status vs blank DOJ (DEPT)), so
+    a future row with one but not the other would reintroduce the gap.
+    Reads: (via get_active_employees) `Status`, `NEW_EMP_ID`;
+           (via get_strategic_pool) `DOJ (DEPT)`, `NEW_EMP_ID`.
     """
     return {
         "Active": get_active_employees(df),
@@ -891,15 +910,22 @@ def get_workforce_category_split(df: pd.DataFrame) -> dict[str, int]:
 @cache_on_df
 def get_status_split(df: pd.DataFrame) -> dict[str, int]:
     """
-    Backs the HR Portal Home "Status Split" donut — Active vs Inactive,
-    over the FULL roster (not date-filtered), wrapping the existing
-    `get_active_employees` / `get_inactive_employees` scalars into a
-    dict shape a donut component can consume directly.
+    Backs the HR Portal Home "Status Split" donut — full breakdown of the
+    `Status` column over the FULL roster (not date-filtered).
+
+    UPDATE (2026-07-17): `Status` now has 3 legitimate values, not 2 —
+    "Strategic Pool" was added at the business owner's direction (see
+    `get_data_quality_warnings`'s `expected_statuses` set for the full
+    rationale). Explicitly enumerating all three here (rather than a
+    generic `value_counts()`) keeps this in the same named-getter style
+    as the rest of this file and keeps zero-count buckets present in the
+    dict even if a future roster snapshot has no Strategic Pool rows.
     Reads: `Status`, `NEW_EMP_ID`.
     """
     return {
         "Active": get_active_employees(df),
         "Inactive": get_inactive_employees(df),
+        "Strategic Pool": get_total_employees(df[df["Status"] == "Strategic Pool"]),
     }
 
 

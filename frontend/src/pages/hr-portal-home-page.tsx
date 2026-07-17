@@ -30,7 +30,7 @@ import {
 
 export function HrPortalHomePage() {
   const employeesQuery = useRosterEmployeesAll()
-  const employees = employeesQuery.data?.items ?? []
+  const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
   const [filters, setFilters] = React.useState<FilterValues>({
     region: ALL,
@@ -58,11 +58,18 @@ export function HrPortalHomePage() {
     },
   ]
 
-  const filtered = applyEmployeeFilters(employees, filters, {
-    region: 'region',
-    status: 'status',
-    department: 'designation',
-  })
+  // Memoized: charts on this page are React.memo'd (custom-bar-chart.tsx /
+  // custom-donut-chart.tsx), so stable references here avoid redrawing all
+  // 4 charts whenever this page re-renders for an unrelated reason.
+  const filtered = React.useMemo(
+    () =>
+      applyEmployeeFilters(employees, filters, {
+        region: 'region',
+        status: 'status',
+        department: 'designation',
+      }),
+    [employees, filters],
+  )
 
   const totalEmployees = filtered.length
   const activeEmployees = filtered.filter((e) => e.status === 'Active').length
@@ -72,23 +79,38 @@ export function HrPortalHomePage() {
   // replicated here, not "fixed" to a per-client count.
   const projectsCount = distinctValues(filtered, 'client').length
 
-  const statusData = Object.entries(groupCount(filtered.map((e) => e.status ?? 'Unknown'))).map(
-    ([name, value]) => ({ name, value }),
+  const statusData = React.useMemo(
+    () =>
+      Object.entries(groupCount(filtered.map((e) => e.status ?? 'Unknown'))).map(
+        ([name, value]) => ({ name, value }),
+      ),
+    [filtered],
   )
-  const statusColors = colorsForLabels(statusData.map((d) => d.name), STATUS_COLORS)
-
-  const regionData = withTruncatedLabels(
-    Object.entries(groupCount(filtered.map((e) => e.region ?? 'Region TBD'))).map(
-      ([name, value]) => ({ name, value }),
-    ),
-    'name',
+  const statusColors = React.useMemo(
+    () => colorsForLabels(statusData.map((d) => d.name), STATUS_COLORS),
+    [statusData],
   )
 
-  const entityData = withTruncatedLabels(
-    Object.entries(
-      groupCount(filtered.map((e) => e.working_entity ?? 'Entity TBD')),
-    ).map(([name, value]) => ({ name, value })),
-    'name',
+  const regionData = React.useMemo(
+    () =>
+      withTruncatedLabels(
+        Object.entries(groupCount(filtered.map((e) => e.region ?? 'Region TBD'))).map(
+          ([name, value]) => ({ name, value }),
+        ),
+        'name',
+      ),
+    [filtered],
+  )
+
+  const entityData = React.useMemo(
+    () =>
+      withTruncatedLabels(
+        Object.entries(
+          groupCount(filtered.map((e) => e.working_entity ?? 'Entity TBD')),
+        ).map(([name, value]) => ({ name, value })),
+        'name',
+      ),
+    [filtered],
   )
   // Working Entity has 8 distinct real values (AMER, DTAU, DTDE, DTIE,
   // DTNL, DTUK, Entity TBD, Hexaware) — above the dashboard-design skill's
@@ -98,11 +120,15 @@ export function HrPortalHomePage() {
   // inconsistent one here.
   const entitySegmentCount = distinctValues(employees, 'working_entity').length
 
-  const experienceBandData = withTruncatedLabels(
-    Object.entries(
-      groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience))),
-    ).map(([name, value]) => ({ name, value })),
-    'name',
+  const experienceBandData = React.useMemo(
+    () =>
+      withTruncatedLabels(
+        Object.entries(
+          groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience))),
+        ).map(([name, value]) => ({ name, value })),
+        'name',
+      ),
+    [filtered],
   )
 
   const isLoading = employeesQuery.isLoading
@@ -146,7 +172,7 @@ export function HrPortalHomePage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Status Split"
-          subtitle="Active vs Inactive"
+          subtitle="Active vs Inactive vs Strategic Pool"
           isLoading={isLoading}
           isError={isError}
           isEmpty={statusData.length === 0}

@@ -47,8 +47,14 @@ export function useHrAnalyticsFilters() {
   // Month Year filters trend/resignation charts directly by month label
   // (these come from the /roster/trends and /roster/attrition-detail
   // endpoints, which are pre-aggregated by month — filtering the returned
-  // arrays is exact, not an approximation).
-  const monthFilter = (month: string) => filters.monthYear === ALL || filters.monthYear === month
+  // arrays is exact, not an approximation). Memoized on `filters.monthYear`
+  // so callers building their own `useMemo`'d chart data (see
+  // hr-analytics-page.tsx) can depend on `monthFilter` itself instead of a
+  // fresh closure identity every render.
+  const monthFilter = React.useCallback(
+    (month: string) => filters.monthYear === ALL || filters.monthYear === month,
+    [filters.monthYear],
+  )
 
   return { summary, trends, attrition, employeesQuery, filters, setFilter, filterDefs, monthFilter }
 }

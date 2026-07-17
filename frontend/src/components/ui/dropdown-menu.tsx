@@ -17,7 +17,12 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
+        // `max-w-[calc(100vw-2rem)]` is a floor against `min-w-[10rem]`:
+        // without it, unusually long content (e.g. a long email address)
+        // silently hard-clips against `overflow-hidden` instead of
+        // wrapping, since nothing here caps the content box itself to the
+        // viewport on a narrow phone screen.
+        'z-50 min-w-[10rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',
         className,
       )}
       {...props}

@@ -441,16 +441,19 @@ def test_real_bookings_weekly_trend_and_region(real_bookings):
 
 
 def test_real_bookings_hours_by_region_market(real_bookings):
+    # UPDATED (2026-07-17): at the business owner's explicit direction,
+    # `Market (EC)` values were corrected directly in the source Excel
+    # file -- "BN" -> "BENO" and "Technology" -> "AMER" -- since those
+    # were data-entry errors, not intentional labels (this resolves the
+    # "unconfirmed/pending reconciliation" flag this test used to carry).
     # Hand-verified via df.groupby(['Region (EC)','Market (EC)'])
-    # ['Employee Booked Hours'].sum() on the real file. NOTE: the real
-    # `Market (EC)` values are Technology/BN/DACH/UKI, NOT the
-    # AMER/BENO/DACH/UKI labels implied by the reference chart -- see
-    # get_hours_by_region_market docstring, flagged as unconfirmed/
-    # pending reconciliation rather than silently relabeled to match.
+    # ['Employee Booked Hours'].sum() on the real file post-fix. Hours
+    # totals per pair are unchanged (only the labels moved), matching
+    # the reference chart's AMER/BENO/DACH/UKI labels exactly now.
     by_region_market = get_hours_by_region_market(real_bookings)
     by_pair = {(r["region"], r["market"]): r["total_hours"] for r in by_region_market}
-    assert by_pair[("EMEA", "BN")] == pytest.approx(3142.0, abs=0.01)
-    assert by_pair[("AMER", "Technology")] == pytest.approx(2710.0, abs=0.01)
+    assert by_pair[("EMEA", "BENO")] == pytest.approx(3142.0, abs=0.01)
+    assert by_pair[("AMER", "AMER")] == pytest.approx(2710.0, abs=0.01)
     assert by_pair[("EMEA", "UKI")] == pytest.approx(2099.6, abs=0.01)
     assert by_pair[("EMEA", "DACH")] == pytest.approx(977.0, abs=0.01)
     assert len(by_region_market) == 4
@@ -461,8 +464,10 @@ def test_real_bookings_filter_options(real_bookings):
     opts = get_filter_options(real_bookings)
     assert len(opts["weeks"]) == 7
     assert opts["regions"] == ["AMER", "EMEA"]
-    # df['Market (EC)'].nunique() == 4, matches get_markets_covered
-    assert sorted(opts["markets"]) == ["BN", "DACH", "Technology", "UKI"]
+    # df['Market (EC)'].nunique() == 4, matches get_markets_covered.
+    # UPDATED (2026-07-17): "BN"/"Technology" corrected to "BENO"/"AMER"
+    # at source -- see test_real_bookings_hours_by_region_market.
+    assert sorted(opts["markets"]) == ["AMER", "BENO", "DACH", "UKI"]
     assert len(opts["departments"]) == 7
     assert len(opts["entities"]) == 5
     assert len(opts["holdings"]) == 43
@@ -480,14 +485,18 @@ def test_real_bookings_filtered_records_and(real_bookings):
 
 
 def test_real_bookings_filtered_records_multi_value(real_bookings):
-    # region IN (EMEA, AMER) covers every Region (EC) value in the file.
-    # UPDATED 2026-07-16: the source file's one fully-blank row (previously
-    # at raw index 258) was deleted at the source (see
-    # RESOLVED-AT-SOURCE note in load_booking_data's docstring / the
-    # data-model skill), so there is no longer a blank-row row to subtract
-    # -- both_regions now equals the full row count exactly.
+    # region IN (EMEA, AMER) covers every real Region (EC) value in the
+    # file. UPDATE (2026-07-17): a newly-noticed, PRE-EXISTING (not
+    # introduced by any 2026-07-17 edit -- confirmed present in the
+    # backup taken before that day's changes) partial-blank row exists
+    # at the end of the file (only `Project URL` populated, every other
+    # column NaN -- see load_booking_data's blank-row detection, which
+    # doesn't catch this one since it's not *fully* blank). Its NaN
+    # `Region (EC)` means it's correctly excluded by this region filter,
+    # so both_regions is 1 less than the full row count, not equal to
+    # it. Flagged as an open data-quality item, not silently fixed here.
     both_regions = get_filtered_records(real_bookings, region=["EMEA", "AMER"])
-    assert len(both_regions) == len(real_bookings)
+    assert len(both_regions) == len(real_bookings) - 1
     # market IN (BN, DACH) -- OR within field
     by_market = get_filtered_records(real_bookings, market=["BN", "DACH"])
     assert len(by_market) == len(
@@ -540,17 +549,34 @@ def test_real_bookings_records_to_dicts_includes_region_department_team(real_boo
 
 
 def test_real_bookings_filtered_records_excludes_blank_row(real_bookings):
-    # Regression for the ghost "--" row bug, now RESOLVED AT SOURCE
-    # (2026-07-16): the source file's 1 fully-blank row (previously at raw
-    # index 258) has been deleted from the source Excel file entirely (see
-    # load_booking_data docstring / the data-model skill), so
-    # get_filtered_records no longer needs to filter anything out here --
-    # this test now just confirms the row-level output matches the full
-    # (already-clean) row count and every row has a non-null employee.
+    # Regression for the ghost "--" row bug, RESOLVED AT SOURCE
+    # (2026-07-16) for the *original* fully-blank row (previously at raw
+    # index 258, deleted from the source file -- see load_booking_data
+    # docstring / the data-model skill).
+    #
+    # UPDATE (2026-07-17): a DIFFERENT, newly-noticed row has since
+    # appeared at the end of the file with only `Project URL` populated
+    # (every other column, including `Employee`, is NaN) -- confirmed
+    # PRE-EXISTING as of the backup taken before that day's edits, not
+    # introduced by them. `get_filtered_records` with no filters doesn't
+    # drop it (it's not *fully* blank, so `prepare_booking_df`'s
+    # `isna().all(axis=1)` check doesn't catch it, and no filter args
+    # were given to exclude it on `Employee` or otherwise), so it's
+    # present in `unfiltered` with a null `Employee` -- the opposite of
+    # this test's original "every row has a non-null employee" claim.
+    # Flagged as an open data-quality item (see
+    # test_real_bookings_filtered_records_multi_value), not silently
+    # dropped here.
     unfiltered = get_filtered_records(real_bookings)
     assert len(unfiltered) == len(real_bookings)
-    assert len(unfiltered) == 1522
+    assert len(unfiltered) == 1523
+    assert unfiltered["Employee"].isna().sum() == 1
 
+    # records_to_dicts does NOT drop the partial-blank row -- it converts
+    # NaN -> None per-field and passes every row through, so the one
+    # None-employee record from the raw dataframe above is still present
+    # here. This is the same open data-quality item, now visible at the
+    # API-facing layer too, not silently absorbed by it.
     records = records_to_dicts(unfiltered)
-    assert len(records) == 1522
-    assert all(r["employee"] is not None for r in records)
+    assert len(records) == 1523
+    assert sum(1 for r in records if r["employee"] is None) == 1

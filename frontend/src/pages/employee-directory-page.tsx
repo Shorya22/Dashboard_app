@@ -192,7 +192,7 @@ export function EmployeeDirectoryPage() {
 
       <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 bg-muted/50">
+          <thead className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
@@ -250,7 +250,7 @@ export function EmployeeDirectoryPage() {
         </table>
       </TableScrollContainer>
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">
           Page {clampedPageIndex + 1} of {pageCount} {isFetching && '· updating…'}
         </span>

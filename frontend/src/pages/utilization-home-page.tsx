@@ -12,6 +12,14 @@ import {
 } from '@/lib/utilization-api'
 import { marketDisplayLabel, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 
+// Hoisted to module scope so its array reference is stable across renders,
+// matching CustomBarChart's React.memo (values are constant column/color
+// pairs, not derived from any state).
+const WEEKLY_HOURS_SERIES = [
+  { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
+  { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
+]
+
 export function UtilizationHomePage() {
   const filterOptions = useUtilizationFilterOptions()
   const byRegionMarket = useUtilizationByRegionMarket()
@@ -68,11 +76,14 @@ export function UtilizationHomePage() {
   // see `chart-colors.ts::MARKET_DISPLAY_ALIASES`) so the bar label matches
   // the Power BI reference; the raw value is never sent anywhere from this
   // read-only chart, so there's no submission concern here.
-  const regionMarketData =
-    byRegionMarket.data?.items.map((r) => ({
-      name: `${r.region}/${marketDisplayLabel(r.market)}`,
-      value: r.total_hours,
-    })) ?? []
+  const regionMarketData = React.useMemo(
+    () =>
+      byRegionMarket.data?.items.map((r) => ({
+        name: `${r.region}/${marketDisplayLabel(r.market)}`,
+        value: r.total_hours,
+      })) ?? [],
+    [byRegionMarket.data],
+  )
 
   const isLoading = recordsAll.isLoading || utilizationSummary.isLoading
   const summary = recordsAll.data?.summary
@@ -155,10 +166,7 @@ export function UtilizationHomePage() {
           <CustomBarChart
             data={weeklyData}
             index="week"
-            series={[
-              { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
-              { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
-            ]}
+            series={WEEKLY_HOURS_SERIES}
             yAxisLabel="Hours"
             xAxisLabel="Week"
             showLegend

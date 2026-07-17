@@ -8,10 +8,45 @@ owner) before relying on these in production metrics, especially for
 
 | Name as it appears in booking / utilization sheets | Best-guess match in roster (`NAME` column) | Confidence |
 |---|---|---|
-| Kaginthala Reddy | KAGITHALA  LOKESH REDDY | High — transposed letters + dropped middle name |
 | Pramod Kabugande | PRAMOD  KABUGADE | High — single extra letter |
-| Saumyarajan Kanungo | SAUMYARANJAN  KANUNGO | High — single letter swap |
-| Suraj Kayade | SURAJ CHHATRAPATI KAVADE | Medium — surname spelling differs (Kayade vs Kavade), plus dropped middle name |
+
+Resolved rows previously in this table (`Kaginthala Reddy`, `Saumyarajan
+Kanungo`, `Suraj Kayade`) have moved to the "RESOLVED AT SOURCE
+(2026-07-17)" section directly below — the ground-truth spelling was
+corrected to match the roster/booking-sheet spelling, so these are no
+longer variants needing a mapping. `Pramod Kabugande` remains open,
+not yet addressed by any business-owner direction.
+
+## RESOLVED AT SOURCE (2026-07-17): `Kaginthala Reddy` / `Saumyarajan Kanungo` / `Suraj Kayade` corrected directly in the ground-truth Excel file
+
+Per explicit business-owner direction, 3 more ground-truth spellings
+were corrected **directly in the source Excel file**
+(`backend/data/PowerBI_Ready_Utilization_May_2026.xlsx`), the same
+treatment as the `Ankit Singh` -> `Amit Singh` fix documented below —
+not a code-level mapping, an actual source-data correction:
+
+| Ground truth had (wrong) | Corrected to (matches roster & booking sheet) |
+|---|---|
+| Kaginthala Reddy | Kagithala Reddy |
+| Saumyarajan Kanungo | Saumyaranjan Kanungo |
+| Suraj Kayade | Suraj Kavade |
+
+Applied via `openpyxl` cell-level edits across both data sheets
+(`Employee_Weekly_Wide`: 3 rows changed, 1 per employee;
+`Utilization_Long`: 12 rows changed, 4 weeks x 3 employees). Pre-fix
+backup: `backend/data/backups/PowerBI_Ready_Utilization_May_2026.xlsx.bak-20260717-115658`.
+
+**Downstream effect**: `BOOKING_TO_GROUND_TRUTH_NAME_MAP` in
+`backend/app/services/utilization_metrics.py` had these 3 entries
+removed — translating the (already-correct) booking-sheet spelling
+through the old mapping would now look up a name that no longer exists
+in the ground truth file, silently dropping those employee/weeks from
+every reconciliation. `test_reconciliation_confirms_formula_a` in
+`backend/tests/test_utilization_metrics.py` confirms the fix: without
+removing the stale mappings, `matched_employee_weeks` regressed
+156 -> 144 (12 employee/weeks lost = 3 employees x 4 weeks); with the
+mappings removed, it's back to 156 and the booking sheet's spelling
+matches the ground truth directly via plain string equality.
 
 ## RESOLVED AT SOURCE (2026-07-16): `Ankit Singh` corrected to `Amit Singh` directly in the ground-truth Excel file
 

@@ -25,11 +25,11 @@ function AnimatedMetric({ value }: { value: string | number }) {
   const animated = useCountUp(parsed?.numeric ?? null)
 
   if (!parsed || animated === null) {
-    return <Metric className="text-2xl font-semibold tracking-tight">{value}</Metric>
+    return <Metric className="truncate text-2xl font-semibold tracking-tight">{value}</Metric>
   }
 
   const display = `${parsed.prefix}${animated.toFixed(parsed.decimals)}${parsed.suffix}`
-  return <Metric className="text-2xl font-semibold tracking-tight tabular-nums">{display}</Metric>
+  return <Metric className="truncate text-2xl font-semibold tracking-tight tabular-nums">{display}</Metric>
 }
 
 interface KpiCardProps {
@@ -103,11 +103,13 @@ export function KpiCard({
         )}
       </div>
       <div className="mt-3 flex items-end justify-between gap-4">
-        <AnimatedMetric value={value} />
+        <div className="min-w-0">
+          <AnimatedMetric value={value} />
+        </div>
         {delta !== undefined && (
           <span
             className={cn(
-              'flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-semibold',
+              'flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-sm font-semibold',
               isGood
                 ? 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-200'
                 : 'border-destructive/20 bg-destructive/10 text-destructive dark:border-destructive/30 dark:bg-destructive/15',

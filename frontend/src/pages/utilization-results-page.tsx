@@ -206,7 +206,7 @@ export function UtilizationResultsPage() {
 
       <TableScrollContainer>
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 bg-muted/50">
+          <thead className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
@@ -268,7 +268,7 @@ export function UtilizationResultsPage() {
       </TableScrollContainer>
 
       {!records.isLoading && total > 0 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span>
             Page {page + 1} of {totalPages} · {total.toLocaleString()} records
           </span>

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, User, LogOut, Bell, Menu } from 'lucide-react'
+import { Search, User, LogOut, Bell, Menu, Settings } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import {
@@ -106,8 +106,18 @@ export function Topbar({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>Account</DropdownMenuLabel>
-          <div className="px-3 py-2 text-sm text-slate-700">{user?.email ?? 'Not signed in'}</div>
+          <div className="break-words px-3 py-2 text-sm text-slate-700">{user?.email ?? 'Not signed in'}</div>
           <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-sm"
+              onClick={() => navigate('/settings')}
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </button>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <button
               type="button"
@@ -145,15 +155,15 @@ export function Topbar({
     return (
       <header className="flex shrink-0 flex-col border-b border-[#D7E4FF] bg-[#F3F7FF]/90 backdrop-blur">
         <div className="h-1 w-full bg-[#4C82FF]" />
-        <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-2 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             {menuButton}
-            <div>
-              <p className="truncate text-base font-semibold tracking-tight text-[#112A60] sm:text-lg">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold tracking-tight text-[#112A60] sm:text-base lg:text-lg">
                 {title}
               </p>
               {subtitle ? (
-                <p className="text-xs text-[#5D6F99]">{subtitle}</p>
+                <p className="line-clamp-2 text-[11px] leading-snug text-[#5D6F99] sm:text-xs">{subtitle}</p>
               ) : null}
             </div>
           </div>
@@ -166,14 +176,18 @@ export function Topbar({
   return (
     <header className="flex shrink-0 flex-col border-b border-[#D7E4FF] bg-[#F3F7FF]/90 backdrop-blur">
       <div className="h-1 w-full bg-[#4C82FF]" />
-      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+      {/* `min-h-14` (not a fixed `h-14`) + `line-clamp-2` on the subtitle:
+          a fixed height fighting a subtitle long enough to wrap on a narrow
+          phone is exactly what pushed the icons out of alignment with the
+          title block instead of just letting the row grow to fit. */}
+      <div className="flex min-h-14 items-center justify-between gap-3 px-4 py-2 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           {menuButton}
-          <div>
-            <p className="truncate text-base font-semibold tracking-tight text-[#112A60] sm:text-lg">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold tracking-tight text-[#112A60] sm:text-base lg:text-lg">
               {title}
             </p>
-            <p className="text-xs text-[#5D6F99]">
+            <p className="line-clamp-2 text-[11px] leading-snug text-[#5D6F99] sm:text-xs">
               {subtitle ?? 'Dashboard overview and quick actions'}
             </p>
           </div>

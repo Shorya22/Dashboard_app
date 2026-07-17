@@ -52,7 +52,7 @@ export function FiltersPanel({ children, defaultOpen = false }: FiltersPanelProp
                   type="button"
                   onClick={() => setOpen(false)}
                   aria-label="Close filters"
-                  className="rounded-md p-1 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  className="rounded-md p-2 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>

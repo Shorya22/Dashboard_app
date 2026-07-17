@@ -38,6 +38,11 @@ interface CreateFullLabelTooltipOptions {
    * its `document.body` portal, and without it the tooltip can't render at
    * all (no anchor to position from). */
   getContainerRect: () => DOMRect | null
+  /** The chart instance's own stable id (`React.useId()`), passed straight
+   * through to `ChartTooltipPortal` — see that component and
+   * chart-tooltip-touch-store.ts for why this needs to be stable per chart
+   * rather than generated fresh per tooltip activation. */
+  ownerId: string
 }
 
 /** Builds a tooltip content component for a Recharts `<Tooltip content={...}>`
@@ -54,9 +59,19 @@ interface CreateFullLabelTooltipOptions {
  * component isn't reusable across chart instances since it needs a
  * different container each time. */
 export function createFullLabelTooltip(options: CreateFullLabelTooltipOptions) {
-  const { valueLabel, getContainerRect } = options
+  const { valueLabel, getContainerRect, ownerId } = options
 
-  function BoundFullLabelTooltip({ active, payload, label, coordinate }: CustomTooltipProps) {
+  // Tremor's `CustomTooltipProps` type doesn't declare `coordinate`, but
+  // Recharts passes it through to every custom tooltip component at
+  // runtime regardless — ChartTooltipPortal needs it to position the
+  // portal. Widening the type here (not changing any runtime behavior)
+  // matches what's actually received.
+  function BoundFullLabelTooltip({
+    active,
+    payload,
+    label,
+    coordinate,
+  }: CustomTooltipProps & { coordinate?: { x?: number; y?: number } }) {
     if (!active || !payload || payload.length === 0) return null
 
     const fullLabel = (payload[0]?.payload?.[FULL_LABEL_KEY] as string | undefined) ?? label
@@ -64,7 +79,7 @@ export function createFullLabelTooltip(options: CreateFullLabelTooltipOptions) {
     const containerRect = getContainerRect()
 
     return (
-      <ChartTooltipPortal active={active} containerRect={containerRect} coordinate={coordinate}>
+      <ChartTooltipPortal ownerId={ownerId} active={active} containerRect={containerRect} coordinate={coordinate}>
         <div className="max-w-[260px] animate-in fade-in-0 zoom-in-95 duration-150 rounded-xl border border-tremor-border bg-tremor-background shadow-lg dark:border-dark-tremor-border dark:bg-dark-tremor-background">
           <div className="border-b border-tremor-border px-3 py-2 dark:border-dark-tremor-border">
             <p className="break-words text-xs font-medium text-tremor-content-emphasis dark:text-dark-tremor-content-emphasis">

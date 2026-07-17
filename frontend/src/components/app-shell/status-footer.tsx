@@ -25,7 +25,13 @@ export function StatusFooter() {
 
   return (
     <footer className="shrink-0 px-4 py-2 text-center text-[11px] text-muted-foreground sm:px-6">
-      <span className="truncate">
+      {/* `truncate` doesn't apply on a plain inline element per the CSS
+          spec (overflow only clips block/inline-block boxes) — it was
+          silently doing nothing here, so this text just relied on
+          `overflow-hidden` further up the tree to hard-clip it mid-word on
+          narrow screens with no ellipsis. Letting it wrap instead reads
+          fine for a two-line footer and never loses the trailing text. */}
+      <span className="inline-block max-w-full break-words">
         All data as of {formatted} <span className="mx-1.5 text-border">|</span> Browser load time, not a live feed
       </span>
     </footer>

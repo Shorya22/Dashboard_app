@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { StatusFooter } from './status-footer'
+import { installGlobalTooltipDismissal } from '@/lib/chart-tooltip-touch-store'
 
 const pageTitles: Record<string, string> = {
   '/': 'Home',
@@ -18,6 +19,7 @@ const pageTitles: Record<string, string> = {
   '/utilization/employees': 'Employee Utilization',
   '/utilization/projects': 'Project Utilization',
   '/utilization/overview-summary': 'Utilization Overview',
+  '/settings': 'Settings',
 }
 
 const pageSubtitles: Record<string, string> = {
@@ -32,6 +34,7 @@ const pageSubtitles: Record<string, string> = {
   '/utilization/employees': 'Review employee utilization detail',
   '/utilization/projects': 'Review project utilization detail',
   '/utilization/overview-summary': 'Period utilization rate and employee-level breakdown',
+  '/settings': 'Customize chart colors and other app preferences',
 }
 
 export function AppLayout() {
@@ -52,6 +55,13 @@ export function AppLayout() {
   React.useEffect(() => {
     setMobileNavOpen(false)
   }, [location.pathname])
+
+  // Scroll/touch-drag/tap-outside chart-tooltip dismissal — see
+  // chart-tooltip-touch-store.ts. One-time, app-wide; idempotent if this
+  // ever mounts more than once.
+  React.useEffect(() => {
+    installGlobalTooltipDismissal()
+  }, [])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">

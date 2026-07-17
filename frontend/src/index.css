@@ -74,16 +74,36 @@
   }
 }
 
-/* Tremor's DonutChart doesn't expose a hover-highlight prop (its
-   activeIndex/inactiveShape dimming only fires on click via onValueChange),
-   so brighten the hovered wedge with a plain CSS filter instead — subtle,
-   consistent in light/dark, no data or interaction logic touched. */
-.recharts-pie-sector {
-  transition:
-    filter 150ms ease-out,
-    opacity 150ms ease-out;
-  cursor: default;
+/* Recharts sets `tabIndex={0}` on every chart's root SVG by default
+   (accessibilityLayer, in generateCategoricalChart.js — the base every
+   bar/line chart uses) and `tabIndex={-1}` on each individual Pie sector
+   (Pie.js), so a tap/click can focus either. A browser's *default* focus
+   ring for an SVG element draws as a rectangle matching its bounding box,
+   not the shape inside — on the donut this reads as an unexplained square
+   or rectangle appearing on tap, exactly the bug this was. The selector
+   covers the whole chart subtree (root SVG *and* individual shapes), not
+   just the root, since either can end up focused. `:focus-visible` (not a
+   blanket `:focus`) keeps this suppressed only for pointer-driven focus;
+   real keyboard Tab navigation still gets a visible ring. */
+.recharts-wrapper *:focus {
+  outline: none;
 }
-.recharts-pie-sector:hover {
-  filter: brightness(1.12) saturate(1.05);
+.recharts-wrapper *:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* custom-donut-chart.tsx already has a proper hover-highlight via
+   Recharts' own `activeShape`/`activeIndex` (enlarges the hovered wedge in
+   JS, driven by onMouseEnter/onMouseLeave) — a `filter` CSS rule used to
+   layer a brightness bump on top of that via `:hover`. Removed: applying
+   `filter` to an SVG shape forces the browser into a rasterized
+   compositing layer for it, which is a known source of a visible
+   rectangular bounding-box artifact around the shape in some browsers —
+   and worse on mobile, where `:hover` is commonly applied on tap with no
+   corresponding "un-hover" event to ever clear it, so the artifact could
+   get stuck. The JS-driven `activeShape` effect alone is the correct fix
+   and doesn't have either problem. */
+.recharts-pie-sector {
+  cursor: default;
 }

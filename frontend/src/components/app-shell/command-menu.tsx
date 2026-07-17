@@ -13,6 +13,7 @@ import {
   User,
   FolderKanban,
   Gauge,
+  Settings,
 } from 'lucide-react'
 
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -90,6 +91,13 @@ export function CommandMenu({
               </Command.Group>
             ))}
             <Command.Group heading="Account">
+              <Command.Item
+                onSelect={() => run(() => Promise.resolve(navigate('/settings')))}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Command.Item>
               <Command.Item
                 onSelect={() =>
                   void run(async () => {

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Users, UserCheck, UserX, UserPlus, UserMinus, TrendingDown, Layers } from 'lucide-react'
 import {
   flexRender,
@@ -28,6 +29,14 @@ interface EmployeeTableRow extends EmployeeRecord {
   lwd: string | null
   reason_for_leaving: string | null
 }
+
+// Hoisted to module scope (rather than an inline literal in JSX) so its
+// array reference is stable across renders, matching CustomBarChart's
+// React.memo.
+const JOINERS_VS_EXITS_SERIES = [
+  { category: 'Joiners', color: 'indigo' },
+  { category: 'Exits', color: 'terracotta' },
+]
 
 const exitColumns: ColumnDef<EmployeeTableRow>[] = [
   { accessorKey: 'name', header: 'Name' },
@@ -61,34 +70,62 @@ export function HrAnalyticsPage() {
   const activeEmployees = filteredEmployees.filter((e) => e.status === 'Active').length
   const inactiveEmployees = filteredEmployees.filter((e) => e.status === 'Inactive').length
 
-  const headcountData = (trends.data?.month_wise_closing_headcount ?? [])
-    .filter((m) => monthFilter(m.month))
-    .map((m) => ({ month: m.month, 'Closing Headcount': m.closing_headcount }))
+  // Memoized so an unrelated page re-render (e.g. the exits table below
+  // changing its internal TanStack Table sort state) doesn't recreate these
+  // arrays with new references and force every chart to redraw. `monthFilter`
+  // is itself `useCallback`'d in the hook (keyed on filters.monthYear), so
+  // depending on it here is both correct and stable.
+  const headcountData = useMemo(
+    () =>
+      (trends.data?.month_wise_closing_headcount ?? [])
+        .filter((m) => monthFilter(m.month))
+        .map((m) => ({ month: m.month, 'Closing Headcount': m.closing_headcount })),
+    [trends.data, monthFilter],
+  )
 
-  const joinersLeaversData = (trends.data?.monthly_joiners_vs_leavers ?? [])
-    .filter((m) => monthFilter(m.month))
-    .map((m) => ({ month: m.month, Joiners: m.joiners, Exits: m.exits }))
+  const joinersLeaversData = useMemo(
+    () =>
+      (trends.data?.monthly_joiners_vs_leavers ?? [])
+        .filter((m) => monthFilter(m.month))
+        .map((m) => ({ month: m.month, Joiners: m.joiners, Exits: m.exits })),
+    [trends.data, monthFilter],
+  )
 
-  const resignationData = (attrition.data?.month_wise_resignation ?? [])
-    .filter((m) => monthFilter(m.month))
-    .map((m) => ({ month: m.month, Exits: m.exits }))
+  const resignationData = useMemo(
+    () =>
+      (attrition.data?.month_wise_resignation ?? [])
+        .filter((m) => monthFilter(m.month))
+        .map((m) => ({ month: m.month, Exits: m.exits })),
+    [attrition.data, monthFilter],
+  )
 
   // Voluntary/Involuntary split still comes from the exits_table, filtered
   // the same way as the KPIs above, so it stays in sync with the table below.
-  const filteredExitsForDonut = applyEmployeeFilters(attrition.data?.exits_table ?? [], filters, {
-    status: 'status',
-    department: 'designation',
-    region: 'region',
-  })
+  const filteredExitsForDonut = useMemo(
+    () =>
+      applyEmployeeFilters(attrition.data?.exits_table ?? [], filters, {
+        status: 'status',
+        department: 'designation',
+        region: 'region',
+      }),
+    [attrition.data, filters],
+  )
 
-  const voluntaryData = Object.entries(
-    filteredExitsForDonut.reduce<Record<string, number>>((acc, e) => {
-      const reason = e.reason_for_leaving ?? 'Unknown'
-      acc[reason] = (acc[reason] ?? 0) + 1
-      return acc
-    }, {}),
-  ).map(([name, value]) => ({ name, value }))
-  const voluntaryColors = colorsForLabels(voluntaryData.map((d) => d.name), VOLUNTARY_COLORS)
+  const voluntaryData = useMemo(
+    () =>
+      Object.entries(
+        filteredExitsForDonut.reduce<Record<string, number>>((acc, e) => {
+          const reason = e.reason_for_leaving ?? 'Unknown'
+          acc[reason] = (acc[reason] ?? 0) + 1
+          return acc
+        }, {}),
+      ).map(([name, value]) => ({ name, value })),
+    [filteredExitsForDonut],
+  )
+  const voluntaryColors = useMemo(
+    () => colorsForLabels(voluntaryData.map((d) => d.name), VOLUNTARY_COLORS),
+    [voluntaryData],
+  )
 
   // Bottom table: the FULL employee directory (matches the Power BI
   // reference, which is not filtered to exits-only), sorted alphabetically
@@ -204,10 +241,7 @@ export function HrAnalyticsPage() {
           <CustomBarChart
             data={joinersLeaversData}
             index="month"
-            series={[
-              { category: 'Joiners', color: 'indigo' },
-              { category: 'Exits', color: 'terracotta' },
-            ]}
+            series={JOINERS_VS_EXITS_SERIES}
             yAxisLabel="Employees"
             xAxisLabel="Month"
             showLegend
@@ -257,7 +291,7 @@ export function HrAnalyticsPage() {
         <h2 className="mb-3 text-lg font-semibold">Employees</h2>
         <TableScrollContainer>
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 bg-muted/50">
+            <thead className="sticky top-0 z-10 bg-muted">
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id}>
                   {hg.headers.map((header) => (

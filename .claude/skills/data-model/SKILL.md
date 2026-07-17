@@ -204,6 +204,149 @@ documented in the "RESOLVED (2026-07-16): `DOJ (DEPT) = "TBD"`" section
 below; that is a separate, intentional data state, not a data-quality
 bug to fix.
 
+**UPDATE (2026-07-17), superseding the "not touched" note above:** these
+same 2 rows *were* touched the following day, at the business owner's
+explicit direction, in a different field. `Status` gained a third
+legitimate value, `"Strategic Pool"` — see the dedicated section below
+("RESOLVED AT SOURCE (2026-07-17): `Status` gains a third value") for
+the full change.
+
+## RESOLVED AT SOURCE (2026-07-17): `Status` gains a third value, `"Strategic Pool"` — `Active Employees` no longer double-counts the 2 blank-`DOJ (DEPT)` rows
+
+**Business context:** the confirmed real DAX (see "Confirmed real DAX
+formulas" below) defines `Active Employees` and `Strategic Pool` as two
+independent measures over two unrelated columns —
+`Active Employees = CALCULATE([Total Employees], Status = "Active")` and
+`Strategic Pool = CALCULATE([Total Employees], ISBLANK(DOJ (DEPT)))`.
+Nothing in the DAX guarantees these are mutually exclusive, and on this
+roster they weren't: the 2 employees with blank/TBD `DOJ (DEPT)`
+(`Rahul Malhotra` NEW_EMP_ID `2000194634`, `Shorya Sharma` NEW_EMP_ID
+`2000195658`) also had `Status = "Active"`, so the Home page showed
+`Active Employees = 47` and `Strategic Pool = 2` side by side — reading
+as if they should sum to something (`Closing Headcount = 47`) but
+actually overlapping instead, which looked like a bug to anyone
+comparing the two KPI cards.
+
+**Decision (business owner's explicit direction, 2026-07-17):** reclassify
+these 2 rows' `Status` from `"Active"` to a new third value,
+`"Strategic Pool"`, directly in the source Excel file
+(`backend/data/DEPT - Master Data(Sheet1).xlsx`). Backup:
+`backend/data/backups/DEPT - Master Data(Sheet1).xlsx.bak-20260717-112122`.
+Post-change `Status` distribution: `Active` 45, `Inactive` 5,
+`Strategic Pool` 2 (sums to `Total Employees` = 52).
+
+**Downstream effects, all implemented and tested:**
+- `get_active_employees()` (`Status == "Active"`, unchanged filter logic)
+  now returns **45** instead of 47 — no code change needed here, it's a
+  pure consequence of the source-data edit.
+- `get_strategic_pool()` (`ISBLANK(DOJ (DEPT))`, unchanged filter logic,
+  a different column) is **unaffected**, still returns **2** — same 2
+  people, reached via the original date-based filter, now also flagged
+  via `Status`.
+- `get_workforce_category_split()` (Home page's "Workforce Category"
+  donut) is unchanged code, but its two independent numbers (`Active`
+  45 + `Strategic Pool` 2) now sum to 47, matching `Closing Headcount`
+  — see that function's docstring for why this is a consequence of the
+  data change, not a new structural guarantee between the two measures.
+- `get_status_split()` (HR Portal's "Status Split" donut) was changed
+  from a hardcoded `{Active, Inactive}` dict to explicitly enumerate all
+  three `Status` values, so the donut now shows 3 slices summing to the
+  full 52 instead of silently dropping the 2 reclassified employees.
+- `get_data_quality_warnings()`'s `expected_statuses` set was widened to
+  `{"Active", "Inactive", "Strategic Pool"}` so these 2 rows don't fire a
+  spurious `unexpected_status_value` warning.
+- `get_average_experience_yrs()` / `get_average_hexaware_experience()`
+  (both filter `Status == "Active"`, provisional/pre-existing logic, not
+  changed) now average over 45 rows instead of 47 — their values shifted
+  from 9.1753/0.9321 to 9.5802/0.9707 years as a correct consequence,
+  not a bug.
+- Frontend `STATUS_COLORS` (`frontend/src/lib/chart-colors.ts`) gained a
+  `'Strategic Pool': 'teal'` entry matching the existing
+  `WORKFORCE_CATEGORY_COLORS` mapping, so the new slice gets a
+  deliberate, consistent color everywhere rather than a hash fallback.
+  Status filter dropdowns (HR Analytics, HR Portal) needed no code
+  change — they already derive their options from `distinctValues(...,
+  'status')` on the live data, not a hardcoded list.
+- Regression tests updated: `test_real_roster_headcount`,
+  `test_real_roster_status_split`, `test_get_status_split` (sample
+  fixture — now expects an explicit `"Strategic Pool": 0`),
+  `test_real_roster_experience` — all in
+  `backend/tests/test_roster_metrics.py` /
+  `backend/tests/test_roster_breakdowns.py`. Full suite (144 tests)
+  passes.
+
+**Not affected:** `Total Employees` (ID-count based, no Status filter),
+`Closing Headcount`/`Opening Headcount`/`Joiners`/`Exits` (all
+date-based via `DOJ (DEPT)`/`LWD`, independent of `Status`),
+`Inactive Employees` (the 2 reclassified rows were never Inactive).
+
+## RESOLVED AT SOURCE (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan Agarwal` removed from the roster; booking sheet `Market (EC)` "BN"/"Technology" corrected to "BENO"/"AMER"
+
+Two more source-data changes made the same day as the `Status` update
+above, at the business owner's explicit direction:
+
+**1) Roster removal.** `Milind Vijay Mokashi` (`NEW_EMP_ID 2000125883`,
+`Designation` "Operations Manager") and `Sakshi Madan Agarwal`
+(`NEW_EMP_ID 2000186338`, `Designation` "DGM - HR") were deleted
+entirely from `backend/data/DEPT - Master Data(Sheet1).xlsx` (both
+`Region`/`Working Entity` = "Hexaware", i.e. internal corporate staff,
+not client-facing). Backup:
+`backend/data/backups/DEPT - Master Data(Sheet1).xlsx.bak-20260717-115658`.
+Neither employee has any row in the booking sheet (`UTILIZATION DATA
+SHEET.xlsx`), so no orphaned booking data results from this removal.
+
+`Total Employees` drops from 52 to **50** (`Active` 45->43, `Inactive`
+unaffected at 5, `Strategic Pool` unaffected at 2 -- see the `Status`
+section above). This cascades into every headcount-adjacent measure
+that happened to include one or both of these 2 rows: `Closing
+Headcount`/`Joiners` (both had a real pre-June-2026 `DOJ (DEPT)` and no
+`LWD` -> both counted, full-range Closing Headcount 47->45, Joiners
+50->48), `Departments` (29->27, both had a unique `Designation`),
+`GCC Employees`/`Non GCC Employees` (48/4 -> 47/3, one was each `Type`),
+`Skills Covered` (16->14, both had a unique `Skill`), `Clients
+Covered`/`Projects` (31/32 -> 30/31, both had a unique `Client as on
+June 2026`), average-experience measures (both were `Status` "Active"),
+`Region`/`Working Entity` breakdowns (the "Hexaware" bucket drops to 0
+and no longer appears as a key), and `Seniority Category` (both mapped
+to "Senior", 19->17). None of these are new formulas or bugs — every
+one is the existing, unchanged getter naturally reflecting 2 fewer rows
+in its input. Full accounting of every affected regression test's old
+vs. new value is in `backend/tests/test_roster_metrics.py` and
+`backend/tests/test_roster_breakdowns.py` (search "UPDATED
+(2026-07-17)"). Full suite (144 tests) passes.
+
+**2) Booking sheet `Market (EC)` correction.** Two `Market (EC)` values
+in `backend/data/UTILIZATION DATA SHEET.xlsx` were data-entry errors,
+not intentional labels — "BN" (523 rows, `Region (EC)` = EMEA) should
+have read "BENO", and "Technology" (528 rows, `Region (EC)` = AMER)
+should have read "AMER" (i.e. the market label had accidentally been
+overwritten with an unrelated segment name for that block of rows).
+Both corrected directly via `openpyxl`. Backup:
+`backend/data/backups/UTILIZATION DATA SHEET.xlsx.bak-20260717-115658`.
+This resolves the long-standing "NOTE: the real `Market (EC)` values
+are Technology/BN/DACH/UKI, NOT the AMER/BENO/DACH/UKI labels implied
+by the reference chart" flag that
+`get_hours_by_region_market`'s regression test used to carry — the raw
+data now matches the reference chart's labels exactly, with hours
+totals per region/market pair unchanged (only the labels moved).
+`backend/tests/test_booking_metrics.py` updated accordingly.
+
+**Also newly noticed while re-running the booking test suite (NOT
+introduced by either change above — confirmed present in the backup
+taken before that day's edits):** a single row at the end of the
+booking sheet has only a `Project URL` value populated, every other
+column (including `Employee` and `Region (EC)`) is `NaN`. This is
+DIFFERENT from the fully-blank row fixed at source on 2026-07-16 (that
+one had every column blank; `load_booking_data`'s
+`df.isna().all(axis=1)` blank-row detector catches fully-blank rows
+only, so it does not fire for this partially-blank one). Flagged as an
+**open data-quality item, not fixed** -- out of scope of today's
+business-owner direction. `test_real_bookings_filtered_records_multi_value`
+and `test_real_bookings_filtered_records_excludes_blank_row` in
+`backend/tests/test_booking_metrics.py` document its current effect on
+row counts (both now off-by-1 from what a fully-clean file would give)
+rather than silently dropping it.
+
 ## Multi-value fields — handling rule
 
 `Client as on June 2026` and `Project Manager` can each hold multiple

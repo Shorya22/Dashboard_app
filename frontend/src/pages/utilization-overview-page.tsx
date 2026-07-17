@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Percent, Users, Gauge } from 'lucide-react'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
@@ -11,27 +12,46 @@ import { withTruncatedLabels } from '@/lib/chart-labels'
 export function UtilizationOverviewPage() {
   const overview = useUtilizationOverview()
 
-  const trendData =
-    overview.data?.weekly_trend.map((w) => ({
-      week: w.week_start,
-      'Avg Weekly Utilization %': +(w.avg_weekly_utilization_pct * 100).toFixed(1),
-    })) ?? []
+  // Memoized, keyed on overview.data rather than the whole query object:
+  // react-query re-renders this component on background-refetch state
+  // changes (isFetching/dataUpdatedAt) even when `data` itself hasn't
+  // changed, which would otherwise recreate these arrays and force the
+  // now-React.memo'd charts to redraw for no reason.
+  const trendData = useMemo(
+    () =>
+      overview.data?.weekly_trend.map((w) => ({
+        week: w.week_start,
+        'Avg Weekly Utilization %': +(w.avg_weekly_utilization_pct * 100).toFixed(1),
+      })) ?? [],
+    [overview.data],
+  )
 
-  const splitData = overview.data
-    ? [
-        { name: 'High', value: overview.data.utilization_split.high },
-        { name: 'Moderate', value: overview.data.utilization_split.moderate },
-        { name: 'Low', value: overview.data.utilization_split.low },
-      ]
-    : []
-  const splitColors = splitData.map((d) => UTILIZATION_SPLIT_COLORS[d.name] ?? 'gray')
+  const splitData = useMemo(
+    () =>
+      overview.data
+        ? [
+            { name: 'High', value: overview.data.utilization_split.high },
+            { name: 'Moderate', value: overview.data.utilization_split.moderate },
+            { name: 'Low', value: overview.data.utilization_split.low },
+          ]
+        : [],
+    [overview.data],
+  )
+  const splitColors = useMemo(
+    () => splitData.map((d) => UTILIZATION_SPLIT_COLORS[d.name] ?? 'gray'),
+    [splitData],
+  )
 
-  const rankingData = withTruncatedLabels(
-    overview.data?.employee_ranking.map((r) => ({
-      name: r.employee,
-      value: +(r.period_utilization_pct * 100).toFixed(1),
-    })) ?? [],
-    'name',
+  const rankingData = useMemo(
+    () =>
+      withTruncatedLabels(
+        overview.data?.employee_ranking.map((r) => ({
+          name: r.employee,
+          value: +(r.period_utilization_pct * 100).toFixed(1),
+        })) ?? [],
+        'name',
+      ),
+    [overview.data],
   )
 
   return (

@@ -71,10 +71,18 @@ INTERNAL_HOURS_LABEL = "Internal Hours"
 # the other direction, booking -> ground-truth, since ground-truth is this
 # module's reference). UNCONFIRMED by a human -- treat as provisional, per
 # that file's own instructions.
+#
+# RESOLVED AT SOURCE (2026-07-17): "Kaginthala Reddy" -> "Kagithala Reddy",
+# "Saumyarajan Kanungo" -> "Saumyaranjan Kanungo", and "Suraj Kayade" ->
+# "Suraj Kavade" were corrected directly in the ground-truth Excel file
+# at the business owner's direction (matching the booking sheet's
+# spelling, which was already correct) -- same resolution pattern as the
+# "Ankit Singh" -> "Amit Singh" fix below. All 3 entries removed from
+# this map: the booking sheet's spelling now matches the ground truth
+# directly, so translating it through the old mapping would look up a
+# name that no longer exists in the ground truth file and silently drop
+# those employee/weeks from every reconciliation.
 BOOKING_TO_GROUND_TRUTH_NAME_MAP: dict[str, str] = {
-    "Kagithala Reddy": "Kaginthala Reddy",
-    "Saumyaranjan Kanungo": "Saumyarajan Kanungo",
-    "Suraj Kavade": "Suraj Kayade",
     "Pramod Kabugade": "Pramod Kabugande",
     # "Amit Singh" (booking) vs "Ankit Singh" (ground truth) is NEW as of
     # this pass and NOT in known-name-variants.md -- deliberately left

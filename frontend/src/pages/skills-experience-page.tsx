@@ -52,7 +52,7 @@ function pivotBySkill(
 export function SkillsExperiencePage() {
   const employeesQuery = useRosterEmployeesAll()
   const summaryQuery = useRosterSummary()
-  const employees = employeesQuery.data?.items ?? []
+  const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
   const [filters, setFilters] = React.useState<FilterValues>({
     region: ALL,
@@ -95,32 +95,43 @@ export function SkillsExperiencePage() {
     { key: 'type', label: 'Type', options: buildOptions(distinctValues(employees, 'type')) },
   ]
 
-  const baseFiltered = applyEmployeeFilters(
-    employees,
-    filters,
-    {
-      region: 'region',
-      department: 'designation',
-      skill: 'primary_skill',
-      type: 'type',
-    },
-    { skill: normalizePrimarySkillLabel },
+  // Memoized: this page's 4 charts are React.memo'd (custom-bar-chart.tsx),
+  // so stable references here mean an unrelated re-render doesn't force
+  // every chart to redraw.
+  const baseFiltered = React.useMemo(
+    () =>
+      applyEmployeeFilters(
+        employees,
+        filters,
+        {
+          region: 'region',
+          department: 'designation',
+          skill: 'primary_skill',
+          type: 'type',
+        },
+        { skill: normalizePrimarySkillLabel },
+      ),
+    [employees, filters],
   )
   // experience / seniorityCategory are derived fields, not raw
   // EmployeeRecord columns, so they're applied as an extra manual pass
   // rather than through applyEmployeeFilters's direct field map.
-  const filtered = baseFiltered.filter((e) => {
-    if (filters.experience !== ALL && deriveExperienceBand(e.total_experience) !== filters.experience) {
-      return false
-    }
-    if (
-      filters.seniorityCategory !== ALL &&
-      deriveSeniorityCategory(e.seniority_level) !== filters.seniorityCategory
-    ) {
-      return false
-    }
-    return true
-  })
+  const filtered = React.useMemo(
+    () =>
+      baseFiltered.filter((e) => {
+        if (filters.experience !== ALL && deriveExperienceBand(e.total_experience) !== filters.experience) {
+          return false
+        }
+        if (
+          filters.seniorityCategory !== ALL &&
+          deriveSeniorityCategory(e.seniority_level) !== filters.seniorityCategory
+        ) {
+          return false
+        }
+        return true
+      }),
+    [baseFiltered, filters.experience, filters.seniorityCategory],
+  )
 
   const isLoading = employeesQuery.isLoading
   const isError = employeesQuery.isError
@@ -128,15 +139,42 @@ export function SkillsExperiencePage() {
   const isUnfiltered = Object.values(filters).every((v) => v === ALL)
   const skillsCoveredLoading = isUnfiltered ? summaryQuery.isLoading : isLoading
 
-  const byExperience = pivotBySkill(filtered, (e) => deriveExperienceBand(e.total_experience))
-  const bySeniority = pivotBySkill(filtered, (e) => deriveSeniorityCategory(e.seniority_level))
-  const byRegion = pivotBySkill(filtered, (e) => e.region ?? 'Region TBD')
+  const byExperience = React.useMemo(
+    () => pivotBySkill(filtered, (e) => deriveExperienceBand(e.total_experience)),
+    [filtered],
+  )
+  const bySeniority = React.useMemo(
+    () => pivotBySkill(filtered, (e) => deriveSeniorityCategory(e.seniority_level)),
+    [filtered],
+  )
+  const byRegion = React.useMemo(() => pivotBySkill(filtered, (e) => e.region ?? 'Region TBD'), [filtered])
 
-  const experienceBandData = withTruncatedLabels(
-    Object.entries(groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience)))).map(
-      ([name, value]) => ({ name, value }),
-    ),
-    'name',
+  const byExperienceSeries = React.useMemo(
+    () => byExperience.groups.map((category) => ({ category, color: colorsForLabels([category])[0] })),
+    [byExperience],
+  )
+  const bySenioritySeries = React.useMemo(
+    () =>
+      bySeniority.groups.map((category) => ({
+        category,
+        color: colorsForLabels([category], SENIORITY_CATEGORY_COLORS)[0],
+      })),
+    [bySeniority],
+  )
+  const byRegionSeries = React.useMemo(
+    () => byRegion.groups.map((category) => ({ category, color: colorsForLabels([category], REGION_COLORS)[0] })),
+    [byRegion],
+  )
+
+  const experienceBandData = React.useMemo(
+    () =>
+      withTruncatedLabels(
+        Object.entries(groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience)))).map(
+          ([name, value]) => ({ name, value }),
+        ),
+        'name',
+      ),
+    [filtered],
   )
 
   const totalEmployees = filtered.length
@@ -189,18 +227,28 @@ export function SkillsExperiencePage() {
           provisional
           provisionalNote="Experience Band bucket boundaries are PROVISIONAL, see the data-model skill."
         >
-          <CustomBarChart
-            data={byExperience.data}
-            index="primary_skill"
-            series={byExperience.groups.map((category) => ({ category, color: colorsForLabels([category])[0] }))}
-            stack
-            layout="vertical"
-            yAxisWidth={110}
-            xAxisLabel="Employees"
-            showLegend
-            tooltipValueLabel="Employees"
-            className="h-full"
-          />
+          {/* One horizontal bar per distinct Primary Skill (often 15-20+)
+              inside a fixed h-80 box would squeeze every bar to a few px
+              tall on mobile — unreadable. Same fixed-row-height-inside-a-
+              scroll-viewport pattern as the ranked chart on
+              utilization-overview-page.tsx: the card stays h-80, the
+              content inside scrolls if it needs more room than that. */}
+          <div className="h-full overflow-y-auto">
+            <div style={{ height: `${Math.max(byExperience.data.length * 32, 288)}px` }}>
+              <CustomBarChart
+                data={byExperience.data}
+                index="primary_skill"
+                series={byExperienceSeries}
+                stack
+                layout="vertical"
+                yAxisWidth={110}
+                xAxisLabel="Employees"
+                showLegend
+                tooltipValueLabel="Employees"
+                className="h-full"
+              />
+            </div>
+          </div>
         </ChartCard>
 
         <ChartCard
@@ -212,18 +260,22 @@ export function SkillsExperiencePage() {
           provisional
           provisionalNote="Seniority Category mapping is PROVISIONAL, see the data-model skill."
         >
-          <CustomBarChart
-            data={bySeniority.data}
-            index="primary_skill"
-            series={bySeniority.groups.map((category) => ({ category, color: colorsForLabels([category], SENIORITY_CATEGORY_COLORS)[0] }))}
-            stack
-            layout="vertical"
-            yAxisWidth={110}
-            xAxisLabel="Employees"
-            showLegend
-            tooltipValueLabel="Employees"
-            className="h-full"
-          />
+          <div className="h-full overflow-y-auto">
+            <div style={{ height: `${Math.max(bySeniority.data.length * 32, 288)}px` }}>
+              <CustomBarChart
+                data={bySeniority.data}
+                index="primary_skill"
+                series={bySenioritySeries}
+                stack
+                layout="vertical"
+                yAxisWidth={110}
+                xAxisLabel="Employees"
+                showLegend
+                tooltipValueLabel="Employees"
+                className="h-full"
+              />
+            </div>
+          </div>
         </ChartCard>
       </div>
 
@@ -235,18 +287,22 @@ export function SkillsExperiencePage() {
           isEmpty={byRegion.data.length === 0}
           height="h-80"
         >
-          <CustomBarChart
-            data={byRegion.data}
-            index="primary_skill"
-            series={byRegion.groups.map((category) => ({ category, color: colorsForLabels([category], REGION_COLORS)[0] }))}
-            stack
-            layout="vertical"
-            yAxisWidth={110}
-            xAxisLabel="Employees"
-            showLegend
-            tooltipValueLabel="Employees"
-            className="h-full"
-          />
+          <div className="h-full overflow-y-auto">
+            <div style={{ height: `${Math.max(byRegion.data.length * 32, 288)}px` }}>
+              <CustomBarChart
+                data={byRegion.data}
+                index="primary_skill"
+                series={byRegionSeries}
+                stack
+                layout="vertical"
+                yAxisWidth={110}
+                xAxisLabel="Employees"
+                showLegend
+                tooltipValueLabel="Employees"
+                className="h-full"
+              />
+            </div>
+          </div>
         </ChartCard>
 
         <ChartCard
