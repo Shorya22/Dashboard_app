@@ -36,7 +36,7 @@ export function LoginPage() {
   const locationState = location.state as
     | { from?: Location; registeredEmail?: string }
     | null
-  const from = locationState?.from?.pathname ?? '/'
+  const from = locationState?.from?.pathname ?? '/welcome'
   // One-shot flash message set by RegisterPage after a successful signup.
   // Captured into local state so it survives the history.replaceState
   // below (which clears it from location.state so a refresh doesn't
