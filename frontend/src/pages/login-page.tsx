@@ -17,8 +17,9 @@ import {
   Sparkles,
   BarChart3,
   Clock,
+  ArrowRight,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -53,6 +54,7 @@ export function LoginPage() {
   const { setAuth } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const reduceMotion = useReducedMotion()
   const locationState = location.state as { registeredEmail?: string } | null
   // One-shot flash message set by RegisterPage after a successful signup.
   // Captured into local state so it survives the history.replaceState
@@ -105,28 +107,39 @@ export function LoginPage() {
     loginMutation.mutate(values)
   }
 
+  const floatAnim = reduceMotion ? undefined : { y: [0, -9, 0] }
+  const floatTransition = reduceMotion
+    ? undefined
+    : { duration: 5.5, repeat: Infinity, ease: 'easeInOut' as const }
+
   return (
-    // Committed-light background system shared with the landing page — blue
-    // gradient + dot texture + soft wave — so login, landing, and dashboard
-    // read as one system. No dark: variants (the app has no dark palette).
-    <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 bg-[linear-gradient(160deg,hsl(216,54%,93%)_0%,hsl(215,56%,87%)_55%,hsl(216,52%,91%)_100%)] text-foreground">
+    // Committed-light background system shared with the landing page. No dark:
+    // variants (the app has no dark palette).
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden px-4 py-8 sm:px-6 bg-[linear-gradient(155deg,hsl(216,56%,94%)_0%,hsl(215,58%,86%)_55%,hsl(216,54%,90%)_100%)] text-foreground">
+      {/* Premium background: layered radial glows, a large elegant dot grid,
+          and a soft brand wave. Clipped by this wrapper. */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         <div
-          className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full opacity-70 blur-3xl"
-          style={{ background: 'radial-gradient(circle, hsl(215 80% 62% / 0.30), transparent 70%)' }}
+          className="absolute -left-40 -top-40 h-[620px] w-[620px] rounded-full opacity-70 blur-[100px]"
+          style={{ background: 'radial-gradient(circle, hsl(215 85% 62% / 0.32), transparent 70%)' }}
         />
         <div
-          className="absolute -bottom-40 -right-32 h-[500px] w-[500px] rounded-full opacity-60 blur-3xl"
-          style={{ background: 'radial-gradient(circle, hsl(217 90% 66% / 0.24), transparent 70%)' }}
+          className="absolute -bottom-48 -right-40 h-[560px] w-[560px] rounded-full opacity-60 blur-[100px]"
+          style={{ background: 'radial-gradient(circle, hsl(220 90% 66% / 0.26), transparent 70%)' }}
         />
         <div
-          className="absolute inset-0 opacity-60"
+          className="absolute left-1/2 top-1/3 h-[420px] w-[720px] -translate-x-1/2 rounded-full opacity-40 blur-[120px]"
+          style={{ background: 'radial-gradient(ellipse, hsl(210 90% 72% / 0.20), transparent 70%)' }}
+        />
+        {/* Large, elegant dot grid — bigger dots, roomier spacing */}
+        <div
+          className="absolute inset-0 opacity-70"
           style={{
-            backgroundImage: 'radial-gradient(circle, hsl(215 42% 52% / 0.2) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
+            backgroundImage: 'radial-gradient(circle, hsl(215 42% 50% / 0.18) 2px, transparent 2px)',
+            backgroundSize: '34px 34px',
           }}
         />
-        <svg className="absolute inset-x-0 bottom-0 h-[36vh] w-full" viewBox="0 0 1440 400" preserveAspectRatio="none">
+        <svg className="absolute inset-x-0 bottom-0 h-[34vh] w-full" viewBox="0 0 1440 400" preserveAspectRatio="none">
           <path d="M0,180 C240,280 480,80 720,130 C960,180 1200,320 1440,220 L1440,400 L0,400 Z" fill="hsl(215 65% 55% / 0.10)" />
           <path d="M0,240 C260,320 520,160 760,200 C1000,240 1220,360 1440,280 L1440,400 L0,400 Z" fill="hsl(215 68% 48% / 0.12)" />
         </svg>
@@ -135,82 +148,104 @@ export function LoginPage() {
       {/* Unified card. Interior is a dotted light-lavender surface on lg (both
           panels), white on mobile. Shake on auth error is preserved. */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={shake ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, -3, 3, 0] } : { opacity: 1, y: 0 }}
-        transition={shake ? { x: { duration: 0.4, ease: 'easeInOut' } } : { duration: 0.3, ease: 'easeOut' }}
-        className="relative z-10 grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_90px_-24px_rgba(28,79,151,0.38)] lg:w-[90vw] lg:max-w-[1300px] lg:grid-cols-2 lg:bg-[linear-gradient(160deg,hsl(216,43%,95.5%)_0%,hsl(216,50%,91%)_100%)]"
+        transition={shake ? { x: { duration: 0.4, ease: 'easeInOut' } } : { duration: 0.35, ease: 'easeOut' }}
+        className="relative z-10 grid w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-card shadow-[0_50px_100px_-30px_rgba(28,79,151,0.42)] ring-1 ring-black/[0.03] lg:max-w-[1140px] lg:grid-cols-[1.05fr_1fr] lg:bg-[linear-gradient(150deg,hsl(216,46%,95%)_0%,hsl(216,52%,90%)_100%)]"
       >
-        {/* dotted texture across the whole card interior — lg only */}
+        {/* dotted texture across the card interior — lg only, larger grid */}
         <div
           className="pointer-events-none absolute inset-0 hidden opacity-60 lg:block"
           style={{
-            backgroundImage: 'radial-gradient(circle, hsl(215 45% 55% / 0.16) 1px, transparent 1px)',
-            backgroundSize: '22px 22px',
+            backgroundImage: 'radial-gradient(circle, hsl(215 45% 52% / 0.16) 2px, transparent 2px)',
+            backgroundSize: '30px 30px',
           }}
           aria-hidden="true"
         />
 
-        {/* Left panel — branding + a peek at the dashboard. Hidden below lg. */}
-        <div className="relative z-10 hidden flex-col overflow-hidden p-12 lg:flex xl:p-16">
-          {/* soft brand blob, a light accent behind the bottom-left card —
-              kept light + low so it never washes out the value-prop text */}
+        {/* ── Left / brand panel (lg+) ────────────────────────────────── */}
+        <div className="relative z-10 hidden flex-col overflow-hidden p-10 lg:flex xl:p-12">
+          {/* soft brand blob behind the mini dashboard */}
           <div
-            className="pointer-events-none absolute -bottom-24 -left-24 h-[360px] w-[360px] rounded-full opacity-80"
-            style={{ background: 'radial-gradient(circle at 45% 40%, hsl(216 58% 83%), hsl(216 50% 71%))' }}
+            className="pointer-events-none absolute -bottom-28 -left-28 h-[380px] w-[380px] rounded-full opacity-80"
+            style={{ background: 'radial-gradient(circle at 45% 40%, hsl(216 62% 82%), hsl(216 52% 70%))' }}
             aria-hidden="true"
           />
 
           <div className="relative z-10 flex items-center gap-4">
             <img src={deptLogo} alt="DEPT" className="h-8 w-auto object-contain xl:h-9" />
-            <span className="h-7 w-px bg-border" />
-            <img src={hexawareLogo} alt="Hexaware" className="h-7 w-auto object-contain" />
+            <span className="h-6 w-px bg-border xl:h-7" />
+            <img src={hexawareLogo} alt="Hexaware" className="h-7 w-auto object-contain xl:h-8" />
           </div>
 
           <div className="relative z-10 mt-8 max-w-md">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5" />
               GCC Cockpit
             </div>
-            <h1 className="mb-3 text-[38px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[42px]">
+            <h1 className="mb-3 text-[40px] font-extrabold leading-[1.02] tracking-tight text-foreground xl:text-[46px]">
               Welcome back!
             </h1>
-            <p className="text-[15px] leading-relaxed text-muted-foreground">
+            <p className="max-w-sm text-[15px] leading-relaxed text-muted-foreground">
               Sign in to your DEPT | Hexaware GCC workforce cockpit — headcount, utilization, skills,
               and attrition, all in one place.
             </p>
           </div>
 
-          {/* Value-prop highlights — what you're signing into */}
-          <ul className="relative z-10 mt-8 space-y-4">
+          {/* Feature cards — hover-lift containers with circular icons */}
+          <ul className="relative z-10 mt-7 space-y-1.5">
             {VALUE_PROPS.map((v) => (
-              <li key={v.title} className="flex items-center gap-3.5">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-primary shadow-[0_4px_12px_-2px_rgba(28,79,151,0.2)] ring-1 ring-black/[0.03]">
+              <li
+                key={v.title}
+                className="group flex items-center gap-3.5 rounded-xl border border-transparent px-2.5 py-2 transition-all duration-200 hover:border-white/70 hover:bg-white/60 hover:shadow-sm"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-primary shadow-[0_4px_12px_-2px_rgba(28,79,151,0.2)] ring-1 ring-black/[0.03] transition-transform duration-200 group-hover:scale-105 group-hover:text-primary">
                   <v.icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold leading-tight text-foreground">{v.title}</p>
+                  <p className="text-[15px] font-bold leading-tight text-foreground">{v.title}</p>
                   <p className="text-xs text-muted-foreground">{v.sub}</p>
                 </div>
               </li>
             ))}
           </ul>
 
-          {/* Decorative "at a glance" card — illustrative shapes only, no
-              invented figures (this is a public, pre-auth page). */}
-          <div className="relative z-10 mt-8 w-[350px] max-w-full rounded-2xl border border-white/60 bg-card p-5 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_10px_20px_-6px_rgba(28,79,151,0.14),0_24px_48px_-16px_rgba(28,79,151,0.30)]">
+          {/* Mini dashboard — the visual highlight, gently floating */}
+          <motion.div
+            animate={floatAnim}
+            transition={floatTransition}
+            className="relative z-10 mt-8 w-[360px] max-w-full rounded-2xl border border-white/70 bg-card/95 p-5 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_12px_24px_-8px_rgba(28,79,151,0.16),0_30px_56px_-18px_rgba(28,79,151,0.32)] backdrop-blur"
+          >
             <div className="mb-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
                   <Users className="h-4 w-4 text-primary" />
                 </div>
                 <span className="text-sm font-bold text-foreground">Workforce at a glance</span>
               </div>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                <TrendingUp className="h-4 w-4 text-primary" />
+              <div className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">
+                <TrendingUp className="h-3 w-3" />
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-y border-border py-4">
+            {/* abstract KPI chips — labels only, no invented figures */}
+            <div className="mb-3.5 grid grid-cols-2 gap-2.5">
+              {['Utilization', 'Headcount'].map((label, i) => (
+                <div key={label} className="rounded-lg border border-border/70 bg-background/70 p-2.5">
+                  <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {label}
+                  </p>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary/70"
+                      style={{ width: i === 0 ? '72%' : '58%' }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
               <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
                 <circle cx="32" cy="32" r="30" fill="hsl(215 25% 88%)" />
                 <path d="M32 32 L32 2 A30 30 0 0 1 60 42 Z" fill="hsl(215 70% 40%)" />
@@ -221,9 +256,9 @@ export function LoginPage() {
                 <div className="h-8 w-3 rounded-sm" style={{ background: 'hsl(215 70% 62%)' }} />
                 <div className="h-11 w-3 rounded-sm bg-primary" />
               </div>
-              <svg width="76" height="40" viewBox="0 0 80 44" className="shrink-0" aria-hidden="true">
+              <svg width="80" height="42" viewBox="0 0 84 44" className="shrink-0" aria-hidden="true">
                 <polyline
-                  points="2,34 18,26 34,30 50,14 64,20 78,6"
+                  points="2,34 18,26 34,30 50,14 66,20 82,6"
                   fill="none"
                   stroke="hsl(215 70% 38%)"
                   strokeWidth="3"
@@ -232,18 +267,15 @@ export function LoginPage() {
                 />
               </svg>
             </div>
-
-            <p className="mt-3.5 text-center text-xs font-medium text-muted-foreground">
-              Headcount, utilization, and attrition — all in one view
-            </p>
-          </div>
+          </motion.div>
         </div>
 
-        {/* Right panel — the sign-in "login part". On lg it's a floating
-            elevated white card on the dotted surface; on mobile it stays
-            flat/clean, where it's the only visible panel. */}
+        {/* ── Right / form panel ──────────────────────────────────────── */}
         <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:p-12">
-          <div className="w-full max-w-md lg:rounded-2xl lg:border lg:border-white/60 lg:bg-card lg:px-9 lg:py-12 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_14px_28px_-8px_rgba(28,79,151,0.16),0_38px_70px_-20px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.02]">
+          {/* glow behind the sign-in card */}
+          <div className="pointer-events-none absolute inset-8 hidden rounded-3xl bg-primary/10 blur-2xl lg:block" aria-hidden="true" />
+
+          <div className="relative w-full max-w-md lg:rounded-[22px] lg:border lg:border-white/70 lg:bg-card/80 lg:px-9 lg:py-11 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_16px_32px_-10px_rgba(28,79,151,0.18),0_40px_72px_-22px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.03] lg:backdrop-blur-xl">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
@@ -285,8 +317,8 @@ export function LoginPage() {
                 <Label htmlFor="email" className="text-[13px] font-semibold text-foreground">
                   Email
                 </Label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="group relative">
+                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
                   <Input
                     id="email"
                     type="email"
@@ -308,8 +340,8 @@ export function LoginPage() {
                 <Label htmlFor="password" className="text-[13px] font-semibold text-foreground">
                   Password
                 </Label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="group relative">
+                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
@@ -341,11 +373,14 @@ export function LoginPage() {
 
               <Button
                 type="submit"
-                className="h-12 w-full text-[15px] font-bold shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5"
+                className="group h-12 w-full text-[15px] font-bold shadow-lg shadow-primary/25 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 bg-[linear-gradient(180deg,hsl(215,70%,43%)_0%,hsl(215,72%,34%)_100%)]"
                 disabled={loginMutation.isPending}
               >
                 {loginMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
+                {!loginMutation.isPending && (
+                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                )}
               </Button>
 
               <p className="pt-2 text-center text-sm text-muted-foreground">
