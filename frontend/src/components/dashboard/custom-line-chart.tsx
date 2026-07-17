@@ -1,3 +1,4 @@
+import * as React from 'react'
 import {
   LineChart as RLineChart,
   Line,
@@ -10,7 +11,7 @@ import {
 } from 'recharts'
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
-import { FullLabelTooltip } from './full-label-tooltip'
+import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
 
 interface CustomLineChartProps {
@@ -24,7 +25,7 @@ interface CustomLineChartProps {
 }
 
 /** Recharts-based line chart, styled to match Tremor's `<LineChart>` (same
- * font sizes, grid, axis, and tooltip via `FullLabelTooltip`), used instead
+ * font sizes, grid, axis, and tooltip via `createFullLabelTooltip`), used instead
  * of Tremor's own component because Tremor's public API has no data-label
  * passthrough — the Power BI reference always shows the value permanently
  * above every point, not just on hover. The legend is the same `CustomLegend`
@@ -43,6 +44,15 @@ export function CustomLineChart({
 }: CustomLineChartProps) {
   const stroke = tremorHex(color)
 
+  // See custom-bar-chart.tsx: the tooltip portal needs this chart
+  // instance's own wrapper rect to translate Recharts' in-chart cursor
+  // coordinate into a viewport position.
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const tooltipContent = React.useMemo(
+    () => createFullLabelTooltip({ getContainerRect: () => containerRef.current?.getBoundingClientRect() ?? null }),
+    [],
+  )
+
   // Permanent per-point value labels (below) match the Power BI reference
   // for a handful of points, but with many data points along the x-axis
   // the labels sit close enough together to overlap each other — there's
@@ -59,7 +69,7 @@ export function CustomLineChart({
   const bottomMargin = xAxisLabel ? 30 : 4
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div ref={containerRef} className="flex h-full w-full flex-col">
       <ResponsiveContainer width="100%" height="100%" className={className}>
         <RLineChart data={data} margin={{ top: 20, right: 10, left: 4, bottom: bottomMargin }}>
           <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-tremor-border dark:text-dark-tremor-border" vertical={false} />
@@ -85,15 +95,7 @@ export function CustomLineChart({
             tickMargin={4}
             label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, fontWeight: 500 } : undefined}
           />
-          {/* `position={{ y: -8 }}` pins the tooltip just above the plot
-              area (x still tracks the cursor) so it never overlaps the
-              line/points themselves — see custom-bar-chart.tsx for the
-              same fix and full rationale. */}
-          <Tooltip
-            content={FullLabelTooltip as unknown as any}
-            allowEscapeViewBox={{ x: true, y: true }}
-            position={{ y: -8 }}
-          />
+          <Tooltip content={tooltipContent as unknown as any} cursor={{ strokeDasharray: '3 3' }} />
           <Line
             type="linear"
             dataKey={category}

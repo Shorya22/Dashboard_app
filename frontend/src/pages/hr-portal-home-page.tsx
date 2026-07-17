@@ -164,6 +164,7 @@ export function HrPortalHomePage() {
             data={regionData}
             index="name"
             category="value"
+            color="teal"
             tooltipValueLabel="Employees"
             yAxisLabel="Employees"
             xAxisLabel="Region"
@@ -184,6 +185,7 @@ export function HrPortalHomePage() {
             data={entityData}
             index="name"
             category="value"
+            color="violet"
             tooltipValueLabel="Employees"
             layout="vertical"
             yAxisLabel="Entity"
@@ -205,6 +207,7 @@ export function HrPortalHomePage() {
             data={experienceBandData}
             index="name"
             category="value"
+            color="amber"
             tooltipValueLabel="Employees"
             yAxisLabel="Employees"
             xAxisLabel="Experience Band"

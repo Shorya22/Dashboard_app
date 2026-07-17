@@ -2,19 +2,40 @@
 // category (e.g. "EMEA", "GCC") always renders in the same color across
 // every chart on every page, per the dashboard-design skill's color rules.
 
-// Hexaware blue is the core brand color for dashboards and metrics.
-// This file intentionally keeps the palette soft and blue-led, with
-// orange/amber limited to rare accent use and red reserved for negative
-// status only. The goal is a cleaner, calmer UI with strong brand
-// consistency and better chart readability.
-export const PRIMARY_COLOR = 'blue' // primary metric accent, reused everywhere
+// The app's categorical palette: brand blue plus 7 light, soft companion
+// hues, validated with the dataviz skill's `validate_palette.js` against
+// this app's actual card surface (#f8f8f9) in this fixed order — order is
+// the CVD-safety mechanism (see color-formula.md), never reorder or cycle
+// it. Passes lightness band, chroma floor, CVD adjacent-pair separation
+// (worst ΔE 13.2, target ≥8) and the normal-vision floor (worst ΔE 20.8,
+// floor ≥15) on the adjacent pairlist these charts use (bar/line/donut,
+// never side-by-side scatter). Teal, amber, and emerald sit under the 3:1
+// contrast target against the light surface (2.0–2.4:1) at this lightness
+// — legal as a WARN only because every chart carrying these colors also
+// ships a relief channel (permanent value labels and/or a named legend),
+// never color alone; verified true for every chart in this app (bar charts
+// always render LabelList by default, every donut always shows its
+// legend). Deliberately light/pastel and low-saturation throughout — a
+// calm, production-grade professional palette, not a highlighter one. If
+// you need more contrast for a *new* chart that has neither labels nor a
+// legend, don't reach for these slots — add direct labels/legend first, or
+// fall back to brand blue.
+//
+// One series/one metric across categories (e.g. "Total Hours by Region")
+// stays a SINGLE hue for that whole chart — recoloring every bar by its
+// own category would spend the identity channel re-encoding what bar
+// length already shows. Variety instead comes from different CHARTS each
+// drawing a different single slot, and from genuinely multi-series/stacked
+// charts (Client vs Internal Hours, Joiners vs Exits, seniority stacks)
+// giving each series its own slot.
+export const PRIMARY_COLOR = 'blue' // brand accent — default single-series color
 
 // Region colors — stable across Home / Workforce / Skills pages
 export const REGION_COLORS: Record<string, string> = {
   AMER: 'blue',
-  EMEA: 'sky',
-  APAC: 'cyan',
-  Hexaware: 'violet',
+  EMEA: 'teal',
+  APAC: 'violet',
+  Hexaware: 'amber',
   'Region TBD': 'slate',
 }
 
@@ -25,7 +46,7 @@ export const TYPE_COLORS: Record<string, string> = {
 
 export const WORKFORCE_CATEGORY_COLORS: Record<string, string> = {
   Active: 'blue',
-  'Strategic Pool': 'sky',
+  'Strategic Pool': 'teal',
 }
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -34,45 +55,47 @@ export const STATUS_COLORS: Record<string, string> = {
 }
 
 // Seniority Category — used on the Home page's "GCC vs Non-GCC" donut
-// and other workforce breakdowns. The palette stays soft and avoids
-// overly bright reds/oranges where possible.
+// and other workforce breakdowns.
 export const SENIORITY_CATEGORY_COLORS: Record<string, string> = {
   Senior: 'blue',
-  Lead: 'sky',
-  Mid: 'cyan',
-  Other: 'violet',
-  TBD: 'gray',
+  Lead: 'teal',
+  Mid: 'violet',
+  Other: 'amber',
+  TBD: 'slate',
 }
 
 export const VOLUNTARY_COLORS: Record<string, string> = {
   Voluntary: 'blue',
-  Involuntary: 'slate',
+  Involuntary: 'terracotta',
 }
 
-// Utilization portal — Client Hours is the dominant blue metric,
-// Internal Hours is the secondary neutral visual tone.
+// Utilization portal — Client Hours and Internal Hours are two genuinely
+// separate series wherever they appear together (weekly trend, per-project,
+// per-employee), so they always get two distinct hues, never blue-vs-neutral.
 export const HOURS_TYPE_COLORS: Record<string, string> = {
   'Client Hours': 'blue',
-  'Internal Hours': 'slate',
+  'Internal Hours': 'teal',
   client_hours: 'blue',
-  internal_hours: 'slate',
+  internal_hours: 'teal',
 }
 
 export const UTILIZATION_SPLIT_COLORS: Record<string, string> = {
   High: 'blue',
-  Moderate: 'sky',
+  Moderate: 'teal',
   Low: 'slate',
 }
 
+// The 8-slot validated categorical rotation (see file header) — order
+// matters, never reorder or cycle a subset.
 export const CATEGORY_COLORS = [
   'blue',
-  'sky',
-  'cyan',
+  'teal',
   'violet',
-  'indigo',
-  'slate',
+  'amber',
+  'rose',
   'emerald',
-  'gray',
+  'indigo',
+  'terracotta',
 ] as const
 
 /** Deterministic color for an arbitrary category label not covered by a
@@ -87,27 +110,31 @@ export function colorsForLabels(labels: string[], known?: Record<string, string>
   return labels.map((l) => known?.[l] ?? colorForLabel(l))
 }
 
-// Hex equivalents (Tailwind default `-500` shade, matching Tremor's own
-// token -> hex mapping at that shade) for the Tremor color tokens used
-// above. Needed only by custom Recharts-based components (Tremor's own
-// <LineChart>/<DonutChart> take the token strings directly and resolve
-// them internally) so custom charts render in the exact same colors as
-// the Tremor charts next to them.
+// Hex equivalents for the color tokens used above. Needed by the custom
+// Recharts-based components (bar/line/donut), which take raw hex, not a
+// Tremor token string. `blue`/`teal`/`violet`/`amber`/`rose`/`emerald`/
+// `indigo`/`terracotta` are the validated 8-slot categorical set (see file
+// header); `slate`/`gray` stay a plain muted neutral for "TBD"/"Other"/
+// "Inactive" buckets, which intentionally sit outside the categorical
+// rotation. Remaining legacy tokens are kept only for any code not yet
+// migrated off them.
 export const TREMOR_HEX: Record<string, string> = {
-  indigo: '#6366f1',
   blue: '#1c4f97',
-  sky: '#0ea5e9',
-  cyan: '#06b6d4',
-  violet: '#8b5cf6',
+  teal: '#4fc4a7',
+  violet: '#9e57c1',
+  amber: '#c89b41',
+  rose: '#c3557a',
+  emerald: '#4abf5d',
+  indigo: '#6057c1',
+  terracotta: '#c86e41',
   slate: '#64748b',
   gray: '#6b7280',
-  emerald: '#10b981',
-  red: '#ef4444',
-  amber: '#f59e0b',
+  red: '#b8504f',
+  sky: '#0ea5e9',
+  cyan: '#06b6d4',
   orange: '#f97316',
   lime: '#84cc16',
   fuchsia: '#d946ef',
-  rose: '#f43f5e',
 }
 
 export function tremorHex(token: string): string {

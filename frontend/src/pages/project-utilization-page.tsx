@@ -16,6 +16,7 @@ import { FilterSelect } from '@/components/dashboard/filter-select'
 import { FiltersPanel } from '@/components/dashboard/filters-panel'
 import { Input } from '@/components/ui/input'
 import { withTruncatedLabels } from '@/lib/chart-labels'
+import { HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import {
@@ -439,8 +440,8 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
             data={employeeData}
             index="name"
             series={[
-              { category: 'Client Hours', color: 'indigo' },
-              { category: 'Internal Hours', color: 'indigo' },
+              { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
+              { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
             ]}
             yAxisLabel="Hours"
             layout="vertical"
@@ -460,8 +461,8 @@ function ProjectUtilizationDetail({ holding }: { holding: string }) {
             data={weekData}
             index="week"
             series={[
-              { category: 'Client Hours', color: 'indigo' },
-              { category: 'Internal Hours', color: 'indigo' },
+              { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
+              { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
             ]}
             yAxisLabel="Hours"
             xAxisLabel="Week"

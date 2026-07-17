@@ -206,7 +206,7 @@ export function HrAnalyticsPage() {
             index="month"
             series={[
               { category: 'Joiners', color: 'indigo' },
-              { category: 'Exits', color: 'slate' },
+              { category: 'Exits', color: 'terracotta' },
             ]}
             yAxisLabel="Employees"
             xAxisLabel="Month"

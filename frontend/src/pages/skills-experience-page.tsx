@@ -5,7 +5,7 @@ import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { useRosterEmployeesAll, useRosterSummary, type EmployeeRecord } from '@/lib/roster-api'
-import { colorsForLabels, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
+import { colorsForLabels, REGION_COLORS, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
@@ -192,7 +192,7 @@ export function SkillsExperiencePage() {
           <CustomBarChart
             data={byExperience.data}
             index="primary_skill"
-            series={byExperience.groups.map((category) => ({ category, color: 'blue' }))}
+            series={byExperience.groups.map((category) => ({ category, color: colorsForLabels([category])[0] }))}
             stack
             layout="vertical"
             yAxisWidth={110}
@@ -238,7 +238,7 @@ export function SkillsExperiencePage() {
           <CustomBarChart
             data={byRegion.data}
             index="primary_skill"
-            series={byRegion.groups.map((category) => ({ category, color: 'blue' }))}
+            series={byRegion.groups.map((category) => ({ category, color: colorsForLabels([category], REGION_COLORS)[0] }))}
             stack
             layout="vertical"
             yAxisWidth={110}
@@ -262,7 +262,7 @@ export function SkillsExperiencePage() {
             data={experienceBandData}
             index="name"
             category="value"
-            color="blue"
+            color="terracotta"
             yAxisLabel="Employees"
             xAxisLabel="Experience Band"
             showLegend={false}

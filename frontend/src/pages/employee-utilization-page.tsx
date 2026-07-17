@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { withTruncatedLabels } from '@/lib/chart-labels'
+import { colorsForLabels, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 import { useEmployeeUtilization, useUtilizationRecordsAll } from '@/lib/utilization-api'
 
 const fmtHours = (v: number) =>
@@ -450,6 +451,7 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
             data={projectData}
             index="name"
             category="value"
+            color="indigo"
             tooltipValueLabel="Hours"
             yAxisLabel="Hours"
             layout="vertical"
@@ -469,7 +471,7 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
           <CustomBarChart
             data={weekData}
             index="week"
-            series={weekCategories.map((c, i) => ({ category: c, color: i === 0 ? 'indigo' : 'slate' }))}
+            series={weekCategories.map((c) => ({ category: c, color: colorsForLabels([c], HOURS_TYPE_COLORS)[0] }))}
             yAxisLabel="Hours"
             xAxisLabel="Week"
             showLegend

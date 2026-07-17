@@ -10,7 +10,7 @@ import {
   useUtilizationRecordsAll,
   useUtilizationSummary,
 } from '@/lib/utilization-api'
-import { marketDisplayLabel } from '@/lib/chart-colors'
+import { marketDisplayLabel, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 
 export function UtilizationHomePage() {
   const filterOptions = useUtilizationFilterOptions()
@@ -156,8 +156,8 @@ export function UtilizationHomePage() {
             data={weeklyData}
             index="week"
             series={[
-              { category: 'Client Hours', color: 'blue' },
-              { category: 'Internal Hours', color: 'slate' },
+              { category: 'Client Hours', color: HOURS_TYPE_COLORS['Client Hours'] },
+              { category: 'Internal Hours', color: HOURS_TYPE_COLORS['Internal Hours'] },
             ]}
             yAxisLabel="Hours"
             xAxisLabel="Week"
@@ -177,6 +177,7 @@ export function UtilizationHomePage() {
             data={regionMarketData}
             index="name"
             category="value"
+            color="amber"
             tooltipValueLabel="Hours"
             yAxisLabel="Hours"
             xAxisLabel="Region/Market"

@@ -1,5 +1,6 @@
 import type { CustomTooltipProps } from '@tremor/react'
 import { FULL_LABEL_KEY, formatChartValue } from '@/lib/chart-labels'
+import { ChartTooltipPortal } from './chart-tooltip-portal'
 
 /** Tremor/Recharts gives every series item a `name` equal to its chart
  * `dataKey`. For single-series charts built from generic `{ name, value }`
@@ -12,24 +13,6 @@ function displayName(itemName: string | undefined, valueLabel?: string): string 
   return itemName ?? ''
 }
 
-/** Drop-in replacement for Tremor's default chart tooltip that shows the
- * *untruncated* category label (stashed by `withTruncatedLabels` under
- * FULL_LABEL_KEY) instead of the ellipsis-truncated axis tick text, plus a
- * meaningful series label instead of the raw "value" dataKey. Renders only
- * while `active` — i.e. only on hover, same as Tremor's own tooltip — so it
- * never stays stuck open once the mouse leaves the chart.
- *
- * Used for every chart on every page (bar, line, donut) so the tooltip
- * visual language — rounded corners, subtle border/shadow, colored series
- * dot, muted label + bold value, fade-in — is identical everywhere.
- *
- * Use directly for multi-series charts, where `item.name` is already a real
- * category name (e.g. a region or seniority band). For a single-series
- * chart built from `{ name, value }` rows, call
- * `createFullLabelTooltip('Employees')` (or whatever the metric is) and
- * pass the returned component instead — that's what turns the meaningless
- * "value" into a real label rather than just hiding it.
- */
 /** Recharts' `<Pie>` computes a `percent` (0-1 fraction of the donut's
  * total) on each slice's payload internally — reuse it here rather than
  * recomputing, so a donut's tooltip shows "value (percent%)" matching the
@@ -41,63 +24,80 @@ function percentOf(item: unknown): number | undefined {
   return typeof raw === 'number' ? raw : undefined
 }
 
-export function createFullLabelTooltip(valueLabel?: string) {
-  function BoundFullLabelTooltip({ active, payload, label, coordinate, viewBox }: CustomTooltipProps) {
+interface CreateFullLabelTooltipOptions {
+  /** Real metric name for a single-series chart's generic `value` dataKey
+   * (see `displayName` above). Omit for multi-series charts, where
+   * `item.name` is already a real category name (e.g. a region or
+   * seniority band). */
+  valueLabel?: string
+  /** Returns the chart's own wrapper rect (viewport coordinates), captured
+   * by the caller via a ref on the element that directly wraps
+   * `<ResponsiveContainer>` — Recharts' `coordinate` is relative to that
+   * box. Every chart must supply this: it's what lets `ChartTooltipPortal`
+   * translate an in-chart cursor position into a real viewport position for
+   * its `document.body` portal, and without it the tooltip can't render at
+   * all (no anchor to position from). */
+  getContainerRect: () => DOMRect | null
+}
+
+/** Builds a tooltip content component for a Recharts `<Tooltip content={...}>`
+ * that shows the *untruncated* category label (stashed by
+ * `withTruncatedLabels` under FULL_LABEL_KEY) instead of the
+ * ellipsis-truncated axis tick text, plus a meaningful series label instead
+ * of the raw "value" dataKey — and renders via `ChartTooltipPortal` so it
+ * always sits clear of the hovered bar/point instead of overlapping it. Used
+ * by every Recharts chart (bar, line) so the tooltip visual language —
+ * rounded corners, subtle border/shadow, colored series dot, muted label +
+ * bold value, fade-in — is identical everywhere. Each chart instance must
+ * create its own bound copy (typically via `useMemo`) with a
+ * `getContainerRect` closed over that chart's own wrapper ref — the returned
+ * component isn't reusable across chart instances since it needs a
+ * different container each time. */
+export function createFullLabelTooltip(options: CreateFullLabelTooltipOptions) {
+  const { valueLabel, getContainerRect } = options
+
+  function BoundFullLabelTooltip({ active, payload, label, coordinate }: CustomTooltipProps) {
     if (!active || !payload || payload.length === 0) return null
 
     const fullLabel = (payload[0]?.payload?.[FULL_LABEL_KEY] as string | undefined) ?? label
     const items = payload.filter((item) => item.type !== 'none')
-
-    // Recharts positions this tooltip relative to the cursor but doesn't
-    // clamp it to the chart's own bounds, so near the right edge of a
-    // narrow chart (or on mobile) it can overflow past the viewport/card
-    // edge. Nudge the anchor so the tooltip flips to the left of the
-    // cursor once there isn't enough room to the right, keeping it fully
-    // inside the plot area.
-    const plotWidth = typeof viewBox?.width === 'number' ? viewBox.width : undefined
-    const cursorX = typeof coordinate?.x === 'number' ? coordinate.x : undefined
-    const nearRightEdge = plotWidth !== undefined && cursorX !== undefined && cursorX > plotWidth - 140
+    const containerRect = getContainerRect()
 
     return (
-      <div
-        className={`max-w-[260px] animate-in fade-in-0 zoom-in-95 duration-150 rounded-xl border border-tremor-border bg-tremor-background shadow-lg dark:border-dark-tremor-border dark:bg-dark-tremor-background ${nearRightEdge ? '-translate-x-full' : ''}`}
-      >
-        <div className="border-b border-tremor-border px-3 py-2 dark:border-dark-tremor-border">
-          <p className="break-words text-xs font-medium text-tremor-content-emphasis dark:text-dark-tremor-content-emphasis">
-            {fullLabel}
-          </p>
+      <ChartTooltipPortal active={active} containerRect={containerRect} coordinate={coordinate}>
+        <div className="max-w-[260px] animate-in fade-in-0 zoom-in-95 duration-150 rounded-xl border border-tremor-border bg-tremor-background shadow-lg dark:border-dark-tremor-border dark:bg-dark-tremor-background">
+          <div className="border-b border-tremor-border px-3 py-2 dark:border-dark-tremor-border">
+            <p className="break-words text-xs font-medium text-tremor-content-emphasis dark:text-dark-tremor-content-emphasis">
+              {fullLabel}
+            </p>
+          </div>
+          <div className="space-y-1.5 px-3 py-2">
+            {items.map((item, i) => {
+              const pct = percentOf(item)
+              return (
+                <div key={`${item.name}-${i}`} className="flex items-center gap-3">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <p className="flex-1 truncate text-xs text-tremor-content dark:text-dark-tremor-content">
+                    {displayName(item.name as string | undefined, valueLabel)}
+                  </p>
+                  <p className="whitespace-nowrap font-semibold tabular-nums text-tremor-content-strong dark:text-dark-tremor-content-strong">
+                    {formatChartValue(item.value)}
+                    {pct !== undefined && (
+                      <span className="ml-1 font-normal text-tremor-content dark:text-dark-tremor-content">
+                        ({(pct * 100).toFixed(1)}%)
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
         </div>
-        <div className="space-y-1.5 px-3 py-2">
-          {items.map((item, i) => {
-            const pct = percentOf(item)
-            return (
-              <div key={`${item.name}-${i}`} className="flex items-center gap-3">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                />
-                <p className="flex-1 truncate text-xs text-tremor-content dark:text-dark-tremor-content">
-                  {displayName(item.name as string | undefined, valueLabel)}
-                </p>
-                <p className="whitespace-nowrap font-semibold tabular-nums text-tremor-content-strong dark:text-dark-tremor-content-strong">
-                  {formatChartValue(item.value)}
-                  {pct !== undefined && (
-                    <span className="ml-1 font-normal text-tremor-content dark:text-dark-tremor-content">
-                      ({(pct * 100).toFixed(1)}%)
-                    </span>
-                  )}
-                </p>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      </ChartTooltipPortal>
     )
   }
   return BoundFullLabelTooltip
 }
-
-/** Default tooltip for multi-series/stacked charts and for single-series
- * charts whose series already carries a real name (e.g. `['Closing
- * Headcount']`, `['Exits']`) — not the generic `['value']`. */
-export const FullLabelTooltip = createFullLabelTooltip()

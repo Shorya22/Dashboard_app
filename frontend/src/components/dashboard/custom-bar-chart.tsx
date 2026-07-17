@@ -1,3 +1,4 @@
+import * as React from 'react'
 import {
   BarChart as RBarChart,
   Bar,
@@ -10,7 +11,7 @@ import {
 } from 'recharts'
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
-import { FullLabelTooltip, createFullLabelTooltip } from './full-label-tooltip'
+import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
 
 interface BarSeries {
@@ -42,7 +43,7 @@ interface CustomBarChartProps {
 }
 
 /** Recharts-based bar chart, styled to match Tremor's `<BarChart>` (same
- * font sizes, grid, axis, and tooltip via `FullLabelTooltip`), used instead
+ * font sizes, grid, axis, and tooltip via `createFullLabelTooltip`), used instead
  * of Tremor's own component because Tremor's public `<BarChart>` API has no
  * data-label passthrough — the Power BI reference always shows the value
  * permanently on/above every bar, not just on hover. Supports either a
@@ -68,7 +69,20 @@ export function CustomBarChart({
 }: CustomBarChartProps) {
   const isVertical = layout === 'vertical'
   const bars: BarSeries[] = series ?? (category ? [{ category, color }] : [])
-  const tooltipContent = tooltipValueLabel ? createFullLabelTooltip(tooltipValueLabel) : FullLabelTooltip
+
+  // The tooltip portal needs this chart instance's own wrapper rect to
+  // translate Recharts' in-chart cursor coordinate into a viewport
+  // position — see chart-tooltip-portal.tsx. Rebuilt only when the value
+  // label changes, not on every render.
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const tooltipContent = React.useMemo(
+    () =>
+      createFullLabelTooltip({
+        valueLabel: tooltipValueLabel,
+        getContainerRect: () => containerRef.current?.getBoundingClientRect() ?? null,
+      }),
+    [tooltipValueLabel],
+  )
 
   const stackId = stack ? 'stack' : undefined
 
@@ -96,7 +110,7 @@ export function CustomBarChart({
     : (value: string) => truncateLabel(value)
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div ref={containerRef} className="flex h-full w-full flex-col">
       <ResponsiveContainer width="100%" height="100%" className={className}>
         <RBarChart
           data={data}
@@ -184,18 +198,6 @@ export function CustomBarChart({
             // gets its own `activeBar` highlight instead, confined to the
             // one bar actually under the cursor.
             cursor={false}
-            // Lets the tooltip render fully outside the plot area instead
-            // of being clamped inside it — without this, hovering a bar
-            // near the card's edge forces the tooltip to squeeze back over
-            // the chart itself rather than simply extending past the edge.
-            allowEscapeViewBox={{ x: true, y: true }}
-            // Pins the tooltip's vertical position to just above the plot
-            // area — x still tracks the cursor horizontally, but y no
-            // longer follows the hovered bar's own height. Without this, a
-            // tall bar's tooltip renders right next to (and often over) a
-            // neighboring bar's label; pinned to the top, it never
-            // overlaps bar content regardless of which bar is hovered.
-            position={{ y: -8 }}
           />
           {bars.map((bar) => (
             <Bar
@@ -207,6 +209,14 @@ export function CustomBarChart({
               isAnimationActive
               animationDuration={1000}
               radius={isVertical ? [0, 4, 4, 0] : [4, 4, 0, 0]}
+              // Without a cap, Recharts stretches bars to fill whatever
+              // space is available — fine with a dozen categories, but a
+              // chart with only 3-4 bars spread across a full-width card
+              // ends up with each bar ~150-200px thick. Capping thickness
+              // keeps every bar chart's bar width visually consistent
+              // regardless of category count or card width; the leftover
+              // space just becomes gap between bars instead.
+              maxBarSize={48}
               // Hover feedback confined to the one bar under the cursor
               // (replaces the old chart-wide cursor rectangle).
               activeBar={{ fillOpacity: 0.85 }}

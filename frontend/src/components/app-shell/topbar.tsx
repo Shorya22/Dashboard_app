@@ -99,7 +99,7 @@ export function Topbar({
           <button
             type="button"
             aria-label="Open account menu"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-900 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 sm:h-12 sm:w-12"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--primary))] text-white transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.4)] sm:h-12 sm:w-12"
           >
             <User className="h-5 w-5" />
           </button>

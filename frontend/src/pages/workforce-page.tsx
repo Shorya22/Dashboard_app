@@ -177,6 +177,7 @@ export function WorkforcePage() {
             data={seniorityData}
             index="name"
             category="value"
+            color="emerald"
             tooltipValueLabel="Employees"
             layout="vertical"
             yAxisLabel="Seniority"
