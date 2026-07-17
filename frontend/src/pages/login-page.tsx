@@ -151,7 +151,7 @@ export function LoginPage() {
         initial={{ opacity: 0, y: 14 }}
         animate={shake ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, -3, 3, 0] } : { opacity: 1, y: 0 }}
         transition={shake ? { x: { duration: 0.4, ease: 'easeInOut' } } : { duration: 0.35, ease: 'easeOut' }}
-        className="relative z-10 grid w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-card shadow-[0_50px_100px_-30px_rgba(28,79,151,0.42)] ring-1 ring-black/[0.03] lg:max-w-[1140px] lg:grid-cols-[1.05fr_1fr] lg:bg-[linear-gradient(150deg,hsl(216,46%,95%)_0%,hsl(216,52%,90%)_100%)]"
+        className="relative z-10 grid w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-card shadow-[0_50px_100px_-30px_rgba(28,79,151,0.42)] ring-1 ring-black/[0.03] lg:max-w-[1060px] lg:grid-cols-[1.1fr_1fr] lg:bg-[linear-gradient(150deg,hsl(216,46%,95%)_0%,hsl(216,52%,90%)_100%)]"
       >
         {/* dotted texture across the card interior — lg only, larger grid */}
         <div
@@ -162,6 +162,24 @@ export function LoginPage() {
           }}
           aria-hidden="true"
         />
+        {/* Central bridge glow — a soft spotlight between the two panels that
+            unifies them (Azure-Portal-style lighting). Very subtle. */}
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 hidden h-[560px] w-[620px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-70 blur-[120px] lg:block"
+          style={{ background: 'radial-gradient(circle, hsl(214 84% 70% / 0.18), transparent 70%)' }}
+          aria-hidden="true"
+        />
+        {/* Card-spanning wave — flows continuously beneath both panels so the
+            surface reads as one, not two isolated columns. */}
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-44 w-full lg:block"
+          viewBox="0 0 1440 220"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path d="M0,90 C240,150 480,40 720,74 C960,108 1200,170 1440,120 L1440,220 L0,220 Z" fill="hsl(215 60% 58% / 0.06)" />
+          <path d="M0,132 C260,182 520,86 760,118 C1000,150 1220,190 1440,150 L1440,220 L0,220 Z" fill="hsl(215 62% 50% / 0.08)" />
+        </svg>
 
         {/* ── Left / brand panel (lg+) ────────────────────────────────── */}
         <div className="relative z-10 hidden flex-col overflow-hidden p-10 lg:flex xl:p-12">
@@ -178,7 +196,7 @@ export function LoginPage() {
             <img src={hexawareLogo} alt="Hexaware" className="h-7 w-auto object-contain xl:h-8" />
           </div>
 
-          <div className="relative z-10 mt-8 max-w-md">
+          <div className="relative z-10 mt-8 max-w-lg">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5" />
               GCC Cockpit
@@ -186,7 +204,7 @@ export function LoginPage() {
             <h1 className="mb-3 text-[40px] font-extrabold leading-[1.02] tracking-tight text-foreground xl:text-[46px]">
               Welcome back!
             </h1>
-            <p className="max-w-sm text-[15px] leading-relaxed text-muted-foreground">
+            <p className="max-w-md text-[15px] leading-relaxed text-muted-foreground">
               Sign in to your DEPT | Hexaware GCC workforce cockpit — headcount, utilization, skills,
               and attrition, all in one place.
             </p>
@@ -214,7 +232,7 @@ export function LoginPage() {
           <motion.div
             animate={floatAnim}
             transition={floatTransition}
-            className="relative z-10 mt-8 w-[360px] max-w-full rounded-2xl border border-white/70 bg-card/95 p-5 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_12px_24px_-8px_rgba(28,79,151,0.16),0_30px_56px_-18px_rgba(28,79,151,0.32)] backdrop-blur"
+            className="relative z-10 mt-8 w-[400px] max-w-full rounded-2xl border border-white/70 bg-card/95 p-5 shadow-[0_2px_4px_rgba(28,79,151,0.05),0_12px_24px_-8px_rgba(28,79,151,0.16),0_30px_56px_-18px_rgba(28,79,151,0.32)] backdrop-blur"
           >
             <div className="mb-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -271,7 +289,10 @@ export function LoginPage() {
         </div>
 
         {/* ── Right / form panel ──────────────────────────────────────── */}
-        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:p-12">
+        {/* On lg the card is left-aligned (justify-start) so it sits closer to
+            the left content — removing the central void — rather than floating
+            far right. */}
+        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:justify-start lg:py-12 lg:pl-6 lg:pr-8">
           {/* glow behind the sign-in card */}
           <div className="pointer-events-none absolute inset-8 hidden rounded-3xl bg-primary/10 blur-2xl lg:block" aria-hidden="true" />
 
