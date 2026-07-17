@@ -4,20 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import {
-  Loader2,
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  AlertCircle,
-  CheckCircle2,
-  Sparkles,
-  ArrowRight,
-  BarChart3,
-  Clock,
-  TrendingUp,
-} from 'lucide-react'
+import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle2, Users, TrendingUp } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
@@ -28,15 +15,6 @@ import { apiClient, extractErrorMessage } from '@/lib/api-client'
 import { useAuth } from '@/lib/auth-context'
 import deptLogo from '@/assets/dept-logo-cropped.png'
 import hexawareLogo from '@/assets/Blue Logo.png'
-
-// What the user is signing into — grounded in real cockpit modules, no
-// numbers (this is a public page). Replaces the dashboard-preview mockup,
-// which belongs on the (post-auth) landing page, not here.
-const VALUE_PROPS = [
-  { icon: BarChart3, title: 'Workforce analytics', sub: 'Headcount, growth & composition' },
-  { icon: Clock, title: 'Utilization insights', sub: 'Client vs internal hours' },
-  { icon: TrendingUp, title: 'Attrition & retention', sub: 'Joiners, exits & resignation trends' },
-]
 
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -108,14 +86,10 @@ export function LoginPage() {
   }
 
   return (
-    // Same committed-light background system as the landing page (welcome-page.tsx)
-    // — gradient + soft radial glows + dot texture — so login, landing, and the
-    // dashboard read as one continuous product. No dark: variants: the app has
-    // no dark-mode palette (see welcome-page.tsx note).
+    // Committed-light background system shared with the landing page — blue
+    // gradient + dot texture + soft wave — so login, landing, and dashboard
+    // read as one system. No dark: variants (the app has no dark palette).
     <div className="relative flex min-h-screen w-full items-center justify-center px-4 py-8 sm:px-6 bg-[linear-gradient(160deg,hsl(216,54%,93%)_0%,hsl(215,56%,87%)_55%,hsl(216,52%,91%)_100%)] text-foreground">
-      {/* Decorative page background — same blue tone + dot texture + soft wave
-          as the card's branding panel, so the whole surface reads as one
-          premium system. Clipped by this wrapper's own overflow-hidden. */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         <div
           className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full opacity-70 blur-3xl"
@@ -132,119 +106,103 @@ export function LoginPage() {
             backgroundSize: '24px 24px',
           }}
         />
-        <svg
-          className="absolute inset-x-0 bottom-0 h-[36vh] w-full"
-          viewBox="0 0 1440 400"
-          preserveAspectRatio="none"
-        >
+        <svg className="absolute inset-x-0 bottom-0 h-[36vh] w-full" viewBox="0 0 1440 400" preserveAspectRatio="none">
           <path d="M0,180 C240,280 480,80 720,130 C960,180 1200,320 1440,220 L1440,400 L0,400 Z" fill="hsl(215 65% 55% / 0.10)" />
           <path d="M0,240 C260,320 520,160 760,200 C1000,240 1220,360 1440,280 L1440,400 L0,400 Z" fill="hsl(215 68% 48% / 0.12)" />
         </svg>
       </div>
 
-      {/* Unified card: left branding panel + right form panel. The shake
-          animation on auth error is preserved exactly. */}
+      {/* Unified card. Interior is a dotted light-lavender surface on lg (both
+          panels), white on mobile. Shake on auth error is preserved. */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={shake ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, -3, 3, 0] } : { opacity: 1, y: 0 }}
-        transition={
-          shake
-            ? { x: { duration: 0.4, ease: 'easeInOut' } }
-            : { duration: 0.3, ease: 'easeOut' }
-        }
-        className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_90px_-24px_rgba(28,79,151,0.38)] lg:w-[92vw] lg:min-h-[720px] lg:max-w-[1440px] lg:grid-cols-2 xl:min-h-[780px]"
+        transition={shake ? { x: { duration: 0.4, ease: 'easeInOut' } } : { duration: 0.3, ease: 'easeOut' }}
+        className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_90px_-24px_rgba(28,79,151,0.38)] lg:w-[92vw] lg:min-h-[720px] lg:max-w-[1440px] lg:grid-cols-2 lg:bg-[linear-gradient(160deg,hsl(216,43%,95.5%)_0%,hsl(216,50%,91%)_100%)] xl:min-h-[780px]"
       >
-        {/* Left panel — premium branding + value props. Hidden below lg. No
-            dashboard mockup here: that peek-at-the-cockpit treatment lives on
-            the (post-auth) landing page, not on this public sign-in surface. */}
-        <div className="relative hidden flex-col overflow-hidden p-12 lg:flex xl:p-16 bg-[linear-gradient(160deg,hsl(215,44%,96%)_0%,hsl(216,62%,87%)_100%)]">
-          {/* layered accent glows for depth */}
-          <div
-            className="pointer-events-none absolute -right-24 -top-28 h-[360px] w-[360px] rounded-full opacity-70"
-            style={{ background: 'radial-gradient(circle at 40% 40%, hsl(215 80% 72% / 0.55), transparent 70%)' }}
-            aria-hidden="true"
-          />
-          <div
-            className="pointer-events-none absolute -bottom-24 -left-20 h-[380px] w-[440px] rounded-full opacity-60"
-            style={{ background: 'radial-gradient(circle at 30% 30%, hsl(215 75% 66% / 0.45), transparent 70%)' }}
-            aria-hidden="true"
-          />
-          {/* fine dot texture */}
-          <div
-            className="pointer-events-none absolute inset-0 opacity-50"
-            style={{
-              backgroundImage: 'radial-gradient(circle, hsl(215 45% 50% / 0.16) 1px, transparent 1px)',
-              backgroundSize: '24px 24px',
-            }}
-            aria-hidden="true"
-          />
-          {/* soft brand wave anchoring the bottom edge */}
-          <svg
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-28 w-full"
-            viewBox="0 0 600 120"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path d="M0,58 C150,110 300,18 450,52 C525,68 570,82 600,72 L600,120 L0,120 Z" fill="hsl(215 70% 55% / 0.12)" />
-            <path d="M0,82 C160,120 320,50 470,82 C540,96 580,102 600,94 L600,120 L0,120 Z" fill="hsl(215 70% 45% / 0.16)" />
-          </svg>
+        {/* dotted texture across the whole card interior — lg only */}
+        <div
+          className="pointer-events-none absolute inset-0 hidden opacity-60 lg:block"
+          style={{
+            backgroundImage: 'radial-gradient(circle, hsl(215 45% 55% / 0.16) 1px, transparent 1px)',
+            backgroundSize: '22px 22px',
+          }}
+          aria-hidden="true"
+        />
 
-          <div className="relative z-10 flex items-center gap-3.5">
-            <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
-            <span className="h-6 w-px bg-border" />
-            <img src={hexawareLogo} alt="Hexaware" className="h-6 w-auto object-contain" />
+        {/* Left panel — branding + a peek at the dashboard. Hidden below lg. */}
+        <div className="relative z-10 hidden flex-col overflow-hidden p-12 lg:flex xl:p-16">
+          {/* large brand blob, anchoring the bottom-left */}
+          <div
+            className="pointer-events-none absolute -bottom-32 -left-28 h-[500px] w-[500px] rounded-full"
+            style={{ background: 'radial-gradient(circle at 42% 38%, hsl(216 64% 73%), hsl(216 56% 61%))' }}
+            aria-hidden="true"
+          />
+
+          <div className="relative z-10 flex items-center gap-4">
+            <img src={deptLogo} alt="DEPT" className="h-8 w-auto object-contain xl:h-9" />
+            <span className="h-7 w-px bg-border" />
+            <img src={hexawareLogo} alt="Hexaware" className="h-7 w-auto object-contain" />
           </div>
 
           <div className="relative z-10 mt-10 max-w-md">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              GCC Cockpit
-            </div>
-            <h1 className="mb-3 text-[38px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[44px]">
+            <h1 className="mb-3 text-[40px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[46px]">
               Welcome back!
             </h1>
             <p className="text-base leading-relaxed text-muted-foreground">
-              Sign in to your DEPT | Hexaware GCC workforce cockpit — headcount, utilization, skills,
-              and attrition, all in one place.
+              Sign in to access your workforce analytics dashboard.
             </p>
           </div>
 
-          {/* Value-prop highlights — what you're signing into */}
-          <ul className="relative z-10 mt-auto space-y-3.5 pt-12">
-            {VALUE_PROPS.map((v, i) => (
-              <motion.li
-                key={v.title}
-                initial={{ opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35, delay: 0.15 + i * 0.08, ease: 'easeOut' }}
-                className="flex items-center gap-3.5"
-              >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card text-primary shadow-sm ring-1 ring-primary/10">
-                  <v.icon className="h-5 w-5" />
+          {/* Decorative "at a glance" card — illustrative shapes only, no
+              invented figures (this is a public, pre-auth page). */}
+          <div className="relative z-10 mt-auto w-[350px] max-w-full rounded-2xl border border-border/60 bg-card p-5 shadow-[0_20px_44px_-14px_rgba(28,79,151,0.28)]">
+            <div className="mb-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                  <Users className="h-4 w-4 text-primary" />
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-foreground">{v.title}</p>
-                  <p className="text-xs text-muted-foreground">{v.sub}</p>
-                </div>
-              </motion.li>
-            ))}
-          </ul>
+                <span className="text-sm font-bold text-foreground">Workforce at a glance</span>
+              </div>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-y border-border py-4">
+              <svg width="54" height="54" viewBox="0 0 64 64" aria-hidden="true">
+                <circle cx="32" cy="32" r="30" fill="hsl(215 25% 88%)" />
+                <path d="M32 32 L32 2 A30 30 0 0 1 60 42 Z" fill="hsl(215 70% 40%)" />
+                <path d="M32 32 L60 42 A30 30 0 0 1 20 60 Z" fill="hsl(215 78% 62%)" />
+              </svg>
+              <div className="flex h-12 items-end gap-2">
+                <div className="h-5 w-3 rounded-sm" style={{ background: 'hsl(215 60% 80%)' }} />
+                <div className="h-8 w-3 rounded-sm" style={{ background: 'hsl(215 70% 62%)' }} />
+                <div className="h-11 w-3 rounded-sm bg-primary" />
+              </div>
+              <svg width="78" height="42" viewBox="0 0 80 44" className="shrink-0" aria-hidden="true">
+                <polyline
+                  points="2,34 18,26 34,30 50,14 64,20 78,6"
+                  fill="none"
+                  stroke="hsl(215 70% 38%)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            <p className="mt-3.5 text-center text-xs font-medium text-muted-foreground">
+              Headcount, utilization, and attrition — all in one view
+            </p>
+          </div>
         </div>
 
         {/* Right panel — the sign-in "login part". On lg it's a floating
-            elevated white card on a tinted, dotted surface (matching the
-            reference); on mobile it stays flat/clean, where it's the only
-            visible panel. */}
-        <div className="relative flex items-center justify-center overflow-hidden p-6 sm:p-10 lg:p-12 bg-card lg:bg-[linear-gradient(160deg,hsl(216,44%,95%)_0%,hsl(216,56%,89%)_100%)]">
-          <div
-            className="pointer-events-none absolute inset-0 hidden opacity-60 lg:block"
-            style={{
-              backgroundImage: 'radial-gradient(circle, hsl(215 45% 55% / 0.16) 1px, transparent 1px)',
-              backgroundSize: '22px 22px',
-            }}
-            aria-hidden="true"
-          />
-          <div className="relative z-10 w-full max-w-md lg:rounded-2xl lg:border lg:border-border/60 lg:bg-card lg:px-9 lg:py-12 lg:shadow-[0_28px_56px_-16px_rgba(28,79,151,0.25)]">
+            elevated white card on the dotted surface; on mobile it stays
+            flat/clean, where it's the only visible panel. */}
+        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:p-12">
+          <div className="w-full max-w-md lg:rounded-2xl lg:border lg:border-border/60 lg:bg-card lg:px-9 lg:py-12 lg:shadow-[0_28px_56px_-16px_rgba(28,79,151,0.25)]">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
@@ -347,7 +305,6 @@ export function LoginPage() {
               >
                 {loginMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
-                {!loginMutation.isPending && <ArrowRight className="h-4 w-4" />}
               </Button>
 
               <p className="pt-2 text-center text-sm text-muted-foreground">
