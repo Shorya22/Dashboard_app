@@ -292,11 +292,11 @@ export function LoginPage() {
         {/* On lg the card is left-aligned (justify-start) so it sits closer to
             the left content — removing the central void — rather than floating
             far right. */}
-        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:justify-start lg:py-12 lg:pl-6 lg:pr-6">
+        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:justify-start lg:py-12 lg:pl-0 lg:pr-6">
           {/* glow behind the sign-in card */}
           <div className="pointer-events-none absolute inset-8 hidden rounded-3xl bg-primary/10 blur-2xl lg:block" aria-hidden="true" />
 
-          <div className="relative w-full max-w-md lg:max-w-[520px] lg:rounded-[22px] lg:border lg:border-white/70 lg:bg-card/80 lg:px-6 lg:py-11 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_16px_32px_-10px_rgba(28,79,151,0.18),0_40px_72px_-22px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.03] lg:backdrop-blur-xl">
+          <div className="relative w-full max-w-md lg:max-w-[510px] lg:rounded-[22px] lg:border lg:border-white/70 lg:bg-card/80 lg:px-6 lg:py-11 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_16px_32px_-10px_rgba(28,79,151,0.18),0_40px_72px_-22px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.03] lg:backdrop-blur-xl">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
