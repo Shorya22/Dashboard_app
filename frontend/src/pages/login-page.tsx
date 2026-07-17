@@ -152,12 +152,12 @@ export function LoginPage() {
             ? { x: { duration: 0.4, ease: 'easeInOut' } }
             : { duration: 0.3, ease: 'easeOut' }
         }
-        className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_80px_-24px_rgba(28,79,151,0.35)] lg:min-h-[660px] lg:grid-cols-2"
+        className="relative z-10 grid w-full max-w-6xl overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_40px_90px_-24px_rgba(28,79,151,0.38)] lg:w-[92vw] lg:min-h-[720px] lg:max-w-[1440px] lg:grid-cols-2 xl:min-h-[780px]"
       >
         {/* Left panel — premium branding + value props. Hidden below lg. No
             dashboard mockup here: that peek-at-the-cockpit treatment lives on
             the (post-auth) landing page, not on this public sign-in surface. */}
-        <div className="relative hidden flex-col overflow-hidden p-12 lg:flex xl:p-14 bg-[linear-gradient(160deg,hsl(215,44%,96%)_0%,hsl(216,62%,87%)_100%)]">
+        <div className="relative hidden flex-col overflow-hidden p-12 lg:flex xl:p-16 bg-[linear-gradient(160deg,hsl(215,44%,96%)_0%,hsl(216,62%,87%)_100%)]">
           {/* layered accent glows for depth */}
           <div
             className="pointer-events-none absolute -right-24 -top-28 h-[360px] w-[360px] rounded-full opacity-70"
@@ -231,9 +231,20 @@ export function LoginPage() {
           </ul>
         </div>
 
-        {/* Right panel — sign-in form, sitting directly on the white card. */}
-        <div className="relative flex items-center justify-center p-8 sm:p-12 lg:p-14">
-          <div className="w-full max-w-md">
+        {/* Right panel — the sign-in "login part". On lg it's a floating
+            elevated white card on a tinted, dotted surface (matching the
+            reference); on mobile it stays flat/clean, where it's the only
+            visible panel. */}
+        <div className="relative flex items-center justify-center overflow-hidden p-6 sm:p-10 lg:p-12 bg-card lg:bg-[linear-gradient(160deg,hsl(216,44%,95%)_0%,hsl(216,56%,89%)_100%)]">
+          <div
+            className="pointer-events-none absolute inset-0 hidden opacity-60 lg:block"
+            style={{
+              backgroundImage: 'radial-gradient(circle, hsl(215 45% 55% / 0.16) 1px, transparent 1px)',
+              backgroundSize: '22px 22px',
+            }}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 w-full max-w-md lg:rounded-2xl lg:border lg:border-border/60 lg:bg-card lg:px-9 lg:py-12 lg:shadow-[0_28px_56px_-16px_rgba(28,79,151,0.25)]">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
