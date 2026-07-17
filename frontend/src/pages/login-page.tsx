@@ -4,7 +4,20 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Loader2, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle2, Users, TrendingUp, Sparkles } from 'lucide-react'
+import {
+  Loader2,
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  AlertCircle,
+  CheckCircle2,
+  Users,
+  TrendingUp,
+  Sparkles,
+  BarChart3,
+  Clock,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 
 import { Button } from '@/components/ui/button'
@@ -15,6 +28,13 @@ import { apiClient, extractErrorMessage } from '@/lib/api-client'
 import { useAuth } from '@/lib/auth-context'
 import deptLogo from '@/assets/dept-logo-cropped.png'
 import hexawareLogo from '@/assets/Blue Logo.png'
+
+// Grounded in real cockpit modules — no numbers (this is a public page).
+const VALUE_PROPS = [
+  { icon: BarChart3, title: 'Workforce analytics', sub: 'Headcount, growth & composition' },
+  { icon: Clock, title: 'Utilization insights', sub: 'Client vs internal hours' },
+  { icon: TrendingUp, title: 'Attrition & retention', sub: 'Joiners, exits & resignation trends' },
+]
 
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -132,9 +152,9 @@ export function LoginPage() {
 
         {/* Left panel — branding + a peek at the dashboard. Hidden below lg. */}
         <div className="relative z-10 hidden flex-col overflow-hidden p-12 lg:flex xl:p-16">
-          {/* large brand blob, anchoring the bottom-left */}
+          {/* large brand blob, anchoring the bottom-left behind the card */}
           <div
-            className="pointer-events-none absolute -bottom-32 -left-28 h-[500px] w-[500px] rounded-full"
+            className="pointer-events-none absolute -bottom-44 -left-32 h-[440px] w-[440px] rounded-full"
             style={{ background: 'radial-gradient(circle at 42% 38%, hsl(216 64% 73%), hsl(216 56% 61%))' }}
             aria-hidden="true"
           />
@@ -145,19 +165,34 @@ export function LoginPage() {
             <img src={hexawareLogo} alt="Hexaware" className="h-7 w-auto object-contain" />
           </div>
 
-          <div className="relative z-10 mt-10 max-w-md">
+          <div className="relative z-10 mt-8 max-w-md">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wide text-primary shadow-sm">
               <Sparkles className="h-3.5 w-3.5" />
               GCC Cockpit
             </div>
-            <h1 className="mb-3 text-[40px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[46px]">
+            <h1 className="mb-3 text-[38px] font-extrabold leading-[1.05] tracking-tight text-foreground xl:text-[44px]">
               Welcome back!
             </h1>
-            <p className="text-base leading-relaxed text-muted-foreground">
+            <p className="text-[15px] leading-relaxed text-muted-foreground">
               Sign in to your DEPT | Hexaware GCC workforce cockpit — headcount, utilization, skills,
               and attrition, all in one place.
             </p>
           </div>
+
+          {/* Value-prop highlights — what you're signing into */}
+          <ul className="relative z-10 mt-7 space-y-3.5">
+            {VALUE_PROPS.map((v) => (
+              <li key={v.title} className="flex items-center gap-3.5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-primary shadow-[0_4px_12px_-2px_rgba(28,79,151,0.2)] ring-1 ring-black/[0.03]">
+                  <v.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold leading-tight text-foreground">{v.title}</p>
+                  <p className="text-xs text-muted-foreground">{v.sub}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
 
           {/* Decorative "at a glance" card — illustrative shapes only, no
               invented figures (this is a public, pre-auth page). */}
