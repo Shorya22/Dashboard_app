@@ -151,7 +151,7 @@ export function LoginPage() {
         initial={{ opacity: 0, y: 14 }}
         animate={shake ? { opacity: 1, y: 0, x: [0, -8, 8, -6, 6, -3, 3, 0] } : { opacity: 1, y: 0 }}
         transition={shake ? { x: { duration: 0.4, ease: 'easeInOut' } } : { duration: 0.35, ease: 'easeOut' }}
-        className="relative z-10 grid w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-card shadow-[0_50px_100px_-30px_rgba(28,79,151,0.42)] ring-1 ring-black/[0.03] lg:max-w-[1060px] lg:grid-cols-[1.1fr_1fr] lg:bg-[linear-gradient(150deg,hsl(216,46%,95%)_0%,hsl(216,52%,90%)_100%)]"
+        className="relative z-10 grid w-full max-w-md overflow-hidden rounded-[28px] border border-white/70 bg-card shadow-[0_50px_100px_-30px_rgba(28,79,151,0.42)] ring-1 ring-black/[0.03] lg:max-w-[1120px] lg:grid-cols-[0.9fr_1fr] lg:bg-[linear-gradient(150deg,hsl(216,46%,95%)_0%,hsl(216,52%,90%)_100%)]"
       >
         {/* dotted texture across the card interior — lg only, larger grid */}
         <div
@@ -182,7 +182,7 @@ export function LoginPage() {
         </svg>
 
         {/* ── Left / brand panel (lg+) ────────────────────────────────── */}
-        <div className="relative z-10 hidden flex-col overflow-hidden p-10 lg:flex xl:p-12">
+        <div className="relative z-10 hidden flex-col overflow-hidden p-12 lg:flex">
           {/* soft brand blob behind the mini dashboard */}
           <div
             className="pointer-events-none absolute -bottom-28 -left-28 h-[380px] w-[380px] rounded-full opacity-80"
@@ -292,11 +292,11 @@ export function LoginPage() {
         {/* On lg the card is left-aligned (justify-start) so it sits closer to
             the left content — removing the central void — rather than floating
             far right. */}
-        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:justify-start lg:py-12 lg:pl-6 lg:pr-8">
+        <div className="relative z-10 flex items-center justify-center p-6 sm:p-10 lg:justify-start lg:py-12 lg:pl-6 lg:pr-6">
           {/* glow behind the sign-in card */}
           <div className="pointer-events-none absolute inset-8 hidden rounded-3xl bg-primary/10 blur-2xl lg:block" aria-hidden="true" />
 
-          <div className="relative w-full max-w-md lg:rounded-[22px] lg:border lg:border-white/70 lg:bg-card/80 lg:px-9 lg:py-11 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_16px_32px_-10px_rgba(28,79,151,0.18),0_40px_72px_-22px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.03] lg:backdrop-blur-xl">
+          <div className="relative w-full max-w-md lg:max-w-[520px] lg:rounded-[22px] lg:border lg:border-white/70 lg:bg-card/80 lg:px-6 lg:py-11 lg:shadow-[0_2px_4px_rgba(28,79,151,0.05),0_16px_32px_-10px_rgba(28,79,151,0.18),0_40px_72px_-22px_rgba(28,79,151,0.34)] lg:ring-1 lg:ring-black/[0.03] lg:backdrop-blur-xl">
             {/* Logos shown here on small screens where the left panel is hidden */}
             <div className="mb-8 flex items-center gap-3.5 lg:hidden">
               <img src={deptLogo} alt="DEPT" className="h-7 w-auto object-contain" />
