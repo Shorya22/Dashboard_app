@@ -95,6 +95,17 @@ Visit: `http://<PUBLIC_IP>:8080`
 local change → git push → git pull on EC2 → docker compose up -d --build --force-recreate
 ```
 
+`--build` is required for any backend or frontend **code** change — both
+Dockerfiles `COPY` the source in at build time, so the running containers
+only ever reflect whatever was baked in during the last build. Plain
+`docker compose up -d` (no `--build`) won't pick up new code.
+
+**Exception**: `backend/data/*.xlsx` is bind-mounted, not baked into the
+image — a data-file-only change just needs a restart, no rebuild:
+```bash
+docker compose restart backend
+```
+
 **On the server:**
 ```bash
 cd ~/Dashboard_app
@@ -106,6 +117,27 @@ docker compose up -d --build --force-recreate
 ```bash
 EC2_HOST=ubuntu@<PUBLIC_IP> EC2_KEY="/path/to/key.pem" ./deploy/deploy-ec2.sh
 ```
+
+### Pulling a specific branch
+
+Plain `git pull` only pulls whatever branch you're currently on. To pull a
+**different** branch:
+
+```bash
+git fetch origin
+git checkout <branch-name>   # switch to it (one-time, or if not local yet)
+git pull origin <branch-name>
+docker compose up -d --build --force-recreate
+```
+
+If you're already on the right branch and just want its latest commits
+without switching:
+
+```bash
+git pull origin <branch-name>
+```
+
+Check which branch the server is currently on with `git branch --show-current`.
 
 ## Useful checks
 
