@@ -201,14 +201,6 @@ export function WelcomePage() {
 
           <div className="flex items-center gap-2">
             <Button
-              size="sm"
-              onClick={() => navigate('/')}
-              className="hidden shadow-sm shadow-primary/20 sm:inline-flex"
-            >
-              <LayoutDashboard className="h-4 w-4" />
-              Launch Cockpit
-            </Button>
-            <Button
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
