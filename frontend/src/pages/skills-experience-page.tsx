@@ -5,7 +5,7 @@ import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { useRosterEmployeesAll, useRosterSummary, type EmployeeRecord } from '@/lib/roster-api'
-import { colorsForLabels, REGION_COLORS, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
+import { colorsForLabels, EXPERIENCE_BAND_COLORS, REGION_COLORS, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
@@ -150,7 +150,11 @@ export function SkillsExperiencePage() {
   const byRegion = React.useMemo(() => pivotBySkill(filtered, (e) => e.region ?? 'Region TBD'), [filtered])
 
   const byExperienceSeries = React.useMemo(
-    () => byExperience.groups.map((category) => ({ category, color: colorsForLabels([category])[0] })),
+    () =>
+      byExperience.groups.map((category) => ({
+        category,
+        color: colorsForLabels([category], EXPERIENCE_BAND_COLORS)[0],
+      })),
     [byExperience],
   )
   const bySenioritySeries = React.useMemo(

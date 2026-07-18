@@ -59,6 +59,19 @@ export const SENIORITY_CATEGORY_COLORS: Record<string, string> = {
   TBD: 'slate',
 }
 
+// Experience Band — used on the Skills & Experience page's "Skill
+// Bifurcation by Experience" stacked bar. Explicit, not hash-derived: the
+// hash fallback in `colorForLabel` below collided for "8+ Years" and
+// "3-5 Years" (both landed on the same palette slot), rendering two
+// distinct bands in the same color in every stacked bar's legend/tooltip.
+export const EXPERIENCE_BAND_COLORS: Record<string, string> = {
+  '0-1 Years': 'blue',
+  '1-3 Years': 'teal',
+  '3-5 Years': 'violet',
+  '5-8 Years': 'amber',
+  '8+ Years': 'rose',
+}
+
 export const VOLUNTARY_COLORS: Record<string, string> = {
   Voluntary: 'blue',
   Involuntary: 'terracotta',
