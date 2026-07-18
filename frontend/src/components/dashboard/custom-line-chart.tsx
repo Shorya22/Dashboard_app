@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { useChartTheme } from '@/lib/chart-theme-store'
+import { useSyncRechartsActive } from '@/lib/chart-tooltip-touch-store'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
@@ -33,7 +34,24 @@ interface CustomLineChartProps {
  * used by the bar and donut charts (swatch + name, rendered as plain HTML
  * below the plot rather than Recharts' own in-SVG `<Legend>`) so all three
  * chart types share one consistent legend look instead of each having its
- * own slightly different styling. */
+ * own slightly different styling.
+ *
+ * Tooltip interaction (desktop + touch), built on Recharts' own event model
+ * rather than a hand-rolled hit-testing layer:
+ *  - Hover / tap activates the *nearest x-category* anywhere in that point's
+ *    vertical column — Recharts' categorical `LineChart` computes this from
+ *    the pointer's x alone, so a user never needs to land pixel-perfect on
+ *    the dot or the line. That forgiving hit behavior is the library
+ *    default; we just don't fight it.
+ *  - `accessibilityLayer` makes the whole chart keyboard-focusable and lets
+ *    arrow keys walk between points (each announced via ARIA), which is
+ *    Recharts' first-party a11y path — no custom key handling to drift.
+ *  - `touch-pan-y` on the wrapper lets a *vertical* finger drag scroll the
+ *    page as normal while a *horizontal* drag is delivered to the chart, so
+ *    dragging across the plot scrubs the tooltip continuously instead of the
+ *    browser stealing the gesture for a scroll. The tooltip-touch store
+ *    (chart-tooltip-touch-store.ts) is what keeps that scrub from being
+ *    dismissed as an accidental scroll. */
 export const CustomLineChart = React.memo(function CustomLineChart({
   data,
   index,
@@ -64,6 +82,11 @@ export const CustomLineChart = React.memo(function CustomLineChart({
     [ownerId],
   )
 
+  // Clear Recharts' own active dot + cursor guideline whenever this chart's
+  // tooltip is dismissed, so they never linger orphaned after a tap on
+  // touch — see the hook's doc comment.
+  useSyncRechartsActive(ownerId, containerRef)
+
   // Permanent per-point value labels (below) match the Power BI reference
   // for a handful of points, but with many data points along the x-axis
   // the labels sit close enough together to overlap each other — there's
@@ -80,9 +103,17 @@ export const CustomLineChart = React.memo(function CustomLineChart({
   const bottomMargin = xAxisLabel ? 30 : 4
 
   return (
-    <div ref={containerRef} className="flex h-full w-full flex-col">
+    <div ref={containerRef} className="flex h-full w-full touch-pan-y flex-col">
       <ResponsiveContainer width="100%" height="100%" className={className}>
-        <RLineChart data={data} margin={{ top: 20, right: 10, left: 4, bottom: bottomMargin }}>
+        <RLineChart
+          data={data}
+          margin={{ top: 20, right: 10, left: 4, bottom: bottomMargin }}
+          // Keyboard access + screen-reader announcements for every point —
+          // Recharts' first-party a11y layer (arrow keys move the active
+          // point, focus ring handled by index.css's `.recharts-wrapper`
+          // focus-visible rule).
+          accessibilityLayer
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-tremor-border dark:text-dark-tremor-border" vertical={false} />
           <XAxis
             dataKey={index}
@@ -113,7 +144,17 @@ export const CustomLineChart = React.memo(function CustomLineChart({
             stroke={stroke}
             strokeWidth={2.25}
             dot={{ r: 3, fill: stroke, strokeWidth: 0 }}
-            activeDot={{ r: 6, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+            // Larger, high-contrast active point: a filled dot ringed with
+            // the card color and a soft brand-tinted drop shadow, so the
+            // point under the cursor/finger reads clearly against the line
+            // and gridlines even on a dense chart.
+            activeDot={{
+              r: 7,
+              fill: stroke,
+              strokeWidth: 2.5,
+              stroke: 'hsl(var(--card))',
+              style: { filter: 'drop-shadow(0 1px 3px rgba(28,79,151,0.35))' },
+            }}
             isAnimationActive
             animationDuration={1000}
           >

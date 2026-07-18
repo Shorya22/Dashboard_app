@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { useChartTheme } from '@/lib/chart-theme-store'
+import { useSyncRechartsActive } from '@/lib/chart-tooltip-touch-store'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
@@ -96,6 +97,11 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     [tooltipValueLabel, ownerId],
   )
 
+  // Clear Recharts' own active-bar highlight + cursor whenever this chart's
+  // tooltip is dismissed, so nothing lingers orphaned after a tap on touch
+  // — see the hook's doc comment.
+  useSyncRechartsActive(ownerId, containerRef)
+
   // `yAxisWidth` is a raw SVG pixel width handed straight to Recharts —
   // unlike a Tailwind class, it can't respond to the viewport on its own.
   // Callers pass a value sized for a full desktop card (up to 220px for a
@@ -154,7 +160,10 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     : (value: string) => truncateLabel(value)
 
   return (
-    <div ref={containerRef} className="flex h-full w-full flex-col">
+    // `touch-pan-y`: a vertical finger drag scrolls the page as normal; a
+    // horizontal drag is delivered to the chart so dragging across it scrubs
+    // the tooltip continuously (same as the line chart).
+    <div ref={containerRef} className="flex h-full w-full touch-pan-y flex-col">
       <ResponsiveContainer width="100%" height="100%" className={className}>
         <RBarChart
           data={data}
@@ -169,6 +178,9 @@ export const CustomBarChart = React.memo(function CustomBarChart({
             // clear the tick labels + axis title themselves.
             bottom: xAxisLabel ? 28 : 4,
           }}
+          // Keyboard access + screen-reader announcements for every bar —
+          // Recharts' first-party a11y layer.
+          accessibilityLayer
         >
           <CartesianGrid
             strokeDasharray="3 3"

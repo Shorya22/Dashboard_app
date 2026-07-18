@@ -17,13 +17,6 @@ import * as React from 'react'
 // to reach every mounted chart synchronously, from outside React's render
 // cycle, which only a shared external store makes simple.
 
-const AUTO_DISMISS_MS = 4000
-// Only touch-activated tooltips get an inactivity auto-dismiss — a desktop
-// user legitimately hovering one point for a while shouldn't have the
-// tooltip vanish out from under a cursor that never left.
-const isCoarsePointer = () =>
-  typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true
-
 // Owner ids are each chart's own *stable* id (`React.useId()`, generated
 // once for the chart's whole lifetime — see custom-bar-chart.tsx /
 // custom-line-chart.tsx), not a fresh id per hover/tap. Claiming keys off
@@ -39,7 +32,6 @@ const isCoarsePointer = () =>
 // that race entirely: one claim per continuous hover/touch session,
 // full stop.
 let activeOwnerId: string | null = null
-let dismissTimer: ReturnType<typeof setTimeout> | null = null
 const listeners = new Set<() => void>()
 
 // A separate counter, bumped only by an actual *global* dismiss (scroll,
@@ -61,28 +53,21 @@ function notifyDismiss() {
   dismissListeners.forEach((listener) => listener())
 }
 
-function clearDismissTimer() {
-  if (dismissTimer) {
-    clearTimeout(dismissTimer)
-    dismissTimer = null
-  }
-}
-
 /** Claims the single "currently visible tooltip" slot for `ownerId`,
  * evicting whatever tooltip held it before (the eviction is what makes
  * "only one tooltip at a time" true across independently-tracked charts).
- * Safe to call repeatedly with the same id — idempotent past the first
- * call bar resetting the auto-dismiss timer, which is the desired
- * behavior (still-active counts as still-recent). */
+ * Safe to call repeatedly with the same id — idempotent.
+ *
+ * There is deliberately no inactivity auto-dismiss timer: an earlier one
+ * (4s, touch only) hid our custom tooltip but could not clear Recharts'
+ * own uncontrolled active dot + cursor guideline, leaving an orphaned dot
+ * with no tooltip beside it after 4s — the "I tapped, the dot shows but no
+ * tooltip" bug. A tapped tooltip now simply persists until an explicit
+ * dismiss (tap/click elsewhere, scroll, or another point/chart), matching
+ * Power BI / Tableau. `useSyncRechartsActive` keeps Recharts' own state in
+ * lockstep on those dismisses. */
 export function claimActiveTooltip(ownerId: string) {
-  clearDismissTimer()
   activeOwnerId = ownerId
-  if (isCoarsePointer()) {
-    dismissTimer = setTimeout(() => {
-      activeOwnerId = null
-      notify()
-    }, AUTO_DISMISS_MS)
-  }
   notify()
 }
 
@@ -92,7 +77,6 @@ export function claimActiveTooltip(ownerId: string) {
 export function releaseActiveTooltip(ownerId: string) {
   if (activeOwnerId === ownerId) {
     activeOwnerId = null
-    clearDismissTimer()
     notify()
   }
 }
@@ -105,7 +89,6 @@ export function dismissActiveTooltip() {
   notifyDismiss()
   if (activeOwnerId === null) return
   activeOwnerId = null
-  clearDismissTimer()
   notify()
 }
 
@@ -124,6 +107,40 @@ export function useIsActiveTooltip(ownerId: string): boolean {
     () => activeOwnerId === ownerId,
     () => activeOwnerId === ownerId,
   )
+}
+
+/** Keeps Recharts' own *uncontrolled* active state — the enlarged active
+ * dot and the vertical cursor guideline — in sync with our floating
+ * tooltip. Recharts turns that state on for hover AND tap, but on touch it
+ * never turns it back off (there's no `mouseleave` equivalent for a
+ * finger). So when our tooltip is dismissed for this chart — the slot lost
+ * to a scroll, a tap elsewhere, or another chart/point claiming it —
+ * Recharts is left showing a dot + guideline with no tooltip next to it.
+ * That desync IS the "I tapped a point, the dot shows but the tooltip
+ * doesn't" bug.
+ *
+ * The fix: the moment this chart loses the active slot, dispatch the exact
+ * event React synthesizes `onMouseLeave` from — a bubbling `mouseout` whose
+ * `relatedTarget` is outside the chart — onto THIS chart's own
+ * `.recharts-surface`. Recharts then clears its own active state through
+ * its normal code path, so tooltip, dot, and guideline always appear and
+ * disappear together. Scoped strictly to this chart via its own container
+ * ref, so it can never disturb another chart's active state (no cross-chart
+ * flicker), and it only fires on the true→false transition, never during a
+ * continuous hover or scrub. */
+export function useSyncRechartsActive(
+  ownerId: string,
+  containerRef: React.RefObject<HTMLElement | null>,
+) {
+  const isActive = useIsActiveTooltip(ownerId)
+  const wasActive = React.useRef(false)
+  React.useEffect(() => {
+    if (wasActive.current && !isActive) {
+      const surface = containerRef.current?.querySelector('.recharts-surface')
+      surface?.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }))
+    }
+    wasActive.current = isActive
+  }, [isActive, containerRef])
 }
 
 function subscribeDismiss(listener: () => void) {
@@ -156,6 +173,13 @@ let globalListenersInstalled = false
 const TOUCH_MOVE_DISMISS_THRESHOLD_PX = 10
 let touchStartX = 0
 let touchStartY = 0
+// Whether the current touch gesture began on a chart. A drag that starts on
+// a chart is the user scrubbing the tooltip across data points, not scrolling
+// the page — so `touchmove` must NOT dismiss it (that's what made continuous
+// finger-drag scrubbing possible). A genuine vertical page scroll while a
+// finger rests on a chart still dismisses, but via the separate `scroll`
+// capture listener, not here — so nothing is left stuck open.
+let touchStartedOnChart = false
 
 /** Installs the app-wide "what dismisses a tooltip" listeners exactly
  * once per page load. Idempotent — safe to call from more than one
@@ -180,17 +204,26 @@ export function installGlobalTooltipDismissal() {
       if (!touch) return
       touchStartX = touch.clientX
       touchStartY = touch.clientY
+      const target = event.target as Element | null
+      touchStartedOnChart = !!target?.closest?.('.recharts-wrapper')
     },
     { passive: true },
   )
 
-  // A touch drag starting is the mobile signal that the user is scrolling
-  // the page, not reading the tooltip — dismiss as soon as the gesture
-  // clears the jitter threshold, rather than waiting for the `scroll`
-  // event, which can lag a frame behind the gesture actually starting.
+  // A touch drag that began OFF a chart is the mobile signal that the user
+  // is scrolling the page, not reading the tooltip — dismiss as soon as the
+  // gesture clears the jitter threshold, rather than waiting for the
+  // `scroll` event, which can lag a frame behind the gesture actually
+  // starting. A drag that began ON a chart is instead the user scrubbing
+  // the tooltip across points (finger-drag to read adjacent values), so it
+  // must be left alone here — dismissing it would make continuous scrubbing
+  // impossible. (Vertical page-scroll started on a chart still dismisses,
+  // via the `scroll` capture listener above, since `touch-pan-y` lets that
+  // scroll through.)
   document.addEventListener(
     'touchmove',
     (event) => {
+      if (touchStartedOnChart) return
       const touch = event.touches[0]
       if (!touch) return
       const dx = touch.clientX - touchStartX
