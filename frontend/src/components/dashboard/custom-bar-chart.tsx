@@ -12,7 +12,7 @@ import {
 import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { useChartTheme } from '@/lib/chart-theme-store'
 import { useSyncRechartsActive } from '@/lib/chart-tooltip-touch-store'
-import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
+import { truncateLabel, formatChartValue, measureTextWidth } from '@/lib/chart-labels'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
 
@@ -134,16 +134,45 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   const totalBarCount = data.length * Math.max(bars.length, 1)
   const showBarLabels = totalBarCount <= 24
 
-  // Effective category-axis width for THIS render: the caller's prop,
-  // clamped to at most ~42% of the chart's actual current width once it's
-  // been measured (see the ResizeObserver above) — keeps a majority of a
-  // narrow mobile card's width for the bars themselves instead of letting
-  // a desktop-sized label column dominate it. Before the first measurement
-  // (containerWidth is still 0), fall back to the raw prop so there's no
-  // flash of an incorrectly tiny axis.
+  // Widest category label, measured in the exact font Recharts renders the
+  // ticks in (12px / 500). This is what lets the label column be sized to
+  // the *real* content instead of a hardcoded guess — the "dynamic margin
+  // based on the longest label" rule. Recomputed only when the category
+  // values change.
+  const CATEGORY_TICK_FONT = '500 12px Inter, system-ui, -apple-system, sans-serif'
+  const longestLabelPx = React.useMemo(() => {
+    if (!isVertical) return 0
+    let max = 0
+    for (const row of data) {
+      const w = measureTextWidth(String(row[index] ?? ''), CATEGORY_TICK_FONT)
+      if (w > max) max = w
+    }
+    return max
+  }, [data, index, isVertical])
+
+  // Effective category-axis (label column) width for THIS render. Sized to
+  // the measured longest label + a small gap, NOT the raw prop — so short
+  // labels no longer reserve a wide, mostly-empty column (the "excessive
+  // left padding / dead space" on horizontal bar charts). The caller's
+  // `yAxisWidth` is now an *upper cap* (backward compatible: a caller can
+  // still limit how wide the column may grow), and everything is clamped to
+  // ~42% of the chart's actual width so a long-label chart still can't let
+  // the labels swallow the plot area on a narrow card. Before the first
+  // measurement (containerWidth 0), fall back to the prop so there's no
+  // flash of a wrong axis width.
+  const LABEL_GAP_PX = 14
   const effectiveYAxisWidth =
     isVertical && containerWidth > 0
-      ? Math.max(56, Math.min(yAxisWidth, Math.round(containerWidth * 0.42)))
+      ? Math.round(
+          Math.max(
+            56,
+            Math.min(
+              longestLabelPx + LABEL_GAP_PX,
+              yAxisWidth,
+              containerWidth * 0.42,
+            ),
+          ),
+        )
       : yAxisWidth
 
   // Safety-net truncation for the category axis: callers are expected to
