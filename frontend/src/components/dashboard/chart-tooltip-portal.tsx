@@ -98,8 +98,30 @@ export function ChartTooltipPortal({ ownerId, active, containerRect, coordinate,
     setPos({ top, left })
     // Re-measure on every anchor move (each hovered point/bar) — the
     // content (series count, label length) can change size between them.
+    //
+    // `isOwner` MUST be in this deps array. The very first time `active`
+    // flips true, `isOwner` is still false for one render (claiming the
+    // slot happens in the effect above, which flushes *after* this one) —
+    // so this component returns `null` that render, `nodeRef` never
+    // attaches to a DOM node, and this effect bails at the `!node` guard
+    // just below without ever computing `pos`. `isOwner` then flips true
+    // on the *next* render (the store's claim notifies), which is the
+    // render that actually mounts the portal — but without `isOwner` in
+    // this array, `active`/`anchorX`/`anchorY` are unchanged from the
+    // prior render, so React skips re-running this effect entirely, and
+    // `pos` is stuck at `null` (top:0, left:0, invisible) forever unless
+    // something else nudges the anchor coordinates.
+    //
+    // On desktop this was invisible: continuous mouse jitter constantly
+    // produces a new `coordinate` from Recharts, which changes anchorX/Y
+    // and re-triggers this effect on the very next pixel of movement,
+    // silently curing it within a frame or two. A single stationary mobile
+    // tap has no such follow-up movement — anchorX/Y never change again —
+    // so the tooltip portal existed in the DOM (confirmed via touch-emulated
+    // testing) but sat permanently invisible at (0,0). Reported as "tooltip
+    // doesn't show on tap" for every bar/line chart.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, anchorX, anchorY])
+  }, [active, anchorX, anchorY, isOwner])
 
   // `isOwner` is the override: a scroll, a touch-drag, a tap elsewhere, or
   // another chart's tooltip claiming the slot all clear it here even while

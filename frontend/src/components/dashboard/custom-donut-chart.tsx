@@ -111,6 +111,19 @@ export const CustomDonutChart = memo(function CustomDonutChart({
               activeShape={renderActiveShape}
               onMouseEnter={(_, index) => setActiveIndex(index)}
               onMouseLeave={() => setActiveIndex(undefined)}
+              // Touch has no real hover, so mobile browsers emulate it from
+              // tap via synthetic mouseenter/mouseover — and on iOS Safari
+              // specifically, that emulation is unreliable across
+              // *consecutive* taps on sibling elements: tapping slice A then
+              // slice B can fail to fire B's mouseenter at all (the browser
+              // needs an intervening tap on a neutral element to "release"
+              // A's hover state first), reported as "tapping a different
+              // color does nothing until I tap outside the chart first."
+              // `onClick` has no such quirk — a real click/tap always fires
+              // it, on every browser — so it's the reliable path for touch,
+              // kept alongside the hover handlers above (which still drive
+              // the smoother continuous-hover feel on desktop).
+              onClick={(_, index) => setActiveIndex(index)}
             >
               {data.map((d, i) => (
                 <Cell key={d.name} fill={tremorHex(colors[i] ?? 'slate')} stroke="transparent" />
