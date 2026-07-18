@@ -3,7 +3,6 @@ import { Card, Text, Metric } from '@tremor/react'
 import { ArrowUpRight, ArrowDownRight, type LucideIcon } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { ProvisionalBadge } from './provisional-badge'
 import { useCountUp } from '@/lib/use-count-up'
 
 /** Splits a KPI value like `"12.3%"` or `1234` into its numeric part (for
@@ -37,6 +36,9 @@ interface KpiCardProps {
   value: string | number
   delta?: { value: number; positiveIsGood?: boolean }
   loading?: boolean
+  // Still accepted (pages pass caveat text documenting data-quality/filter
+  // notes for future reference) but intentionally not rendered — the
+  // visual badge was removed per product feedback.
   provisional?: boolean
   provisionalNote?: string
   icon?: LucideIcon
@@ -55,8 +57,6 @@ export function KpiCard({
   value,
   delta,
   loading,
-  provisional,
-  provisionalNote,
   icon: Icon,
   iconTone = 'blue',
 }: KpiCardProps) {
@@ -83,7 +83,6 @@ export function KpiCard({
         <div>
           <div className="flex items-center gap-1.5">
             <Text className="text-muted-foreground">{label}</Text>
-            {provisional && <ProvisionalBadge note={provisionalNote} />}
           </div>
           {delta !== undefined && (
             <p

@@ -15,13 +15,13 @@ import { PageLoadingFallback } from '@/components/dashboard/page-loading-fallbac
 // an unauthenticated user sees.
 import { LoginPage } from '@/pages/login-page'
 import { RegisterPage } from '@/pages/register-page'
-const WelcomePage = React.lazy(() =>
-  import('@/pages/welcome-page').then((m) => ({ default: m.WelcomePage })),
-)
 // Route chunk importers are centralized in route-preload.ts so the sidebar
 // can kick off the same dynamic import() on link hover/focus, well before
 // the click — see that file for why.
 import { routeImporters, preloadRoute } from '@/lib/route-preload'
+const WelcomePage = React.lazy(() =>
+  routeImporters['/welcome']().then((m) => ({ default: (m as typeof import('@/pages/welcome-page')).WelcomePage })),
+)
 const HomePage = React.lazy(() =>
   routeImporters['/']().then((m) => ({ default: (m as typeof import('@/pages/home-page')).HomePage })),
 )

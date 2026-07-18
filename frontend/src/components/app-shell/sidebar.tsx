@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import {
   Home,
   BarChart3,
@@ -94,19 +94,31 @@ export function Sidebar({
             <X className="h-5 w-5" />
           </button>
 
-          <div className="flex max-w-full items-center gap-3 justify-center">
-            <img
-              src={deptLogo}
-              alt="DEPT"
-              className={cn(!collapsed ? 'h-11' : 'h-8', 'w-auto shrink-0')}
-            />
-          </div>
+          {/* Brand lockup doubles as the way back to the landing page
+              (/welcome) from anywhere inside the dashboard — previously
+              only reachable once, right after login, with no way back. */}
+          <Link
+            to="/welcome"
+            onClick={onMobileClose}
+            onMouseEnter={() => preloadRoute('/welcome')}
+            onFocus={() => preloadRoute('/welcome')}
+            className="flex max-w-full flex-col items-center gap-2 rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            title="Go to landing page"
+          >
+            <div className="flex max-w-full items-center gap-3 justify-center">
+              <img
+                src={deptLogo}
+                alt="DEPT"
+                className={cn(!collapsed ? 'h-11' : 'h-8', 'w-auto shrink-0')}
+              />
+            </div>
 
-          {!collapsed && (
-            <span className="whitespace-nowrap text-[11px] uppercase tracking-[0.15em] text-white/90">
-              Workforce Analytics
-            </span>
-          )}
+            {!collapsed && (
+              <span className="whitespace-nowrap text-[11px] uppercase tracking-[0.15em] text-white/90">
+                Workforce Analytics
+              </span>
+            )}
+          </Link>
         </div>
 
         <nav className="flex-1 space-y-3 overflow-y-auto p-2.5 pt-4">

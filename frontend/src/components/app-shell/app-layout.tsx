@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
-import { StatusFooter } from './status-footer'
 import { RouteErrorBoundary } from './route-error-boundary'
 import { installGlobalTooltipDismissal } from '@/lib/chart-tooltip-touch-store'
 
@@ -89,7 +88,6 @@ export function AppLayout() {
             </motion.div>
           </AnimatePresence>
         </main>
-        <StatusFooter />
       </div>
     </div>
   )

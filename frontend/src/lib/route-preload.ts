@@ -10,6 +10,7 @@
 // hover/focus (well before the click) means the chunk is usually already in
 // flight or cached by the time the user actually clicks.
 export const routeImporters: Record<string, () => Promise<unknown>> = {
+  '/welcome': () => import('@/pages/welcome-page'),
   '/': () => import('@/pages/home-page'),
   '/hr-portal': () => import('@/pages/hr-portal-home-page'),
   '/hr-analytics': () => import('@/pages/hr-analytics-page'),
