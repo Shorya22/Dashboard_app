@@ -60,12 +60,22 @@ export function HrAnalyticsPage() {
   // below. Joiners/Exits/Attrition % are date-based (DOJ/LWD aren't
   // exposed on EmployeeRecord — see employee-filters.ts caveat) so they
   // stay as the server-computed, unfiltered values.
-  const employees = employeesQuery.data?.items ?? []
-  const filteredEmployees = applyEmployeeFilters(employees, filters, {
-    status: 'status',
-    department: 'designation',
-    region: 'region',
-  })
+  // Memoized to match the working-page pattern (see workforce-page.tsx):
+  // `employeesQuery.data?.items` is a stable react-query reference, but the
+  // `?? []` fallback and the filtered result must be memoized so the derived
+  // arrays below (KPIs, table rows) keep stable references across unrelated
+  // re-renders (e.g. a KPI count-up animation frame) instead of being rebuilt
+  // every render and forcing the TanStack table + every chart to reconcile.
+  const employees = useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
+  const filteredEmployees = useMemo(
+    () =>
+      applyEmployeeFilters(employees, filters, {
+        status: 'status',
+        department: 'designation',
+        region: 'region',
+      }),
+    [employees, filters],
+  )
   const totalEmployees = filteredEmployees.length
   const activeEmployees = filteredEmployees.filter((e) => e.status === 'Active').length
   const inactiveEmployees = filteredEmployees.filter((e) => e.status === 'Inactive').length
@@ -131,19 +141,27 @@ export function HrAnalyticsPage() {
   // reference, which is not filtered to exits-only), sorted alphabetically
   // by Name, with LWD/Reason for Leaving joined in by name from
   // exits_table since EmployeeRecord doesn't carry those two fields.
-  const exitsByName = new Map(
-    (attrition.data?.exits_table ?? []).map((e) => [e.name, e]),
-  )
-  const employeeTableRows: EmployeeTableRow[] = [...filteredEmployees]
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
-    .map((e) => {
-      const exit = e.name ? exitsByName.get(e.name) : undefined
-      return {
-        ...e,
-        lwd: exit?.lwd ?? null,
-        reason_for_leaving: exit?.reason_for_leaving ?? null,
-      }
-    })
+  // Memoized (was rebuilt inline every render): a fresh `Map` +
+  // `[...].sort().map()` on every render handed `useReactTable` a new `data`
+  // reference each time, making the table reconcile its whole row model on
+  // every unrelated re-render. Keyed only on the inputs that actually change
+  // it, so the table now re-derives only when the filtered roster or the
+  // exits join data changes — matching the working pages' memoized pattern.
+  const employeeTableRows: EmployeeTableRow[] = useMemo(() => {
+    const exitsByName = new Map(
+      (attrition.data?.exits_table ?? []).map((e) => [e.name, e]),
+    )
+    return [...filteredEmployees]
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+      .map((e) => {
+        const exit = e.name ? exitsByName.get(e.name) : undefined
+        return {
+          ...e,
+          lwd: exit?.lwd ?? null,
+          reason_for_leaving: exit?.reason_for_leaving ?? null,
+        }
+      })
+  }, [filteredEmployees, attrition.data])
 
   const table = useReactTable({
     data: employeeTableRows,
