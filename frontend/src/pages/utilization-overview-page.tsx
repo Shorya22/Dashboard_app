@@ -122,24 +122,20 @@ export function UtilizationOverviewPage() {
         {/* 41 employees at the page's normal chart height would squash
             every bar into an unreadable ~11px sliver, silently hiding most
             of the data even though it's all present in the DOM (the same
-            failure mode flagged on Workforce's seniority chart). Instead,
-            give each bar a fixed pixel height inside a vertically
-            scrollable container so every bar + label stays legible and the
-            full 41-row set is reachable by scrolling. */}
-        <div className="h-full overflow-y-auto">
-          <div style={{ height: `${rankingData.length * 32}px` }}>
-            <CustomBarChart
-              data={rankingData}
-              index="name"
-              category="value"
-              tooltipValueLabel="Utilization %"
-              layout="vertical"
-              yAxisWidth={140}
-              showLegend={false}
-              className="h-full"
-            />
-          </div>
-        </div>
+            failure mode flagged on Workforce's seniority chart). `rowHeightPx`
+            gives each bar a fixed height and lets CustomBarChart scroll its
+            plot internally instead. */}
+        <CustomBarChart
+          data={rankingData}
+          index="name"
+          category="value"
+          tooltipValueLabel="Utilization %"
+          layout="vertical"
+          yAxisWidth={140}
+          showLegend={false}
+          rowHeightPx={32}
+          className="h-full"
+        />
       </ChartCard>
     </div>
   )

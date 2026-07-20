@@ -233,27 +233,23 @@ export function SkillsExperiencePage() {
         >
           {/* One horizontal bar per distinct Primary Skill (often 15-20+)
               inside a fixed h-80 box would squeeze every bar to a few px
-              tall on mobile — unreadable. Same fixed-row-height-inside-a-
-              scroll-viewport pattern as the ranked chart on
-              utilization-overview-page.tsx: the card stays h-80, the
-              content inside scrolls if it needs more room than that. */}
-          <div className="h-full overflow-y-auto">
-            <div style={{ height: `${Math.max(byExperience.data.length * 32, 288)}px` }}>
-              <CustomBarChart
-                data={byExperience.data}
-                index="primary_skill"
-                series={byExperienceSeries}
-                stack
-                layout="vertical"
-                yAxisWidth={110}
-                yAxisLabel="Primary Skill"
-                xAxisLabel="Employees"
-                showLegend
-                tooltipValueLabel="Employees"
-                className="h-full"
-              />
-            </div>
-          </div>
+              tall on mobile — unreadable. `rowHeightPx` gives each bar a
+              fixed height and lets CustomBarChart scroll its plot
+              internally (axis titles stay put) instead. */}
+          <CustomBarChart
+            data={byExperience.data}
+            index="primary_skill"
+            series={byExperienceSeries}
+            stack
+            layout="vertical"
+            yAxisWidth={110}
+            yAxisLabel="Primary Skill"
+            xAxisLabel="Employees"
+            showLegend
+            tooltipValueLabel="Employees"
+            rowHeightPx={32}
+            className="h-full"
+          />
         </ChartCard>
 
         <ChartCard
@@ -265,23 +261,20 @@ export function SkillsExperiencePage() {
           provisional
           provisionalNote="Seniority Category mapping is PROVISIONAL, see the data-model skill."
         >
-          <div className="h-full overflow-y-auto">
-            <div style={{ height: `${Math.max(bySeniority.data.length * 32, 288)}px` }}>
-              <CustomBarChart
-                data={bySeniority.data}
-                index="primary_skill"
-                series={bySenioritySeries}
-                stack
-                layout="vertical"
-                yAxisWidth={110}
-                yAxisLabel="Primary Skill"
-                xAxisLabel="Employees"
-                showLegend
-                tooltipValueLabel="Employees"
-                className="h-full"
-              />
-            </div>
-          </div>
+          <CustomBarChart
+            data={bySeniority.data}
+            index="primary_skill"
+            series={bySenioritySeries}
+            stack
+            layout="vertical"
+            yAxisWidth={110}
+            yAxisLabel="Primary Skill"
+            xAxisLabel="Employees"
+            showLegend
+            tooltipValueLabel="Employees"
+            rowHeightPx={32}
+            className="h-full"
+          />
         </ChartCard>
       </div>
 
@@ -293,23 +286,20 @@ export function SkillsExperiencePage() {
           isEmpty={byRegion.data.length === 0}
           height="h-80"
         >
-          <div className="h-full overflow-y-auto">
-            <div style={{ height: `${Math.max(byRegion.data.length * 32, 288)}px` }}>
-              <CustomBarChart
-                data={byRegion.data}
-                index="primary_skill"
-                series={byRegionSeries}
-                stack
-                layout="vertical"
-                yAxisWidth={110}
-                yAxisLabel="Primary Skill"
-                xAxisLabel="Employees"
-                showLegend
-                tooltipValueLabel="Employees"
-                className="h-full"
-              />
-            </div>
-          </div>
+          <CustomBarChart
+            data={byRegion.data}
+            index="primary_skill"
+            series={byRegionSeries}
+            stack
+            layout="vertical"
+            yAxisWidth={110}
+            yAxisLabel="Primary Skill"
+            xAxisLabel="Employees"
+            showLegend
+            tooltipValueLabel="Employees"
+            rowHeightPx={32}
+            className="h-full"
+          />
         </ChartCard>
 
         <ChartCard

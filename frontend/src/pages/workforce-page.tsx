@@ -192,28 +192,22 @@ export function WorkforcePage() {
           provisional
           provisionalNote="Recomputed client-side from the raw Seniorirty Level field per selected filters, with the same casing-collapse normalization as the backend's /roster/breakdowns (title-case + TBD restore) applied, so all 9 seniority categories render as 9 distinct bars matching the unfiltered totals."
         >
-          {/* 9 rows in a fixed h-80 box already reads a bit tight on
-              desktop and gets worse once the 220px yAxisWidth
-              self-clamps down on a narrow mobile card (see
-              custom-bar-chart.tsx) — same scroll-viewport pattern as the
-              skills-experience charts and the utilization-overview ranked
-              list. */}
-          <div className="h-full overflow-y-auto">
-            <div style={{ height: `${Math.max(seniorityData.length * 32, 288)}px` }}>
-              <CustomBarChart
-                data={seniorityData}
-                index="name"
-                category="value"
-                color="emerald"
-                tooltipValueLabel="Employees"
-                layout="vertical"
-                yAxisLabel="Seniority"
-                xAxisLabel="Employees"
-                yAxisWidth={220}
-                className="h-full"
-              />
-            </div>
-          </div>
+          {/* 9 rows in a fixed h-80 box reads tight — `rowHeightPx` gives
+              each bar a fixed height and lets CustomBarChart scroll its
+              plot internally (axis titles stay put) instead. */}
+          <CustomBarChart
+            data={seniorityData}
+            index="name"
+            category="value"
+            color="emerald"
+            tooltipValueLabel="Employees"
+            layout="vertical"
+            yAxisLabel="Seniority"
+            xAxisLabel="Employees"
+            yAxisWidth={220}
+            rowHeightPx={32}
+            className="h-full"
+          />
         </ChartCard>
 
         <ChartCard

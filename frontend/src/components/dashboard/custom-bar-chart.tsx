@@ -13,6 +13,7 @@ import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { useChartTheme } from '@/lib/chart-theme-store'
 import { useSyncRechartsActive } from '@/lib/chart-tooltip-touch-store'
 import { truncateLabel, formatChartValue, measureTextWidth } from '@/lib/chart-labels'
+import { cn } from '@/lib/utils'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
 
@@ -42,6 +43,13 @@ interface CustomBarChartProps {
   yAxisWidth?: number
   showLegend?: boolean
   className?: string
+  /** Vertical (horizontal-bar) layout only: give every category row a fixed
+   * pixel height and let the plot scroll internally instead of squashing
+   * every bar to fit the card's fixed height — for charts with many
+   * categories (15-40+). Axis titles and the legend stay outside the
+   * scrolling element (see the component doc comment on why), so they
+   * never scroll out of view while the bars do. */
+  rowHeightPx?: number
 }
 
 /** Recharts-based bar chart, styled to match Tremor's `<BarChart>` (same
@@ -53,7 +61,18 @@ interface CustomBarChartProps {
  * (e.g. Joiners vs Exits), both with permanent labels. The legend (when
  * shown) is the same `CustomLegend` used by the line and donut charts —
  * plain HTML below the plot, not Recharts' own in-SVG `<Legend>` — so all
- * three chart types share one consistent legend look. */
+ * three chart types share one consistent legend look.
+ *
+ * Vertical (horizontal-bar) layout renders its axis titles as plain HTML
+ * flex siblings of the chart's `<ResponsiveContainer>`, not Recharts' own
+ * in-SVG `label` — two reasons: (1) a flex box centers trivially and
+ * perfectly regardless of card height, where Recharts' rotated SVG label
+ * needs pixel-accurate `textAnchor` tuning to match; (2) when `rowHeightPx`
+ * puts the plot in its own scrolling box, a title living outside that box
+ * never scrolls away with it — "frozen" falls out of normal DOM layout
+ * instead of needing sticky-positioning tricks. Horizontal (category-on-X)
+ * layout charts never need internal scrolling (the category count that
+ * would require it doesn't come up), so they keep Recharts' native label. */
 export const CustomBarChart = React.memo(function CustomBarChart({
   data,
   index,
@@ -68,6 +87,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   yAxisWidth = 40,
   showLegend,
   className,
+  rowHeightPx,
 }: CustomBarChartProps) {
   // Subscribes this chart to the user's chosen color theme (Settings page)
   // — tremorHex() below always reads the live theme, but this component
@@ -122,6 +142,60 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     return () => observer.disconnect()
   }, [])
 
+  // Precise position of the plotting area (the `<CartesianGrid>`) relative
+  // to this component's own wrapper, measured from the live DOM rather than
+  // recomputed from margins — Recharts reserves extra, variously-sized
+  // space around the grid for tick text that isn't captured by the margin
+  // values alone (e.g. the numeric axis's own tick-label row), so a margin-
+  // based estimate drifts a few px off true center. The external Y/X axis
+  // titles below use this to center on the grid exactly, the same
+  // pixel-perfect standard Recharts' own centered numeric-axis label meets.
+  // Only meaningful for vertical layout's non-scrolling case: once
+  // `rowHeightPx` puts the plot in a tall scrolling box, "the grid" spans
+  // the full (mostly off-screen) content rather than the visible viewport,
+  // so titles fall back to centering on the visible box instead (see the
+  // JSX below).
+  const [gridBox, setGridBox] = React.useState<{ top: number; left: number; width: number; height: number } | null>(
+    null,
+  )
+  React.useEffect(() => {
+    if (!isVertical || rowHeightPx) {
+      setGridBox(null)
+      return
+    }
+    const el = containerRef.current
+    if (!el) return
+    const measure = () => {
+      const grid = el.querySelector('.recharts-cartesian-grid')
+      if (!grid) return
+      const gridRect = grid.getBoundingClientRect()
+      const containerRect = el.getBoundingClientRect()
+      const next = {
+        top: gridRect.top - containerRect.top,
+        left: gridRect.left - containerRect.left,
+        width: gridRect.width,
+        height: gridRect.height,
+      }
+      setGridBox((prev) =>
+        prev &&
+        prev.top === next.top &&
+        prev.left === next.left &&
+        prev.width === next.width &&
+        prev.height === next.height
+          ? prev
+          : next,
+      )
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+    // `containerWidth` isn't read directly, but a change in it means
+    // `effectiveYAxisWidth` (derived from it) just shifted the grid's own
+    // left edge on this render — re-measure so `gridBox` doesn't go stale
+    // between the initial fallback width and the real measured one.
+  }, [isVertical, rowHeightPx, data, containerWidth])
+
   const stackId = stack ? 'stack' : undefined
 
   // Permanent value labels read as "value on every bar" only while there's
@@ -153,28 +227,17 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   // Effective category-axis (label column) width for THIS render. Sized to
   // the measured longest label + a small gap, NOT the raw prop — so short
   // labels no longer reserve a wide, mostly-empty column (the "excessive
-  // left padding / dead space" on horizontal bar charts). The caller's
-  // `yAxisWidth` is now an *upper cap* (backward compatible: a caller can
-  // still limit how wide the column may grow), and everything is clamped to
-  // ~42% of the chart's actual width so a long-label chart still can't let
+  // left padding / dead space" on horizontal bar charts). The axis title
+  // itself (when present) lives outside this column entirely — see the
+  // component doc comment — so it never inflates this width. Clamped to
+  // ~40% of the chart's actual width so a long-label chart still can't let
   // the labels swallow the plot area on a narrow card. Before the first
   // measurement (containerWidth 0), fall back to the prop so there's no
   // flash of a wrong axis width.
   const LABEL_GAP_PX = 14
-  // Reserve extra left room for the rotated Y-axis title (when present) so it
-  // sits clear of the tick labels instead of overlapping them.
-  const yTitleSpacePx = isVertical && yAxisLabel ? 22 : 0
   const effectiveYAxisWidth =
     isVertical && containerWidth > 0
-      ? Math.round(
-          Math.max(
-            56,
-            Math.min(
-              longestLabelPx + LABEL_GAP_PX + yTitleSpacePx,
-              containerWidth * 0.44,
-            ),
-          ),
-        )
+      ? Math.round(Math.max(48, Math.min(longestLabelPx + LABEL_GAP_PX, containerWidth * 0.4)))
       : yAxisWidth
 
   // Safety-net truncation for the category axis: callers are expected to
@@ -187,151 +250,243 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   // is `effectiveYAxisWidth` (not the raw prop — see above), so the char
   // budget scales down with it on mobile instead of overflowing.
   const categoryTickFormatter = isVertical
-    ? (value: string) => truncateLabel(value, Math.max(4, Math.floor((effectiveYAxisWidth - yTitleSpacePx) / 6)))
+    ? (value: string) => truncateLabel(value, Math.max(4, Math.floor(effectiveYAxisWidth / 6)))
     : (value: string) => truncateLabel(value)
 
+  // Custom category-tick renderer for vertical layout: left-anchored right
+  // at the plot's own left edge instead of Recharts' default right-anchor
+  // (hugging the plot). Right-anchoring is what produced the "dead space"
+  // complaint — a short label like "DTNL" sharing a column sized for the
+  // longest label ("Entity TBD") leaves a visible gap between the axis
+  // title and the text on every row shorter than the max. Left-anchoring
+  // puts that same unavoidable slack in one consistent, unremarkable place
+  // (immediately before the bars start) instead of varying per row right
+  // under the title.
+  const CategoryTick = React.useCallback(
+    (props: { x: number; y: number; payload: { value: string } }) => (
+      <text
+        x={4}
+        y={props.y}
+        dy={4}
+        textAnchor="start"
+        fontSize={12}
+        fontWeight={500}
+        className="fill-tremor-content dark:fill-dark-tremor-content"
+      >
+        {categoryTickFormatter(props.payload.value)}
+      </text>
+    ),
+    [categoryTickFormatter],
+  )
+
+  const plot = (
+    <ResponsiveContainer width="100%" height="100%" className={isVertical ? undefined : className}>
+      <RBarChart
+        data={data}
+        layout={isVertical ? 'vertical' : 'horizontal'}
+        margin={{
+          top: 16,
+          right: isVertical ? 24 : 10,
+          left: 4,
+          // Extra bottom room when an x-axis title is present: the
+          // legend (when shown) now renders as plain HTML below the
+          // chart, not inside this SVG margin, so this only needs to
+          // clear the tick labels + axis title themselves. Vertical
+          // layout's x-axis title is rendered externally (see below), so
+          // no bottom reservation is needed here for it.
+          bottom: isVertical ? 4 : xAxisLabel ? 28 : 4,
+        }}
+        // Keyboard access + screen-reader announcements for every bar —
+        // Recharts' first-party a11y layer.
+        accessibilityLayer
+      >
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="currentColor"
+          className="text-tremor-border dark:text-dark-tremor-border"
+          horizontal={!isVertical}
+          vertical={isVertical}
+        />
+        {isVertical ? (
+          <>
+            <XAxis
+              type="number"
+              // Headroom past the longest bar so its permanent value
+              // label (rendered just past the bar's end) never touches
+              // or gets clipped by the axis's own max tick/edge — without
+              // this, a bar that happens to reach exactly the auto-scaled
+              // axis max has nowhere for its label to sit.
+              domain={[0, (max: number) => Math.ceil(max * 1.15)]}
+              tick={{ fontSize: 12, fontWeight: 500 }}
+              className="fill-tremor-content dark:fill-dark-tremor-content"
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="category"
+              dataKey={index}
+              tick={CategoryTick as never}
+              className="fill-tremor-content dark:fill-dark-tremor-content"
+              axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
+              tickLine={false}
+              width={effectiveYAxisWidth}
+            />
+          </>
+        ) : (
+          <>
+            <XAxis
+              dataKey={index}
+              tick={{ fontSize: 12, fontWeight: 500 }}
+              tickFormatter={categoryTickFormatter}
+              className="fill-tremor-content dark:fill-dark-tremor-content"
+              axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
+              tickLine={false}
+              label={xAxisLabel ? { value: xAxisLabel, position: 'bottom', offset: 2, fontSize: 13 } : undefined}
+            />
+            <YAxis
+              // Same headroom fix as the vertical layout's XAxis above —
+              // room for the tallest bar's permanent value label so it
+              // doesn't get clipped against the axis max / card edge.
+              domain={[0, (max: number) => Math.ceil(max * 1.15)]}
+              tick={{ fontSize: 12, fontWeight: 500 }}
+              className="fill-tremor-content dark:fill-dark-tremor-content"
+              axisLine={false}
+              tickLine={false}
+              width={effectiveYAxisWidth}
+              label={
+                yAxisLabel
+                  ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, style: { textAnchor: 'middle' } }
+                  : undefined
+              }
+            />
+          </>
+        )}
+        <Tooltip
+          content={tooltipContent as unknown as any}
+          // No cursor rectangle: Recharts' default bar cursor is a
+          // translucent fill spanning the *entire* category's height —
+          // for grouped series it covers every bar (and their permanent
+          // LabelList values) at that category, not just the hovered one.
+          // Sitting on top of the labels' stroked halo, it read as
+          // doubled/ghosted text (a gray wash over already-rendered
+          // digits) rather than a hover affordance. Each `<Bar>` below
+          // gets its own `activeBar` highlight instead, confined to the
+          // one bar actually under the cursor.
+          cursor={false}
+        />
+        {bars.map((bar) => (
+          <Bar
+            key={bar.category}
+            name={bar.category}
+            dataKey={bar.category}
+            fill={tremorHex(bar.color)}
+            stackId={stackId}
+            isAnimationActive
+            animationDuration={1000}
+            radius={isVertical ? [0, 4, 4, 0] : [4, 4, 0, 0]}
+            // Without a cap, Recharts stretches bars to fill whatever
+            // space is available — fine with a dozen categories, but a
+            // chart with only 3-4 bars spread across a full-width card
+            // ends up with each bar ~150-200px thick. Capping thickness
+            // keeps every bar chart's bar width visually consistent
+            // regardless of category count or card width; the leftover
+            // space just becomes gap between bars instead.
+            maxBarSize={48}
+            // Hover feedback confined to the one bar under the cursor
+            // (replaces the old chart-wide cursor rectangle).
+            activeBar={{ fillOpacity: 0.85 }}
+          >
+            {showBarLabels && (
+              <LabelList
+                dataKey={bar.category}
+                position={isVertical ? 'right' : 'top'}
+                offset={8}
+                formatter={formatChartValue as never}
+                className="fill-tremor-content-strong dark:fill-dark-tremor-content-strong"
+                // See custom-line-chart.tsx: a stroked halo keeps the value
+                // legible when it lands on a dashed gridline instead of
+                // reading as struck-through.
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  paintOrder: 'stroke',
+                  stroke: 'hsl(var(--card))',
+                  strokeWidth: 4,
+                  strokeLinejoin: 'round',
+                }}
+              />
+            )}
+          </Bar>
+        ))}
+      </RBarChart>
+    </ResponsiveContainer>
+  )
+
+  if (!isVertical) {
+    return (
+      // `touch-pan-y`: a vertical finger drag scrolls the page as normal; a
+      // horizontal drag is delivered to the chart so dragging across it
+      // scrubs the tooltip continuously (same as the line chart).
+      <div ref={containerRef} className="flex h-full w-full touch-pan-y flex-col">
+        {plot}
+        {showLegend && bars.length > 0 && (
+          <CustomLegend
+            data={bars.map((b) => ({ name: b.category, value: 0 }))}
+            colors={bars.map((b) => b.color)}
+            showValues={false}
+            layout="wrap"
+            className="mt-1.5 shrink-0 justify-center"
+          />
+        )}
+      </div>
+    )
+  }
+
+  // Vertical (horizontal-bar) layout: axis titles are plain HTML flex
+  // siblings of the plot, not Recharts' in-SVG `label` — see the component
+  // doc comment. When `gridBox` is available (measured above), each title
+  // is positioned to center on the grid's own extent, not the wrapper's —
+  // pixel-perfect regardless of how much space Recharts reserves around the
+  // grid for its own tick text. Before the first measurement (or in
+  // `rowHeightPx` scroll mode, where "the grid" spans mostly off-screen
+  // content), fall back to centering on the visible box itself. When
+  // `rowHeightPx` is set, only the inner box holding the plot scrolls —
+  // both title strips are its siblings, so neither one scrolls with it.
+  const plotBox = rowHeightPx ? (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div style={{ height: `${data.length * rowHeightPx}px` }}>{plot}</div>
+    </div>
+  ) : (
+    <div className="min-h-0 flex-1">{plot}</div>
+  )
+
   return (
-    // `touch-pan-y`: a vertical finger drag scrolls the page as normal; a
-    // horizontal drag is delivered to the chart so dragging across it scrubs
-    // the tooltip continuously (same as the line chart).
-    <div ref={containerRef} className="flex h-full w-full touch-pan-y flex-col">
-      <ResponsiveContainer width="100%" height="100%" className={className}>
-        <RBarChart
-          data={data}
-          layout={isVertical ? 'vertical' : 'horizontal'}
-          margin={{
-            top: 16,
-            right: isVertical ? 24 : 10,
-            left: 4,
-            // Extra bottom room when an x-axis title is present: the
-            // legend (when shown) now renders as plain HTML below the
-            // chart, not inside this SVG margin, so this only needs to
-            // clear the tick labels + axis title themselves.
-            bottom: xAxisLabel ? 28 : 4,
-          }}
-          // Keyboard access + screen-reader announcements for every bar —
-          // Recharts' first-party a11y layer.
-          accessibilityLayer
-        >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="currentColor"
-            className="text-tremor-border dark:text-dark-tremor-border"
-            horizontal={!isVertical}
-            vertical={isVertical}
-          />
-          {isVertical ? (
-            <>
-              <XAxis
-                type="number"
-                // Headroom past the longest bar so its permanent value
-                // label (rendered just past the bar's end) never touches
-                // or gets clipped by the axis's own max tick/edge — without
-                // this, a bar that happens to reach exactly the auto-scaled
-                // axis max has nowhere for its label to sit.
-                domain={[0, (max: number) => Math.ceil(max * 1.15)]}
-                tick={{ fontSize: 12, fontWeight: 500 }}
-                className="fill-tremor-content dark:fill-dark-tremor-content"
-                axisLine={false}
-                tickLine={false}
-                label={xAxisLabel ? { value: xAxisLabel, position: 'bottom', offset: 2, fontSize: 13 } : undefined}
-              />
-              <YAxis
-                type="category"
-                dataKey={index}
-                tick={{ fontSize: 12, fontWeight: 500 }}
-                tickFormatter={categoryTickFormatter}
-                className="fill-tremor-content dark:fill-dark-tremor-content"
-                axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
-                tickLine={false}
-                width={effectiveYAxisWidth}
-                label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, style: { textAnchor: 'middle' } } : undefined}
-              />
-            </>
-          ) : (
-            <>
-              <XAxis
-                dataKey={index}
-                tick={{ fontSize: 12, fontWeight: 500 }}
-                tickFormatter={categoryTickFormatter}
-                className="fill-tremor-content dark:fill-dark-tremor-content"
-                axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
-                tickLine={false}
-                label={xAxisLabel ? { value: xAxisLabel, position: 'bottom', offset: 2, fontSize: 13 } : undefined}
-              />
-              <YAxis
-                // Same headroom fix as the vertical layout's XAxis above —
-                // room for the tallest bar's permanent value label so it
-                // doesn't get clipped against the axis max / card edge.
-                domain={[0, (max: number) => Math.ceil(max * 1.15)]}
-                tick={{ fontSize: 12, fontWeight: 500 }}
-                className="fill-tremor-content dark:fill-dark-tremor-content"
-                axisLine={false}
-                tickLine={false}
-                width={effectiveYAxisWidth}
-                label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, style: { textAnchor: 'middle' } } : undefined}
-              />
-            </>
-          )}
-          <Tooltip
-            content={tooltipContent as unknown as any}
-            // No cursor rectangle: Recharts' default bar cursor is a
-            // translucent fill spanning the *entire* category's height —
-            // for grouped series it covers every bar (and their permanent
-            // LabelList values) at that category, not just the hovered one.
-            // Sitting on top of the labels' stroked halo, it read as
-            // doubled/ghosted text (a gray wash over already-rendered
-            // digits) rather than a hover affordance. Each `<Bar>` below
-            // gets its own `activeBar` highlight instead, confined to the
-            // one bar actually under the cursor.
-            cursor={false}
-          />
-          {bars.map((bar) => (
-            <Bar
-              key={bar.category}
-              name={bar.category}
-              dataKey={bar.category}
-              fill={tremorHex(bar.color)}
-              stackId={stackId}
-              isAnimationActive
-              animationDuration={1000}
-              radius={isVertical ? [0, 4, 4, 0] : [4, 4, 0, 0]}
-              // Without a cap, Recharts stretches bars to fill whatever
-              // space is available — fine with a dozen categories, but a
-              // chart with only 3-4 bars spread across a full-width card
-              // ends up with each bar ~150-200px thick. Capping thickness
-              // keeps every bar chart's bar width visually consistent
-              // regardless of category count or card width; the leftover
-              // space just becomes gap between bars instead.
-              maxBarSize={48}
-              // Hover feedback confined to the one bar under the cursor
-              // (replaces the old chart-wide cursor rectangle).
-              activeBar={{ fillOpacity: 0.85 }}
+    <div ref={containerRef} className={cn('flex h-full w-full touch-pan-y flex-col', className)}>
+      <div className="flex min-h-0 flex-1">
+        {yAxisLabel && (
+          <div className="relative w-[22px] shrink-0 self-stretch">
+            <div
+              className="absolute inset-x-0 flex items-center justify-center"
+              style={gridBox ? { top: gridBox.top, height: gridBox.height } : { top: 0, bottom: 0 }}
             >
-              {showBarLabels && (
-                <LabelList
-                  dataKey={bar.category}
-                  position={isVertical ? 'right' : 'top'}
-                  offset={8}
-                  formatter={formatChartValue as never}
-                  className="fill-tremor-content-strong dark:fill-dark-tremor-content-strong"
-                  // See custom-line-chart.tsx: a stroked halo keeps the value
-                  // legible when it lands on a dashed gridline instead of
-                  // reading as struck-through.
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    paintOrder: 'stroke',
-                    stroke: 'hsl(var(--card))',
-                    strokeWidth: 4,
-                    strokeLinejoin: 'round',
-                  }}
-                />
-              )}
-            </Bar>
-          ))}
-        </RBarChart>
-      </ResponsiveContainer>
+              <span className="-rotate-90 whitespace-nowrap text-[13px] font-medium text-tremor-content dark:text-dark-tremor-content">
+                {yAxisLabel}
+              </span>
+            </div>
+          </div>
+        )}
+        {plotBox}
+      </div>
+      {xAxisLabel && (
+        <div className="relative shrink-0 pt-1">
+          <p
+            className="text-center text-[13px] font-medium text-tremor-content dark:text-dark-tremor-content"
+            style={gridBox ? { marginLeft: gridBox.left, width: gridBox.width } : undefined}
+          >
+            {xAxisLabel}
+          </p>
+        </div>
+      )}
       {showLegend && bars.length > 0 && (
         <CustomLegend
           data={bars.map((b) => ({ name: b.category, value: 0 }))}
