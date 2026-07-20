@@ -123,7 +123,22 @@ export const CustomLineChart = React.memo(function CustomLineChart({
             axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
             tickLine={false}
             tickMargin={6}
-            label={xAxisLabel ? { value: xAxisLabel, position: 'bottom', offset: 2, fontSize: 13, fontWeight: 500 } : undefined}
+            label={
+              xAxisLabel
+                ? {
+                    value: xAxisLabel,
+                    position: 'bottom',
+                    offset: 2,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    // See custom-bar-chart.tsx: Recharts' <Label> hardcodes
+                    // its own fill attribute, so it has to be overridden via
+                    // `style`, not `className`, to match the same color
+                    // every other chart's axis title uses.
+                    style: { fill: 'hsl(var(--foreground))' },
+                  }
+                : undefined
+            }
           />
           <YAxis
             // Headroom past the highest point so its permanent value label
@@ -135,7 +150,18 @@ export const CustomLineChart = React.memo(function CustomLineChart({
             axisLine={false}
             tickLine={false}
             tickMargin={4}
-            label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, fontWeight: 500, style: { textAnchor: 'middle' } } : undefined}
+            label={
+              yAxisLabel
+                ? {
+                    value: yAxisLabel,
+                    angle: -90,
+                    position: 'insideLeft',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    style: { textAnchor: 'middle', fill: 'hsl(var(--foreground))' },
+                  }
+                : undefined
+            }
           />
           <Tooltip content={tooltipContent as unknown as any} cursor={{ strokeDasharray: '3 3' }} />
           <Line

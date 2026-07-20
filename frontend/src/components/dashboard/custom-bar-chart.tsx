@@ -324,7 +324,26 @@ export const CustomBarChart = React.memo(function CustomBarChart({
               className="fill-tremor-content dark:fill-dark-tremor-content"
               axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
               tickLine={false}
-              label={xAxisLabel ? { value: xAxisLabel, position: 'bottom', offset: 2, fontSize: 13 } : undefined}
+              label={
+                xAxisLabel
+                  ? {
+                      value: xAxisLabel,
+                      position: 'bottom',
+                      offset: 2,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      // Recharts' <Label> hardcodes its own `fill="#808080"`
+                      // presentation attribute regardless of `className` —
+                      // a CSS class can't win against that without matching
+                      // specificity tricks, so set the color directly here
+                      // instead. `hsl(var(--foreground))` is the same token
+                      // this chart's external (vertical-layout) axis titles
+                      // resolve to, so every chart's axis title reads as one
+                      // consistent color instead of some looking gray.
+                      style: { fill: 'hsl(var(--foreground))' },
+                    }
+                  : undefined
+              }
             />
             <YAxis
               // Same headroom fix as the vertical layout's XAxis above —
@@ -338,7 +357,17 @@ export const CustomBarChart = React.memo(function CustomBarChart({
               width={effectiveYAxisWidth}
               label={
                 yAxisLabel
-                  ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, style: { textAnchor: 'middle' } }
+                  ? {
+                      value: yAxisLabel,
+                      angle: -90,
+                      position: 'insideLeft',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      // See the XAxis label above: fill has to be set here,
+                      // not via className, to beat Recharts' own hardcoded
+                      // fill attribute.
+                      style: { textAnchor: 'middle', fill: 'hsl(var(--foreground))' },
+                    }
                   : undefined
               }
             />
@@ -452,7 +481,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
               className="absolute inset-x-0 flex items-center justify-center"
               style={gridBox ? { top: gridBox.top, height: gridBox.height } : { top: 0, bottom: 0 }}
             >
-              <span className="-rotate-90 whitespace-nowrap text-[13px] font-medium text-tremor-content dark:text-dark-tremor-content">
+              <span className="-rotate-90 whitespace-nowrap text-[13px] font-medium text-foreground">
                 {yAxisLabel}
               </span>
             </div>
@@ -463,7 +492,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
       {xAxisLabel && (
         <div className="relative shrink-0 pt-1">
           <p
-            className="text-center text-[13px] font-medium text-tremor-content dark:text-dark-tremor-content"
+            className="text-center text-[13px] font-medium text-foreground"
             style={gridBox ? { marginLeft: gridBox.left, width: gridBox.width } : undefined}
           >
             {xAxisLabel}
