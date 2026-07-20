@@ -253,32 +253,6 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     ? (value: string) => truncateLabel(value, Math.max(4, Math.floor(effectiveYAxisWidth / 6)))
     : (value: string) => truncateLabel(value)
 
-  // Custom category-tick renderer for vertical layout: left-anchored right
-  // at the plot's own left edge instead of Recharts' default right-anchor
-  // (hugging the plot). Right-anchoring is what produced the "dead space"
-  // complaint — a short label like "DTNL" sharing a column sized for the
-  // longest label ("Entity TBD") leaves a visible gap between the axis
-  // title and the text on every row shorter than the max. Left-anchoring
-  // puts that same unavoidable slack in one consistent, unremarkable place
-  // (immediately before the bars start) instead of varying per row right
-  // under the title.
-  const CategoryTick = React.useCallback(
-    (props: { x: number; y: number; payload: { value: string } }) => (
-      <text
-        x={4}
-        y={props.y}
-        dy={4}
-        textAnchor="start"
-        fontSize={12}
-        fontWeight={500}
-        className="fill-tremor-content dark:fill-dark-tremor-content"
-      >
-        {categoryTickFormatter(props.payload.value)}
-      </text>
-    ),
-    [categoryTickFormatter],
-  )
-
   const plot = (
     <ResponsiveContainer width="100%" height="100%" className={isVertical ? undefined : className}>
       <RBarChart
@@ -325,7 +299,16 @@ export const CustomBarChart = React.memo(function CustomBarChart({
             <YAxis
               type="category"
               dataKey={index}
-              tick={CategoryTick as never}
+              tick={{ fontSize: 12, fontWeight: 500 }}
+              tickFormatter={categoryTickFormatter}
+              // Recharts' default `interval="preserveEnd"` estimates
+              // available space per tick and silently skips labels it
+              // guesses won't fit — its guess doesn't know each category
+              // already has its own dedicated row (fixed `maxBarSize`
+              // spacing, or `rowHeightPx` in scroll mode), so it was
+              // dropping every other label even with plenty of vertical
+              // room. Force every category to render its name.
+              interval={0}
               className="fill-tremor-content dark:fill-dark-tremor-content"
               axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
               tickLine={false}
