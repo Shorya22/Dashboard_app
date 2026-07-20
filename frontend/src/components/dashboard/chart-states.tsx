@@ -47,7 +47,15 @@ export function ChartCard({
       <div className="flex items-center gap-1.5">
         <Title className="text-sm font-semibold text-foreground">{title}</Title>
       </div>
-      {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+      {/* Reserved at a fixed height regardless of whether `subtitle` is
+          passed (up to its longest observed 2-line wrap), not just when
+          present — `items-start` on the page-level grid rows (see the
+          component doc comment) means cards no longer stretch to match a
+          taller sibling, so two cards in the same row only end up the same
+          height if their *own* content already matches. A subtitle-less
+          card next to one with a 2-line subtitle would otherwise sit
+          visibly shorter than its row partner. */}
+      <div className="min-h-[28px]">{subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}</div>
       {/* Tremor pins bar/line chart tooltips to a fixed y=0 (top of the plot
           area) rather than following the cursor vertically, so it can sit
           very close to the title above. `pt-1` gives it just enough
