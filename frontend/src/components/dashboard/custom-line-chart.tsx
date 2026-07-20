@@ -13,6 +13,7 @@ import { PRIMARY_COLOR, tremorHex } from '@/lib/chart-colors'
 import { useChartTheme } from '@/lib/chart-theme-store'
 import { useSyncRechartsActive } from '@/lib/chart-tooltip-touch-store'
 import { truncateLabel, formatChartValue } from '@/lib/chart-labels'
+import { cn } from '@/lib/utils'
 import { createFullLabelTooltip } from './full-label-tooltip'
 import { CustomLegend } from './custom-legend'
 
@@ -35,6 +36,13 @@ interface CustomLineChartProps {
  * below the plot rather than Recharts' own in-SVG `<Legend>`) so all three
  * chart types share one consistent legend look instead of each having its
  * own slightly different styling.
+ *
+ * Axis titles render as plain HTML flex siblings of the plot, not Recharts'
+ * in-SVG `label` — same reasoning as custom-bar-chart.tsx: a flex box
+ * centers trivially and perfectly against the measured `<CartesianGrid>`
+ * rect, and never shares space with the tick text (Recharts' `<Label>`
+ * reserves no extra room for itself, so on a narrow card the rotated Y
+ * title can land right on top of the tick numbers).
  *
  * Tooltip interaction (desktop + touch), built on Recharts' own event model
  * rather than a hand-rolled hit-testing layer:
@@ -95,120 +103,148 @@ export const CustomLineChart = React.memo(function CustomLineChart({
   // forcing all of them to render permanently.
   const showPointLabels = data.length <= 12
 
-  // Extra bottom room whenever an axis title stacks below the tick labels,
-  // so the two don't collide. The legend used to need to be accounted for
-  // here too, back when it was Recharts' own in-SVG `<Legend>` — now that
-  // it's the plain-HTML `CustomLegend` rendered below the chart instead,
-  // this only needs room for the tick labels + axis title themselves.
-  const bottomMargin = xAxisLabel ? 30 : 4
+  // Precise position of the plotting area, measured from the live DOM —
+  // see custom-bar-chart.tsx for why this beats a margin-based estimate.
+  const [gridBox, setGridBox] = React.useState<{ top: number; left: number; width: number; height: number } | null>(
+    null,
+  )
+  React.useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const measure = () => {
+      const grid = el.querySelector('.recharts-cartesian-grid')
+      if (!grid) return
+      const gridRect = grid.getBoundingClientRect()
+      const containerRect = el.getBoundingClientRect()
+      const next = {
+        top: gridRect.top - containerRect.top,
+        left: gridRect.left - containerRect.left,
+        width: gridRect.width,
+        height: gridRect.height,
+      }
+      setGridBox((prev) =>
+        prev &&
+        prev.top === next.top &&
+        prev.left === next.left &&
+        prev.width === next.width &&
+        prev.height === next.height
+          ? prev
+          : next,
+      )
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [data])
 
   return (
-    <div ref={containerRef} className="flex h-full w-full touch-pan-y flex-col">
-      <ResponsiveContainer width="100%" height="100%" className={className}>
-        <RLineChart
-          data={data}
-          margin={{ top: 20, right: 10, left: 4, bottom: bottomMargin }}
-          // Keyboard access + screen-reader announcements for every point —
-          // Recharts' first-party a11y layer (arrow keys move the active
-          // point, focus ring handled by index.css's `.recharts-wrapper`
-          // focus-visible rule).
-          accessibilityLayer
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-tremor-border dark:text-dark-tremor-border" vertical={false} />
-          <XAxis
-            dataKey={index}
-            tick={{ fontSize: 12, fontWeight: 500 }}
-            tickFormatter={(value: string) => truncateLabel(value)}
-            className="fill-tremor-content dark:fill-dark-tremor-content"
-            axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
-            tickLine={false}
-            tickMargin={6}
-            label={
-              xAxisLabel
-                ? {
-                    value: xAxisLabel,
-                    position: 'bottom',
-                    offset: 2,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    // See custom-bar-chart.tsx: Recharts' <Label> hardcodes
-                    // its own fill attribute, so it has to be overridden via
-                    // `style`, not `className`, to match the same color
-                    // every other chart's axis title uses.
-                    style: { fill: 'hsl(var(--foreground))' },
-                  }
-                : undefined
-            }
-          />
-          <YAxis
-            // Headroom past the highest point so its permanent value label
-            // (rendered just above the dot) never gets clipped against the
-            // axis max / card edge — same fix as the bar chart's domain.
-            domain={[0, (max: number) => Math.ceil(max * 1.15)]}
-            tick={{ fontSize: 12, fontWeight: 500 }}
-            className="fill-tremor-content dark:fill-dark-tremor-content"
-            axisLine={false}
-            tickLine={false}
-            tickMargin={4}
-            label={
-              yAxisLabel
-                ? {
-                    value: yAxisLabel,
-                    angle: -90,
-                    position: 'insideLeft',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    style: { textAnchor: 'middle', fill: 'hsl(var(--foreground))' },
-                  }
-                : undefined
-            }
-          />
-          <Tooltip content={tooltipContent as unknown as any} cursor={{ strokeDasharray: '3 3' }} />
-          <Line
-            type="linear"
-            dataKey={category}
-            stroke={stroke}
-            strokeWidth={2.25}
-            dot={{ r: 3, fill: stroke, strokeWidth: 0 }}
-            // Larger, high-contrast active point: a filled dot ringed with
-            // the card color and a soft brand-tinted drop shadow, so the
-            // point under the cursor/finger reads clearly against the line
-            // and gridlines even on a dense chart.
-            activeDot={{
-              r: 7,
-              fill: stroke,
-              strokeWidth: 2.5,
-              stroke: 'hsl(var(--card))',
-              style: { filter: 'drop-shadow(0 1px 3px rgba(28,79,151,0.35))' },
-            }}
-            isAnimationActive
-            animationDuration={1000}
-          >
-            {showPointLabels && (
-              <LabelList
-                dataKey={category}
-                position="top"
-                offset={10}
-                formatter={formatChartValue as never}
-                className="fill-tremor-content-strong dark:fill-dark-tremor-content-strong"
-                // A permanent label sitting at the same height as one of the
-                // dashed gridlines gets the dashes bleeding through its
-                // strokes, reading as struck-through text. A stroked halo
-                // painted behind the fill (paintOrder: 'stroke') masks
-                // whatever's behind the glyphs regardless of where they land.
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  paintOrder: 'stroke',
-                  stroke: 'hsl(var(--card))',
-                  strokeWidth: 4,
-                  strokeLinejoin: 'round',
-                }}
+    <div ref={containerRef} className={cn('flex h-full w-full touch-pan-y flex-col', className)}>
+      <div className="flex min-h-0 flex-1">
+        {yAxisLabel && (
+          <div className="relative w-[22px] shrink-0 self-stretch">
+            <div
+              className="absolute inset-x-0 flex items-center justify-center"
+              style={gridBox ? { top: gridBox.top, height: gridBox.height } : { top: 0, bottom: 0 }}
+            >
+              <span className="-rotate-90 whitespace-nowrap text-[13px] font-medium text-foreground">
+                {yAxisLabel}
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="min-h-0 min-w-0 flex-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <RLineChart
+              data={data}
+              // Both axis titles render externally as plain HTML, so this
+              // margin only needs to clear the tick labels themselves.
+              margin={{ top: 20, right: 10, left: 4, bottom: 4 }}
+              // Keyboard access + screen-reader announcements for every point —
+              // Recharts' first-party a11y layer (arrow keys move the active
+              // point, focus ring handled by index.css's `.recharts-wrapper`
+              // focus-visible rule).
+              accessibilityLayer
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-tremor-border dark:text-dark-tremor-border" vertical={false} />
+              <XAxis
+                dataKey={index}
+                tick={{ fontSize: 12, fontWeight: 500 }}
+                tickFormatter={(value: string) => truncateLabel(value)}
+                className="fill-tremor-content dark:fill-dark-tremor-content"
+                axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
+                tickLine={false}
+                tickMargin={6}
               />
-            )}
-          </Line>
-        </RLineChart>
-      </ResponsiveContainer>
+              <YAxis
+                // Headroom past the highest point so its permanent value label
+                // (rendered just above the dot) never gets clipped against the
+                // axis max / card edge — same fix as the bar chart's domain.
+                domain={[0, (max: number) => Math.ceil(max * 1.08)]}
+                tick={{ fontSize: 12, fontWeight: 500 }}
+                className="fill-tremor-content dark:fill-dark-tremor-content"
+                axisLine={false}
+                tickLine={false}
+                tickMargin={4}
+              />
+              <Tooltip content={tooltipContent as unknown as any} cursor={{ strokeDasharray: '3 3' }} />
+              <Line
+                type="linear"
+                dataKey={category}
+                stroke={stroke}
+                strokeWidth={2.25}
+                dot={{ r: 3, fill: stroke, strokeWidth: 0 }}
+                // Larger, high-contrast active point: a filled dot ringed with
+                // the card color and a soft brand-tinted drop shadow, so the
+                // point under the cursor/finger reads clearly against the line
+                // and gridlines even on a dense chart.
+                activeDot={{
+                  r: 7,
+                  fill: stroke,
+                  strokeWidth: 2.5,
+                  stroke: 'hsl(var(--card))',
+                  style: { filter: 'drop-shadow(0 1px 3px rgba(28,79,151,0.35))' },
+                }}
+                isAnimationActive
+                animationDuration={1000}
+              >
+                {showPointLabels && (
+                  <LabelList
+                    dataKey={category}
+                    position="top"
+                    offset={10}
+                    formatter={formatChartValue as never}
+                    className="fill-tremor-content-strong dark:fill-dark-tremor-content-strong"
+                    // A permanent label sitting at the same height as one of the
+                    // dashed gridlines gets the dashes bleeding through its
+                    // strokes, reading as struck-through text. A stroked halo
+                    // painted behind the fill (paintOrder: 'stroke') masks
+                    // whatever's behind the glyphs regardless of where they land.
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      paintOrder: 'stroke',
+                      stroke: 'hsl(var(--card))',
+                      strokeWidth: 4,
+                      strokeLinejoin: 'round',
+                    }}
+                  />
+                )}
+              </Line>
+            </RLineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      {xAxisLabel && (
+        <div className="relative shrink-0 pt-1">
+          <p
+            className="text-center text-[13px] font-medium text-foreground"
+            style={gridBox ? { marginLeft: gridBox.left, width: gridBox.width } : undefined}
+          >
+            {xAxisLabel}
+          </p>
+        </div>
+      )}
       <CustomLegend
         data={[{ name: category, value: 0 }]}
         colors={[color]}

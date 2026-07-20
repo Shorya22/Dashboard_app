@@ -63,16 +63,17 @@ interface CustomBarChartProps {
  * plain HTML below the plot, not Recharts' own in-SVG `<Legend>` — so all
  * three chart types share one consistent legend look.
  *
- * Vertical (horizontal-bar) layout renders its axis titles as plain HTML
- * flex siblings of the chart's `<ResponsiveContainer>`, not Recharts' own
- * in-SVG `label` — two reasons: (1) a flex box centers trivially and
- * perfectly regardless of card height, where Recharts' rotated SVG label
- * needs pixel-accurate `textAnchor` tuning to match; (2) when `rowHeightPx`
- * puts the plot in its own scrolling box, a title living outside that box
- * never scrolls away with it — "frozen" falls out of normal DOM layout
- * instead of needing sticky-positioning tricks. Horizontal (category-on-X)
- * layout charts never need internal scrolling (the category count that
- * would require it doesn't come up), so they keep Recharts' native label. */
+ * Every axis title (both layouts) renders as a plain HTML flex sibling of
+ * the chart's `<ResponsiveContainer>`, never Recharts' own in-SVG `label` —
+ * three reasons: (1) a flex box centers trivially and perfectly regardless
+ * of card height, where Recharts' rotated SVG label needs pixel-accurate
+ * `textAnchor` tuning to match; (2) when `rowHeightPx` puts the plot in its
+ * own scrolling box, a title living outside that box never scrolls away
+ * with it — "frozen" falls out of normal DOM layout instead of needing
+ * sticky-positioning tricks; (3) Recharts' `<Label>` hardcodes its own
+ * `fill`/position and reserves no extra room for it, so on a narrow card
+ * the rotated Y title can land right on top of the tick numbers — a plain
+ * HTML gutter never shares space with them by construction. */
 export const CustomBarChart = React.memo(function CustomBarChart({
   data,
   index,
@@ -148,18 +149,16 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   // space around the grid for tick text that isn't captured by the margin
   // values alone (e.g. the numeric axis's own tick-label row), so a margin-
   // based estimate drifts a few px off true center. The external Y/X axis
-  // titles below use this to center on the grid exactly, the same
-  // pixel-perfect standard Recharts' own centered numeric-axis label meets.
-  // Only meaningful for vertical layout's non-scrolling case: once
-  // `rowHeightPx` puts the plot in a tall scrolling box, "the grid" spans
-  // the full (mostly off-screen) content rather than the visible viewport,
-  // so titles fall back to centering on the visible box instead (see the
-  // JSX below).
+  // titles below use this to center on the grid exactly, in both layouts.
+  // Only `rowHeightPx` (vertical layout's scroll mode) opts out: once the
+  // plot is a tall scrolling box, "the grid" spans the full (mostly
+  // off-screen) content rather than the visible viewport, so titles fall
+  // back to centering on the visible box instead (see the JSX below).
   const [gridBox, setGridBox] = React.useState<{ top: number; left: number; width: number; height: number } | null>(
     null,
   )
   React.useEffect(() => {
-    if (!isVertical || rowHeightPx) {
+    if (rowHeightPx) {
       setGridBox(null)
       return
     }
@@ -224,6 +223,28 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     return max
   }, [data, index, isVertical])
 
+  // Horizontal layout's category axis (X) has the mirror-image problem:
+  // Recharts' default `interval="preserveEnd"` guesses how many ticks fit
+  // from an internal estimate that doesn't match our actual font/weight,
+  // so on tick-dense charts (many weeks/months) it can leave two adjacent
+  // labels closer together than their own rendered width — visible
+  // overlap. Measuring the real widest label and comparing it against the
+  // real per-category slot width lets us pick an `interval` that
+  // guarantees shown labels never touch, instead of trusting the guess.
+  const longestXCategoryLabelPx = React.useMemo(() => {
+    if (isVertical) return 0
+    let max = 0
+    for (const row of data) {
+      const w = measureTextWidth(truncateLabel(String(row[index] ?? '')), CATEGORY_TICK_FONT)
+      if (w > max) max = w
+    }
+    return max
+  }, [data, index, isVertical])
+  const categoryInterval =
+    !isVertical && containerWidth > 0 && data.length > 0
+      ? Math.max(0, Math.ceil((longestXCategoryLabelPx + 12) / (containerWidth / data.length)) - 1)
+      : 0
+
   // Effective category-axis (label column) width for THIS render. Sized to
   // the measured longest label + a small gap, NOT the raw prop — so short
   // labels no longer reserve a wide, mostly-empty column (the "excessive
@@ -254,7 +275,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     : (value: string) => truncateLabel(value)
 
   const plot = (
-    <ResponsiveContainer width="100%" height="100%" className={isVertical ? undefined : className}>
+    <ResponsiveContainer width="100%" height="100%">
       <RBarChart
         data={data}
         layout={isVertical ? 'vertical' : 'horizontal'}
@@ -262,13 +283,10 @@ export const CustomBarChart = React.memo(function CustomBarChart({
           top: 16,
           right: isVertical ? 24 : 10,
           left: 4,
-          // Extra bottom room when an x-axis title is present: the
-          // legend (when shown) now renders as plain HTML below the
-          // chart, not inside this SVG margin, so this only needs to
-          // clear the tick labels + axis title themselves. Vertical
-          // layout's x-axis title is rendered externally (see below), so
-          // no bottom reservation is needed here for it.
-          bottom: isVertical ? 4 : xAxisLabel ? 28 : 4,
+          // Both axis titles render externally as plain HTML (see the
+          // component doc comment), so this margin only needs to clear the
+          // tick labels themselves — no reservation for title text.
+          bottom: 4,
         }}
         // Keyboard access + screen-reader announcements for every bar —
         // Recharts' first-party a11y layer.
@@ -289,8 +307,10 @@ export const CustomBarChart = React.memo(function CustomBarChart({
               // label (rendered just past the bar's end) never touches
               // or gets clipped by the axis's own max tick/edge — without
               // this, a bar that happens to reach exactly the auto-scaled
-              // axis max has nowhere for its label to sit.
-              domain={[0, (max: number) => Math.ceil(max * 1.15)]}
+              // axis max has nowhere for its label to sit. Kept small
+              // (8%, just enough for the label) rather than the 15% used
+              // before — any more reads as dead space past the longest bar.
+              domain={[0, (max: number) => Math.ceil(max * 1.08)]}
               tick={{ fontSize: 12, fontWeight: 500 }}
               className="fill-tremor-content dark:fill-dark-tremor-content"
               axisLine={false}
@@ -321,55 +341,21 @@ export const CustomBarChart = React.memo(function CustomBarChart({
               dataKey={index}
               tick={{ fontSize: 12, fontWeight: 500 }}
               tickFormatter={categoryTickFormatter}
+              interval={categoryInterval}
               className="fill-tremor-content dark:fill-dark-tremor-content"
               axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
               tickLine={false}
-              label={
-                xAxisLabel
-                  ? {
-                      value: xAxisLabel,
-                      position: 'bottom',
-                      offset: 2,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      // Recharts' <Label> hardcodes its own `fill="#808080"`
-                      // presentation attribute regardless of `className` —
-                      // a CSS class can't win against that without matching
-                      // specificity tricks, so set the color directly here
-                      // instead. `hsl(var(--foreground))` is the same token
-                      // this chart's external (vertical-layout) axis titles
-                      // resolve to, so every chart's axis title reads as one
-                      // consistent color instead of some looking gray.
-                      style: { fill: 'hsl(var(--foreground))' },
-                    }
-                  : undefined
-              }
             />
             <YAxis
               // Same headroom fix as the vertical layout's XAxis above —
               // room for the tallest bar's permanent value label so it
               // doesn't get clipped against the axis max / card edge.
-              domain={[0, (max: number) => Math.ceil(max * 1.15)]}
+              domain={[0, (max: number) => Math.ceil(max * 1.08)]}
               tick={{ fontSize: 12, fontWeight: 500 }}
               className="fill-tremor-content dark:fill-dark-tremor-content"
               axisLine={false}
               tickLine={false}
               width={effectiveYAxisWidth}
-              label={
-                yAxisLabel
-                  ? {
-                      value: yAxisLabel,
-                      angle: -90,
-                      position: 'insideLeft',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      // See the XAxis label above: fill has to be set here,
-                      // not via className, to beat Recharts' own hardcoded
-                      // fill attribute.
-                      style: { textAnchor: 'middle', fill: 'hsl(var(--foreground))' },
-                    }
-                  : undefined
-              }
             />
           </>
         )}
@@ -434,36 +420,16 @@ export const CustomBarChart = React.memo(function CustomBarChart({
     </ResponsiveContainer>
   )
 
-  if (!isVertical) {
-    return (
-      // `touch-pan-y`: a vertical finger drag scrolls the page as normal; a
-      // horizontal drag is delivered to the chart so dragging across it
-      // scrubs the tooltip continuously (same as the line chart).
-      <div ref={containerRef} className="flex h-full w-full touch-pan-y flex-col">
-        {plot}
-        {showLegend && bars.length > 0 && (
-          <CustomLegend
-            data={bars.map((b) => ({ name: b.category, value: 0 }))}
-            colors={bars.map((b) => b.color)}
-            showValues={false}
-            layout="wrap"
-            className="mt-1.5 shrink-0 justify-center"
-          />
-        )}
-      </div>
-    )
-  }
-
-  // Vertical (horizontal-bar) layout: axis titles are plain HTML flex
-  // siblings of the plot, not Recharts' in-SVG `label` — see the component
-  // doc comment. When `gridBox` is available (measured above), each title
-  // is positioned to center on the grid's own extent, not the wrapper's —
-  // pixel-perfect regardless of how much space Recharts reserves around the
-  // grid for its own tick text. Before the first measurement (or in
-  // `rowHeightPx` scroll mode, where "the grid" spans mostly off-screen
-  // content), fall back to centering on the visible box itself. When
-  // `rowHeightPx` is set, only the inner box holding the plot scrolls —
-  // both title strips are its siblings, so neither one scrolls with it.
+  // Axis titles are plain HTML flex siblings of the plot, not Recharts'
+  // in-SVG `label` — see the component doc comment. When `gridBox` is
+  // available (measured above), each title is positioned to center on the
+  // grid's own extent, not the wrapper's — pixel-perfect regardless of how
+  // much space Recharts reserves around the grid for its own tick text.
+  // Before the first measurement (or in `rowHeightPx` scroll mode, where
+  // "the grid" spans mostly off-screen content), fall back to centering on
+  // the visible box itself. When `rowHeightPx` is set, only the inner box
+  // holding the plot scrolls — both title strips are its siblings, so
+  // neither one scrolls with it.
   const plotBox = rowHeightPx ? (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div style={{ height: `${data.length * rowHeightPx}px` }}>{plot}</div>
