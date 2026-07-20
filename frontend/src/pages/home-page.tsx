@@ -161,14 +161,14 @@ export function HomePage() {
       {/* All 3 donuts side-by-side in one row, left-to-right order matching
           the reference: Internal v Client Utilization, Workforce by Seniority,
           Workforce Category. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
         <ChartCard
           title="Internal v Client Utilization"
           subtitle="Client Hours vs Internal Hours"
           isLoading={booking.isLoading}
           isError={booking.isError}
           isEmpty={utilizationSplitData.length === 0}
-          height="min-h-56"
+          height="h-56"
         >
           <CustomDonutChart
             data={utilizationSplitData}
@@ -186,7 +186,7 @@ export function HomePage() {
           isEmpty={seniorityCategoryData.length === 0}
           provisional
           provisionalNote="Seniority Category mapping is PROVISIONAL, not confirmed against real DAX."
-          height="min-h-56"
+          height="h-56"
         >
           <CustomDonutChart
             data={seniorityCategoryData}
@@ -201,7 +201,7 @@ export function HomePage() {
           isLoading={breakdowns.isLoading}
           isError={breakdowns.isError}
           isEmpty={categoryData.length === 0}
-          height="min-h-56"
+          height="h-56"
         >
           <CustomDonutChart
             data={categoryData}
@@ -211,7 +211,7 @@ export function HomePage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
         <Card
           className="group cursor-pointer rounded-2xl border-border bg-card p-5 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           role="button"

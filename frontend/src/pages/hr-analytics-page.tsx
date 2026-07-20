@@ -215,7 +215,7 @@ export function HrAnalyticsPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Month Wise Headcount"
           isLoading={trends.isLoading}
@@ -252,7 +252,7 @@ export function HrAnalyticsPage() {
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Attrition drill-down</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <ChartCard
             title="Month-Wise Resignation"
             isLoading={attrition.isLoading}

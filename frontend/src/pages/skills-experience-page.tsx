@@ -221,13 +221,13 @@ export function SkillsExperiencePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Skill Bifurcation by Experience"
           isLoading={isLoading}
           isError={isError}
           isEmpty={byExperience.data.length === 0}
-          height="min-h-80"
+          height="h-80"
           provisional
           provisionalNote="Experience Band bucket boundaries are PROVISIONAL, see the data-model skill."
         >
@@ -257,7 +257,7 @@ export function SkillsExperiencePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={bySeniority.data.length === 0}
-          height="min-h-80"
+          height="h-80"
           provisional
           provisionalNote="Seniority Category mapping is PROVISIONAL, see the data-model skill."
         >
@@ -278,13 +278,13 @@ export function SkillsExperiencePage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Skill Bifurcation by Region"
           isLoading={isLoading}
           isError={isError}
           isEmpty={byRegion.data.length === 0}
-          height="min-h-80"
+          height="h-80"
         >
           <CustomBarChart
             data={byRegion.data}
@@ -307,7 +307,7 @@ export function SkillsExperiencePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={experienceBandData.length === 0}
-          height="min-h-80"
+          height="h-80"
           provisional
           provisionalNote="Experience Band bucket boundaries are PROVISIONAL, see the data-model skill."
         >

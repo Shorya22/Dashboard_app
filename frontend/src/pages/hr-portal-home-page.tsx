@@ -169,7 +169,7 @@ export function HrPortalHomePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Status Split"
           subtitle="Active vs Inactive vs Strategic Pool"
@@ -199,7 +199,7 @@ export function HrPortalHomePage() {
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Workforce by Working Entity"
           subtitle={`${entitySegmentCount} entities — bar chart, not a donut, since that exceeds the design skill's 4-5 segment cap for part-to-whole circles`}

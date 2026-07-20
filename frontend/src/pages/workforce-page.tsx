@@ -182,13 +182,13 @@ export function WorkforcePage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Headcount by Seniority"
           isLoading={isLoading}
           isError={isError}
           isEmpty={seniorityData.length === 0}
-          height="min-h-80"
+          height="h-80"
           provisional
           provisionalNote="Recomputed client-side from the raw Seniorirty Level field per selected filters, with the same casing-collapse normalization as the backend's /roster/breakdowns (title-case + TBD restore) applied, so all 9 seniority categories render as 9 distinct bars matching the unfiltered totals."
         >
@@ -216,21 +216,21 @@ export function WorkforcePage() {
           isLoading={isLoading}
           isError={isError}
           isEmpty={typeData.length === 0}
-          height="min-h-80"
+          height="h-80"
         >
           <CustomDonutChart data={typeData} colors={typeColors} className="h-full" />
 
         </ChartCard>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 items-start gap-4">
         <ChartCard
           title="Workforce Details by Region"
           subtitle="AMER / APAC / EMEA / Hexaware — total headcount per region"
           isLoading={isLoading}
           isError={isError}
           isEmpty={regionCounts.every((r) => r.count === 0)}
-          height="min-h-96 sm:min-h-80"
+          height="h-96 sm:h-80"
         >
           {/* Single column on mobile — a hard-coded 2x2 grid squeezed each
               region's label + progress bar + count into a ~150px-wide

@@ -81,7 +81,7 @@ export function UtilizationOverviewPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ChartCard
           title="Weekly Utilization Trend"
           isLoading={overview.isLoading}
@@ -117,7 +117,7 @@ export function UtilizationOverviewPage() {
         isLoading={overview.isLoading}
         isError={overview.isError}
         isEmpty={rankingData.length === 0}
-        height="min-h-80"
+        height="h-80"
       >
         {/* 41 employees at the page's normal chart height would squash
             every bar into an unreadable ~11px sliver, silently hiding most
