@@ -117,7 +117,7 @@ export function UtilizationOverviewPage() {
         isLoading={overview.isLoading}
         isError={overview.isError}
         isEmpty={rankingData.length === 0}
-        height="h-80"
+        height="min-h-80"
       >
         {/* 41 employees at the page's normal chart height would squash
             every bar into an unreadable ~11px sliver, silently hiding most

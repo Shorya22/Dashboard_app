@@ -168,7 +168,7 @@ export function HomePage() {
           isLoading={booking.isLoading}
           isError={booking.isError}
           isEmpty={utilizationSplitData.length === 0}
-          height="h-56"
+          height="min-h-56"
         >
           <CustomDonutChart
             data={utilizationSplitData}
@@ -186,7 +186,7 @@ export function HomePage() {
           isEmpty={seniorityCategoryData.length === 0}
           provisional
           provisionalNote="Seniority Category mapping is PROVISIONAL, not confirmed against real DAX."
-          height="h-56"
+          height="min-h-56"
         >
           <CustomDonutChart
             data={seniorityCategoryData}
@@ -201,7 +201,7 @@ export function HomePage() {
           isLoading={breakdowns.isLoading}
           isError={breakdowns.isError}
           isEmpty={categoryData.length === 0}
-          height="h-56"
+          height="min-h-56"
         >
           <CustomDonutChart
             data={categoryData}
