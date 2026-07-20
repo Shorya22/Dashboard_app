@@ -132,6 +132,8 @@ export function UtilizationOverviewPage() {
           tooltipValueLabel="Utilization %"
           layout="vertical"
           yAxisWidth={140}
+          yAxisLabel="Employee"
+          xAxisLabel="Utilization %"
           showLegend={false}
           rowHeightPx={32}
           className="h-full"
