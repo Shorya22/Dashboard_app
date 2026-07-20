@@ -246,6 +246,7 @@ export function SkillsExperiencePage() {
                 stack
                 layout="vertical"
                 yAxisWidth={110}
+                yAxisLabel="Primary Skill"
                 xAxisLabel="Employees"
                 showLegend
                 tooltipValueLabel="Employees"
@@ -273,6 +274,7 @@ export function SkillsExperiencePage() {
                 stack
                 layout="vertical"
                 yAxisWidth={110}
+                yAxisLabel="Primary Skill"
                 xAxisLabel="Employees"
                 showLegend
                 tooltipValueLabel="Employees"
@@ -300,6 +302,7 @@ export function SkillsExperiencePage() {
                 stack
                 layout="vertical"
                 yAxisWidth={110}
+                yAxisLabel="Primary Skill"
                 xAxisLabel="Employees"
                 showLegend
                 tooltipValueLabel="Employees"

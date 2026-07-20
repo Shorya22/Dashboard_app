@@ -135,7 +135,7 @@ export const CustomLineChart = React.memo(function CustomLineChart({
             axisLine={false}
             tickLine={false}
             tickMargin={4}
-            label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, fontWeight: 500 } : undefined}
+            label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, fontWeight: 500, style: { textAnchor: 'middle' } } : undefined}
           />
           <Tooltip content={tooltipContent as unknown as any} cursor={{ strokeDasharray: '3 3' }} />
           <Line

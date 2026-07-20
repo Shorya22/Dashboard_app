@@ -161,15 +161,17 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   // measurement (containerWidth 0), fall back to the prop so there's no
   // flash of a wrong axis width.
   const LABEL_GAP_PX = 14
+  // Reserve extra left room for the rotated Y-axis title (when present) so it
+  // sits clear of the tick labels instead of overlapping them.
+  const yTitleSpacePx = isVertical && yAxisLabel ? 22 : 0
   const effectiveYAxisWidth =
     isVertical && containerWidth > 0
       ? Math.round(
           Math.max(
             56,
             Math.min(
-              longestLabelPx + LABEL_GAP_PX,
-              yAxisWidth,
-              containerWidth * 0.42,
+              longestLabelPx + LABEL_GAP_PX + yTitleSpacePx,
+              containerWidth * 0.44,
             ),
           ),
         )
@@ -185,7 +187,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   // is `effectiveYAxisWidth` (not the raw prop — see above), so the char
   // budget scales down with it on mobile instead of overflowing.
   const categoryTickFormatter = isVertical
-    ? (value: string) => truncateLabel(value, Math.max(4, Math.floor(effectiveYAxisWidth / 6)))
+    ? (value: string) => truncateLabel(value, Math.max(4, Math.floor((effectiveYAxisWidth - yTitleSpacePx) / 6)))
     : (value: string) => truncateLabel(value)
 
   return (
@@ -243,7 +245,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
                 axisLine={{ className: 'stroke-tremor-border dark:stroke-dark-tremor-border' } as never}
                 tickLine={false}
                 width={effectiveYAxisWidth}
-                label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13 } : undefined}
+                label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, style: { textAnchor: 'middle' } } : undefined}
               />
             </>
           ) : (
@@ -267,7 +269,7 @@ export const CustomBarChart = React.memo(function CustomBarChart({
                 axisLine={false}
                 tickLine={false}
                 width={effectiveYAxisWidth}
-                label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13 } : undefined}
+                label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft', fontSize: 13, style: { textAnchor: 'middle' } } : undefined}
               />
             </>
           )}
