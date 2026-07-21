@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Users, UserCheck, UserX, UserPlus, UserMinus, TrendingDown, Layers } from 'lucide-react'
+import { Users, UserCheck, UserMinus, TrendingDown, Target } from 'lucide-react'
 import {
   flexRender,
   getCoreRowModel,
@@ -14,7 +14,7 @@ import { CustomLineChart } from '@/components/dashboard/custom-line-chart'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
 import { Skeleton } from '@/components/ui/skeleton'
-import { type EmployeeRecord } from '@/lib/roster-api'
+import { useRosterBreakdowns, type EmployeeRecord } from '@/lib/roster-api'
 import { VOLUNTARY_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { applyEmployeeFilters } from '@/lib/employee-filters'
@@ -54,6 +54,7 @@ const exitColumns: ColumnDef<EmployeeTableRow>[] = [
 export function HrAnalyticsPage() {
   const { summary, trends, attrition, employeesQuery, filters, setFilter, filterDefs, monthFilter } =
     useHrAnalyticsFilters()
+  const breakdowns = useRosterBreakdowns()
 
   // Status/Department/Region filter the roster directly (EmployeeRecord
   // carries those fields), so Total/Active/Inactive are recomputed from
@@ -82,11 +83,6 @@ export function HrAnalyticsPage() {
     filters,
     summary.data?.active_employees,
     filteredEmployees.filter((e) => e.status === 'Active').length,
-  )
-  const inactiveEmployees = demoHeadcount(
-    filters,
-    summary.data?.inactive_employees,
-    filteredEmployees.filter((e) => e.status === 'Inactive').length,
   )
 
   // Memoized so an unrelated page re-render (e.g. the exits table below
@@ -182,7 +178,7 @@ export function HrAnalyticsPage() {
     <div className="space-y-5">
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Total Employees"
           value={employeesQuery.data ? totalEmployees : '—'}
@@ -198,22 +194,6 @@ export function HrAnalyticsPage() {
           iconTone="emerald"
         />
         <KpiCard
-          label="Inactive"
-          value={employeesQuery.data ? inactiveEmployees : '—'}
-          loading={employeesQuery.isLoading}
-          icon={UserX}
-          iconTone="red"
-        />
-        <KpiCard
-          label="Joiners"
-          value={summary.data?.joiners ?? '—'}
-          loading={summary.isLoading}
-          provisional
-          provisionalNote="Date-based (DOJ), not exposed on the employee directory row — not affected by Status/Department/Region filters above."
-          icon={UserPlus}
-          iconTone="emerald"
-        />
-        <KpiCard
           label="Exits"
           value={summary.data?.exits ?? '—'}
           loading={summary.isLoading}
@@ -223,21 +203,19 @@ export function HrAnalyticsPage() {
           iconTone="red"
         />
         <KpiCard
+          label="Strategic Pool"
+          value={breakdowns.data?.strategic_pool ?? '—'}
+          loading={breakdowns.isLoading}
+          icon={Target}
+          iconTone="blue"
+        />
+        <KpiCard
           label="Attrition %"
-          value={summary.data ? `${summary.data.attrition_pct.toFixed(1)}%` : '—'}
+          value={summary.data ? `${summary.data.attrition_pct.toFixed(2)}%` : '—'}
           loading={summary.isLoading}
           provisional
           provisionalNote="Attrition % measure is PROVISIONAL, see the data-model skill. Also not affected by the filters above — see in-code note."
           icon={TrendingDown}
-          iconTone="blue"
-        />
-        <KpiCard
-          label="Closing Headcount"
-          value={summary.data?.closing_headcount ?? '—'}
-          loading={summary.isLoading}
-          provisional
-          provisionalNote="Server-computed month-end headcount, not exposed per-row on the employee directory — not affected by Status/Department/Region filters above."
-          icon={Layers}
           iconTone="blue"
         />
       </div>

@@ -25,7 +25,7 @@ const pageTitles: Record<string, string> = {
 const pageSubtitles: Record<string, string> = {
   '/': 'Workforce overview at a glance',
   '/hr-portal': 'Workforce composition overview — status, region, entity, and experience',
-  '/hr-analytics': 'Headcount, joiners/exits, and attrition',
+  '/hr-analytics': 'Headcount, exits, and attrition',
   '/workforce': 'Seniority, type, and regional distribution',
   '/skills-experience': 'Skills and experience breakdown across workforce segments',
   '/employee-directory': 'Browse employees and their current roles',

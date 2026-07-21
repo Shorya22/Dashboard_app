@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core import demo_overrides  # TEMPORARY demo branch only
 from app.core.security import get_current_user
 from app.db.models import User
 from app.models.utilization import (
@@ -47,13 +48,14 @@ router = APIRouter(prefix="/utilization", tags=["utilization"])
 def utilization_summary(user: User = Depends(get_current_user)) -> UtilizationSummary:
     try:
         df = get_booking_df()
-        return UtilizationSummary(
+        summary = UtilizationSummary(
             total_employees=booking_metrics.get_total_employees(df),
             total_hours=booking_metrics.get_total_hours(df),
             client_hours=booking_metrics.get_client_hours(df),
             internal_hours=booking_metrics.get_internal_hours(df),
             total_projects=booking_metrics.get_total_projects(df),
         )
+        return demo_overrides.apply_utilization(summary)
     except Exception:
         logger.exception("utilization_summary: failed to compute utilization summary")
         raise HTTPException(status_code=500, detail="Failed to compute utilization summary")
@@ -208,7 +210,8 @@ def utilization_holdings_projects(user: User = Depends(get_current_user)) -> Hol
 def utilization_overview(user: User = Depends(get_current_user)) -> UtilizationOverview:
     try:
         df = get_utilization_ground_truth_df()
-        return UtilizationOverview(**utilization_metrics.get_utilization_overview(df))
+        overview = UtilizationOverview(**utilization_metrics.get_utilization_overview(df))
+        return demo_overrides.apply_utilization(overview)
     except Exception:
         logger.exception("utilization_overview: failed to compute utilization overview")
         raise HTTPException(status_code=500, detail="Failed to compute utilization overview")

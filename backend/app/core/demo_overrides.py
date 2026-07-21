@@ -58,6 +58,17 @@ INACTIVE = EXITED = 17
 CLOSING = ACTIVE + STRATEGIC  # 38, as of today
 OPENING = 2
 JOINERS = CLOSING - OPENING + EXITED  # 53
+# Split of the 17 exits, as requested.
+VOLUNTARY = 4
+INVOLUNTARY = 13
+
+# Utilization pages: the booking sheet's distinct-employee count (46 on
+# /utilization/summary, 41 on /utilization/overview) is a DIFFERENT
+# measure from roster headcount and normally differs on purpose. The
+# requester asked for one number across the demo, so both are forced to
+# TOTAL. Hours/utilization %/project figures still derive from the real
+# booking rows, so per-employee averages implied by these cards are off.
+UTILIZATION_OVERRIDES: dict[str, object] = {"total_employees": TOTAL}
 
 SUMMARY_OVERRIDES: dict[str, int | float] = {
     "active_employees": ACTIVE,
@@ -70,10 +81,12 @@ SUMMARY_OVERRIDES: dict[str, int | float] = {
     # Recomputed from the demo numbers so each percentage matches its own
     # numerator and denominator on screen.
     "active_pct": ACTIVE / TOTAL * 100,
-    "attrition_pct": EXITED / TOTAL * 100,
+    # Requested as 7.27% — i.e. voluntary leavers only (4/55), not all 17
+    # exits over headcount, which would read 30.9%.
+    "attrition_pct": 7.27,
     # Must sum to Exits.
-    "voluntary_leavers": 9,
-    "involuntary_leavers": 8,
+    "voluntary_leavers": VOLUNTARY,
+    "involuntary_leavers": INVOLUNTARY,
     # Padded from 47/3 so GCC + Non GCC = Total.
     "gcc_employees": 51,
     "non_gcc_employees": 4,
@@ -139,17 +152,17 @@ _MONTHLY = [
     # (month,      joiners, exits, closing)
     ("Jul 2025", 3, 0, 5),
     ("Aug 2025", 4, 1, 8),
-    ("Sep 2025", 4, 0, 12),
-    ("Oct 2025", 4, 1, 15),
-    ("Nov 2025", 5, 1, 19),
-    ("Dec 2025", 6, 1, 24),
-    ("Jan 2026", 7, 2, 29),
-    ("Feb 2026", 5, 1, 33),
-    ("Mar 2026", 5, 2, 36),
-    ("Apr 2026", 3, 4, 35),
-    ("May 2026", 3, 1, 37),
-    ("Jun 2026", 2, 2, 37),
-    ("Jul 2026", 2, 1, 38),
+    ("Sep 2025", 5, 0, 13),
+    ("Oct 2025", 3, 0, 16),
+    ("Nov 2025", 5, 1, 20),
+    ("Dec 2025", 6, 1, 25),
+    ("Jan 2026", 7, 2, 30),
+    ("Feb 2026", 6, 1, 35),
+    ("Mar 2026", 5, 2, 38),
+    ("Apr 2026", 4, 1, 41),
+    ("May 2026", 3, 1, 43),
+    ("Jun 2026", 2, 1, 44),  # requested: June peaks at 44
+    ("Jul 2026", 0, 6, 38),  # requested: current month lands on 38
 ]
 
 TREND_OVERRIDES: dict[str, object] = {
@@ -172,7 +185,7 @@ ATTRITION_OVERRIDES: dict[str, object] = {
         {"month": month, "exits": exits} for month, _, exits, _ in _MONTHLY
     ],
     # Must match voluntary_leavers / involuntary_leavers above, and sum to Exits.
-    "voluntary_involuntary_split": {"Voluntary": 9, "Involuntary": 8},
+    "voluntary_involuntary_split": {"Voluntary": VOLUNTARY, "Involuntary": INVOLUNTARY},
 }
 
 
@@ -205,3 +218,7 @@ def apply_trends(model):
 
 def apply_attrition_detail(model):
     return _apply(model, ATTRITION_OVERRIDES)
+
+
+def apply_utilization(model):
+    return _apply(model, UTILIZATION_OVERRIDES)
