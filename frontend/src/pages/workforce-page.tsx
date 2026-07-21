@@ -5,7 +5,8 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
-import { useRosterBreakdowns, useRosterEmployeesAll } from '@/lib/roster-api'
+import { useRosterBreakdowns, useRosterEmployeesAll, useRosterSummary } from '@/lib/roster-api'
+import { demoHeadcount, isUnfiltered } from '@/lib/demo-headcount' // TEMPORARY demo branch only
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import { TYPE_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import {
@@ -42,6 +43,7 @@ function normalizeSeniorityLabel(value: string): string {
 export function WorkforcePage() {
   
   const breakdowns = useRosterBreakdowns()
+  const summary = useRosterSummary()
   const employeesQuery = useRosterEmployeesAll()
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
@@ -89,9 +91,17 @@ export function WorkforcePage() {
   const isLoading = employeesQuery.isLoading
   const isError = employeesQuery.isError
 
-  const totalEmployees = filtered.length
-  const activeEmployees = filtered.filter((e) => e.status === 'Active').length
-  const inactiveEmployees = filtered.filter((e) => e.status === 'Inactive').length
+  const totalEmployees = demoHeadcount(filters, summary.data?.total_employees, filtered.length)
+  const activeEmployees = demoHeadcount(
+    filters,
+    summary.data?.active_employees,
+    filtered.filter((e) => e.status === 'Active').length,
+  )
+  const inactiveEmployees = demoHeadcount(
+    filters,
+    summary.data?.inactive_employees,
+    filtered.filter((e) => e.status === 'Inactive').length,
+  )
   const departmentsCount = distinctDepartmentsCount(filtered)
   const projectsCount = distinctValues(filtered, 'client').length
 
@@ -99,23 +109,34 @@ export function WorkforcePage() {
     () =>
       withTruncatedLabels(
         Object.entries(
-          groupCount(
-            filtered.map((e) => normalizeSeniorityLabel(e.seniority_level ?? 'Seniority TBD')),
-          ),
+          // TEMPORARY demo branch only — unfiltered, take the (overridden)
+          // server breakdown so this chart totals the same as the cards.
+          isUnfiltered(filters) && breakdowns.data?.headcount_by_seniority
+            ? breakdowns.data.headcount_by_seniority
+            : groupCount(
+                filtered.map((e) =>
+                  normalizeSeniorityLabel(e.seniority_level ?? 'Seniority TBD'),
+                ),
+              ),
         )
           .map(([name, value]) => ({ name, value }))
           .sort((a, b) => b.value - a.value),
         'name',
       ),
-    [filtered],
+    [filtered, filters, breakdowns.data],
   )
 
   const typeData = React.useMemo(
     () =>
-      Object.entries(groupCount(filtered.map((e) => e.type ?? 'Type TBD')))
+      Object.entries(
+        // TEMPORARY demo branch only — see seniorityData above.
+        isUnfiltered(filters) && breakdowns.data?.workforce_by_type
+          ? breakdowns.data.workforce_by_type
+          : groupCount(filtered.map((e) => e.type ?? 'Type TBD')),
+      )
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => (a.name === 'GCC' ? -1 : b.name === 'GCC' ? 1 : 0)),
-    [filtered],
+    [filtered, filters, breakdowns.data],
   )
   const typeColors = React.useMemo(
     () =>
@@ -128,7 +149,12 @@ export function WorkforcePage() {
 
   const regionCounts = REGION_QUADRANTS.map((region) => ({
     region,
-    count: filtered.filter((e) => e.region === region).length,
+    // TEMPORARY demo branch only — see seniorityData above.
+    count: demoHeadcount(
+      filters,
+      breakdowns.data?.headcount_by_region?.[region],
+      filtered.filter((e) => e.region === region).length,
+    ),
   }))
 
   return (

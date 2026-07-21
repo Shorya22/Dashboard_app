@@ -5,7 +5,8 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
-import { useRosterEmployeesAll } from '@/lib/roster-api'
+import { useRosterEmployeesAll, useRosterSummary, useRosterBreakdowns } from '@/lib/roster-api'
+import { demoHeadcount, isUnfiltered } from '@/lib/demo-headcount' // TEMPORARY demo branch only
 import { STATUS_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
@@ -30,6 +31,8 @@ import {
 
 export function HrPortalHomePage() {
   const employeesQuery = useRosterEmployeesAll()
+  const summary = useRosterSummary()
+  const breakdowns = useRosterBreakdowns()
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
   const [filters, setFilters] = React.useState<FilterValues>({
@@ -71,8 +74,12 @@ export function HrPortalHomePage() {
     [employees, filters],
   )
 
-  const totalEmployees = filtered.length
-  const activeEmployees = filtered.filter((e) => e.status === 'Active').length
+  const totalEmployees = demoHeadcount(filters, summary.data?.total_employees, filtered.length)
+  const activeEmployees = demoHeadcount(
+    filters,
+    summary.data?.active_employees,
+    filtered.filter((e) => e.status === 'Active').length,
+  )
   const departmentsCount = distinctDepartmentsCount(filtered)
   // Projects mirrors the real DAX's naive DISTINCTCOUNT over the raw,
   // messy `Client as on June 2026` string field (see data-model skill) —
@@ -81,10 +88,14 @@ export function HrPortalHomePage() {
 
   const statusData = React.useMemo(
     () =>
-      Object.entries(groupCount(filtered.map((e) => e.status ?? 'Unknown'))).map(
-        ([name, value]) => ({ name, value }),
-      ),
-    [filtered],
+      Object.entries(
+        // TEMPORARY demo branch only — unfiltered, use the overridden
+        // server breakdown so this totals the same as the cards.
+        isUnfiltered(filters) && breakdowns.data?.status_split
+          ? breakdowns.data.status_split
+          : groupCount(filtered.map((e) => e.status ?? 'Unknown')),
+      ).map(([name, value]) => ({ name, value })),
+    [filtered, filters, breakdowns.data],
   )
   const statusColors = React.useMemo(
     () => colorsForLabels(statusData.map((d) => d.name), STATUS_COLORS),
@@ -94,23 +105,29 @@ export function HrPortalHomePage() {
   const regionData = React.useMemo(
     () =>
       withTruncatedLabels(
-        Object.entries(groupCount(filtered.map((e) => e.region ?? 'Region TBD'))).map(
-          ([name, value]) => ({ name, value }),
-        ),
+        Object.entries(
+          // TEMPORARY demo branch only — see statusData above.
+          isUnfiltered(filters) && breakdowns.data?.headcount_by_region
+            ? breakdowns.data.headcount_by_region
+            : groupCount(filtered.map((e) => e.region ?? 'Region TBD')),
+        ).map(([name, value]) => ({ name, value })),
         'name',
       ),
-    [filtered],
+    [filtered, filters, breakdowns.data],
   )
 
   const entityData = React.useMemo(
     () =>
       withTruncatedLabels(
         Object.entries(
-          groupCount(filtered.map((e) => e.working_entity ?? 'Entity TBD')),
+          // TEMPORARY demo branch only — see statusData above.
+          isUnfiltered(filters) && breakdowns.data?.workforce_by_working_entity
+            ? breakdowns.data.workforce_by_working_entity
+            : groupCount(filtered.map((e) => e.working_entity ?? 'Entity TBD')),
         ).map(([name, value]) => ({ name, value })),
         'name',
       ),
-    [filtered],
+    [filtered, filters, breakdowns.data],
   )
   // Working Entity has 8 distinct real values (AMER, DTAU, DTDE, DTIE,
   // DTNL, DTUK, Entity TBD, Hexaware) — above the dashboard-design skill's
@@ -124,11 +141,14 @@ export function HrPortalHomePage() {
     () =>
       withTruncatedLabels(
         Object.entries(
-          groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience))),
+          // TEMPORARY demo branch only — see statusData above.
+          isUnfiltered(filters) && breakdowns.data?.workforce_by_experience_band
+            ? breakdowns.data.workforce_by_experience_band
+            : groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience))),
         ).map(([name, value]) => ({ name, value })),
         'name',
       ),
-    [filtered],
+    [filtered, filters, breakdowns.data],
   )
 
   const isLoading = employeesQuery.isLoading

@@ -5,6 +5,7 @@ import { KpiCard } from '@/components/dashboard/kpi-card'
 import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { useRosterEmployeesAll, useRosterSummary, type EmployeeRecord } from '@/lib/roster-api'
+import { demoHeadcount } from '@/lib/demo-headcount' // TEMPORARY demo branch only
 import { colorsForLabels, EXPERIENCE_BAND_COLORS, REGION_COLORS, SENIORITY_CATEGORY_COLORS } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
@@ -181,7 +182,12 @@ export function SkillsExperiencePage() {
     [filtered],
   )
 
-  const totalEmployees = filtered.length
+  // TEMPORARY demo branch only — see lib/demo-headcount.ts
+  const totalEmployees = demoHeadcount(
+    filters,
+    summaryQuery.data?.total_employees,
+    filtered.length,
+  )
   const departmentsCount = distinctDepartmentsCount(filtered)
   // Confirmed real DAX measure (`get_skills_covered`, DISTINCTCOUNT of the
   // `Skill` column excluding blank/TBD-containing values). Unfiltered

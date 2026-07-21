@@ -18,6 +18,7 @@ import { type EmployeeRecord } from '@/lib/roster-api'
 import { VOLUNTARY_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { applyEmployeeFilters } from '@/lib/employee-filters'
+import { demoHeadcount } from '@/lib/demo-headcount' // TEMPORARY demo branch only
 import { useHrAnalyticsFilters } from '@/lib/use-hr-analytics-filters'
 
 // EmployeeRecord doesn't carry LWD/Reason for Leaving (see employee-filters.ts
@@ -76,9 +77,17 @@ export function HrAnalyticsPage() {
       }),
     [employees, filters],
   )
-  const totalEmployees = filteredEmployees.length
-  const activeEmployees = filteredEmployees.filter((e) => e.status === 'Active').length
-  const inactiveEmployees = filteredEmployees.filter((e) => e.status === 'Inactive').length
+  const totalEmployees = demoHeadcount(filters, summary.data?.total_employees, filteredEmployees.length)
+  const activeEmployees = demoHeadcount(
+    filters,
+    summary.data?.active_employees,
+    filteredEmployees.filter((e) => e.status === 'Active').length,
+  )
+  const inactiveEmployees = demoHeadcount(
+    filters,
+    summary.data?.inactive_employees,
+    filteredEmployees.filter((e) => e.status === 'Inactive').length,
+  )
 
   // Memoized so an unrelated page re-render (e.g. the exits table below
   // changing its internal TanStack Table sort state) doesn't recreate these

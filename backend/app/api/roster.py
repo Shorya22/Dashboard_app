@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core import demo_overrides  # TEMPORARY demo branch only — see module docstring
 from app.core.security import get_current_user
 from app.db.models import User
 from app.models.roster import (
@@ -33,7 +34,7 @@ router = APIRouter(prefix="/roster", tags=["roster"])
 def roster_summary(user: User = Depends(get_current_user)) -> RosterSummary:
     try:
         df = get_roster_df()
-        return RosterSummary(
+        summary = RosterSummary(
             active_employees=roster_metrics.get_active_employees(df),
             inactive_employees=roster_metrics.get_inactive_employees(df),
             total_employees=roster_metrics.get_total_employees(df),
@@ -58,6 +59,7 @@ def roster_summary(user: User = Depends(get_current_user)) -> RosterSummary:
             departments=roster_metrics.get_departments(df),
             skills_covered=roster_metrics.get_skills_covered(df),
         )
+        return demo_overrides.apply_summary(summary)
     except Exception:
         logger.exception("roster_summary: failed to compute roster summary")
         raise HTTPException(status_code=500, detail="Failed to compute roster summary")
@@ -67,7 +69,7 @@ def roster_summary(user: User = Depends(get_current_user)) -> RosterSummary:
 def roster_breakdowns(user: User = Depends(get_current_user)) -> RosterBreakdowns:
     try:
         df = get_roster_df()
-        return RosterBreakdowns(
+        breakdowns = RosterBreakdowns(
             strategic_pool=roster_metrics.get_strategic_pool(df),
             workforce_category_split=roster_metrics.get_workforce_category_split(df),
             status_split=roster_metrics.get_status_split(df),
@@ -80,6 +82,7 @@ def roster_breakdowns(user: User = Depends(get_current_user)) -> RosterBreakdown
                 df
             ),
         )
+        return demo_overrides.apply_breakdowns(breakdowns)
     except Exception:
         logger.exception("roster_breakdowns: failed to compute roster breakdowns")
         raise HTTPException(status_code=500, detail="Failed to compute roster breakdowns")
@@ -89,10 +92,11 @@ def roster_breakdowns(user: User = Depends(get_current_user)) -> RosterBreakdown
 def roster_trends(user: User = Depends(get_current_user)) -> RosterTrends:
     try:
         df = get_roster_df()
-        return RosterTrends(
+        trends = RosterTrends(
             month_wise_closing_headcount=roster_metrics.get_month_wise_closing_headcount(df),
             monthly_joiners_vs_leavers=roster_metrics.get_monthly_joiners_vs_leavers(df),
         )
+        return demo_overrides.apply_trends(trends)
     except Exception:
         logger.exception("roster_trends: failed to compute roster trends")
         raise HTTPException(status_code=500, detail="Failed to compute roster trends")
@@ -102,11 +106,12 @@ def roster_trends(user: User = Depends(get_current_user)) -> RosterTrends:
 def roster_attrition_detail(user: User = Depends(get_current_user)) -> RosterAttritionDetail:
     try:
         df = get_roster_df()
-        return RosterAttritionDetail(
+        detail = RosterAttritionDetail(
             month_wise_resignation=roster_metrics.get_month_wise_resignation(df),
             voluntary_involuntary_split=roster_metrics.get_voluntary_involuntary_split(df),
             exits_table=roster_metrics.get_exits_table(df),
         )
+        return demo_overrides.apply_attrition_detail(detail)
     except Exception:
         logger.exception("roster_attrition_detail: failed to compute attrition detail")
         raise HTTPException(status_code=500, detail="Failed to compute attrition detail")
