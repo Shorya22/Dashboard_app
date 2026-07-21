@@ -188,9 +188,9 @@ def test_upload_rejects_bad_file_with_422_and_keeps_active_unchanged(client):
         files=_files(_real_roster_bytes()),
         headers=_auth(token),
     )
-    # then a broken one
+    # then a broken one (blank primary key -> hard error)
     df = pd.read_excel(REAL_ROSTER)
-    df.loc[0, "Total Experience"] = df.loc[0, "Total Experience"] + 99
+    df.loc[0, "NEW_EMP_ID"] = None
     resp = client.post(
         "/api/v1/data/upload/roster",
         files=_files(_xlsx_bytes(df)),
@@ -261,7 +261,7 @@ def test_schema_endpoint_serializes_contract(client):
     assert body["file_type"] == "roster"
     grade = next(c for c in body["columns"] if c["name"] == "GRADE")
     assert "Grade TBD" in grade["allowed_values"]
-    assert any(r["name"] == "total_experience_sum" for r in body["business_rules"])
+    assert any(r["name"] == "doj_dept_date_or_token" for r in body["business_rules"])
 
 
 def test_template_download_has_expected_columns(client):

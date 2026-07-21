@@ -128,14 +128,15 @@ def test_roster_unknown_region_is_warning(tmp_path):
     )
 
 
-def test_roster_total_experience_mismatch(tmp_path):
+def test_roster_total_experience_taken_as_given(tmp_path):
+    # v5 (business owner's decision): experience values are taken exactly
+    # as supplied — Total Experience is never reconciled against
+    # Hexaware + Before, since the app only reads it and never recomputes it.
     df = _read_real("roster")
     df.loc[0, "Total Experience"] = df.loc[0, "Total Experience"] + 5.0
     report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
-    assert "total_experience_sum" in _rules_fired(report)
-    bad = [i for i in report.errors if i.rule == "total_experience_sum"]
-    assert bad[0].row == 0
+    assert report.passed, [i.to_dict() for i in report.errors]
+    assert "total_experience_sum" not in _rules_fired(report)
 
 
 def test_roster_duplicate_new_emp_id(tmp_path):
@@ -206,16 +207,16 @@ def test_roster_blank_experience_defaults_to_zero(tmp_path):
     assert len(defaulted) == 3
 
 
-def test_roster_partial_blank_experience_still_caught_by_sum_rule(tmp_path):
-    # Defaulting must not hide a genuine inconsistency: if only one operand
-    # is blank and the remaining numbers don't add up, the sum rule fires.
+def test_roster_partial_blank_experience_accepted_as_given(tmp_path):
+    # A partly-filled experience row (blank operand + a Total that doesn't
+    # match the parts) is accepted: the blank defaults to 0 and the stated
+    # Total is kept verbatim. No reconciliation is performed.
     df = _read_real("roster")
     df.loc[0, "Hexaware Experience (Years)"] = None
     df.loc[0, "Before Hexaware Experience"] = 7.4
-    df.loc[0, "Total Experience"] = 0.01  # 0 + 7.4 != 0.01
+    df.loc[0, "Total Experience"] = 0.01
     report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
-    assert "total_experience_sum" in _rules_fired(report)
+    assert report.passed, [i.to_dict() for i in report.errors]
 
 
 def test_roster_blank_new_emp_id_still_blocks(tmp_path):

@@ -31,7 +31,9 @@ file_type: roster
 # blank that makes numbers WRONG rather than merely incomplete, since
 # `get_total_employees` is nunique(dropna=True) and would drop that
 # employee from every headcount.
-schema_version: 4
+# v5 (2026-07-21): removed the Total Experience sum cross-check — experience
+# is taken exactly as given (blank -> 0), never recomputed or reconciled.
+schema_version: 5
 display_name: Employee Roster
 source_file: "DEPT - Master Data(Sheet1).xlsx"
 read:
@@ -201,13 +203,13 @@ columns:
     min: 0
 
 business_rules:
-  - name: total_experience_sum
-    type: sum_equals
-    target: "Total Experience"
-    addends: ["Hexaware Experience (Years)", "Before Hexaware Experience"]
-    tolerance: 0.01
-    severity: error
-    reason: "Total Experience must equal Hexaware Experience + Before Hexaware Experience"
+  # v5: the Total Experience = Hexaware + Before cross-check was REMOVED at
+  # the business owner's direction. Experience values are taken exactly as
+  # given in the file (blank -> 0 via the column defaults above); the app
+  # never recomputes Total Experience, it only reads it, so trusting the
+  # source value is safe for the dashboard. Trade-off accepted knowingly:
+  # a row whose Total disagrees with its parts is no longer flagged, so it
+  # will chart in whatever experience band its stated Total implies.
 
   - name: doj_dept_date_or_token
     type: date_or_token
