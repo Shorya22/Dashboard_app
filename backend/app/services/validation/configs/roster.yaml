@@ -1,0 +1,191 @@
+# =============================================================================
+# Roster dataset validation contract
+# =============================================================================
+# The single source of truth for what a valid employee-roster upload looks
+# like. The validation ENGINE (engine.py / rules.py) is generic and reads
+# this file — it contains no roster-specific knowledge. To change what is
+# valid (add a GRADE, allow a new Region, adjust a rule), edit THIS file and
+# bump schema_version. Never edit Python for a value/rule change.
+#
+# Built from the 2026-07-21 full-file audit (see .claude/skills/data-model).
+# `required`/`nullable`/`allowed_values` reflect the REAL current file and
+# which columns the app actually reads today.
+#
+# allowed_values is set ONLY on genuinely closed, stable sets (grade, status,
+# type, region, working entity, declaration). Open-growth columns (skills,
+# clients, PMs, designations, markets, locations, names) are intentionally
+# left unconstrained so a legitimate new value never blocks an upload.
+
+file_type: roster
+schema_version: 1
+display_name: Employee Roster
+source_file: "DEPT - Master Data(Sheet1).xlsx"
+read:
+  sheet: 0
+  header: 0
+allow_unknown_columns: false
+
+columns:
+  # --- identifiers ---
+  - name: "EMP ID"
+    dtype: string          # legacy id, mixed int/str in source — never math on it
+    required: false        # present in file but never read by app code
+    nullable: false
+  - name: "NEW_EMP_ID"
+    dtype: int             # primary key used by every roster metric
+    required: true
+    nullable: false
+    unique: true
+    min: 0
+  - name: "NAME"
+    dtype: string
+    required: true
+    nullable: false
+
+  # --- classification (closed sets: allowed_values enforced) ---
+  - name: "GRADE"
+    dtype: categorical
+    required: true
+    nullable: false
+    allowed_values: ["G3A", "G4", "G5", "G6", "G8", "Grade TBD"]
+  - name: "Working Entity"
+    dtype: categorical
+    required: true
+    nullable: false
+    allowed_values: ["AMER", "DTNL", "DTIE", "DTDE", "DTUK", "DTAU", "Entity TBD"]
+  - name: "Region"
+    dtype: categorical
+    required: true
+    nullable: false
+    allowed_values: ["EMEA", "AMER", "APAC", "Region TBD"]
+  - name: "Type"
+    dtype: categorical
+    required: true
+    nullable: false
+    allowed_values: ["GCC", "Non GCC"]
+  - name: "Status"
+    dtype: categorical
+    required: true
+    nullable: false
+    allowed_values: ["Active", "Inactive", "Strategic Pool"]
+  - name: "Declaration Signed"
+    dtype: categorical
+    required: false        # never read by app code today
+    nullable: true         # ~20% blank in real file
+    allowed_values: ["Yes", "No", "Pending"]
+
+  # --- classification (open-growth: no allowed_values) ---
+  - name: "DEPUTATION"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Market"
+    dtype: categorical
+    required: false
+    nullable: false
+  - name: "Primary Skill"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Skill"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Designation"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Seniorirty Level"   # source-file typo kept verbatim — do not "fix"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Client as on June 2026"
+    dtype: string          # multi-value free text, "Client TBD" = bench
+    required: true
+    nullable: false
+  - name: "Project Manager"
+    dtype: string          # multi-value, "PM TBD" pairs with Client TBD
+    required: true
+    nullable: false
+  - name: "WORK_LOCATION"
+    dtype: categorical
+    required: false
+    nullable: false
+  - name: "SUPERVISOR (Hexaware)"
+    dtype: string
+    required: false
+    nullable: false
+  - name: "DEPT ID"
+    dtype: string          # work email — not a guaranteed-unique key
+    required: false
+    nullable: true
+
+  # --- dates (stored as DD-Mon-YY strings in source; validated as text,
+  #     with date-ness enforced by the date_or_token business rule where it
+  #     matters, matching how the app itself parses these with coerce) ---
+  - name: "DOJ (Hexaware)"
+    dtype: string
+    required: false
+    nullable: false
+  - name: "DOJ (DEPT)"
+    dtype: string          # real date OR the literal "TBD" (2 rows)
+    required: true
+    nullable: false
+  - name: "Today"
+    dtype: string          # snapshot "as of" date, constant across rows
+    required: true
+    nullable: false
+  - name: "LWD"
+    dtype: string          # last working day — blank unless Status=Inactive
+    required: true
+    nullable: true
+  - name: "Reason for Leaving"
+    dtype: categorical
+    required: true
+    nullable: true         # blank for active employees is expected
+    allowed_values: ["Voluntary", "Involuntary"]
+
+  # --- experience (numeric, non-negative) ---
+  - name: "Hexaware Experience (Years)"
+    dtype: float
+    required: true
+    nullable: false
+    min: 0
+  - name: "Before Hexaware Experience"
+    dtype: float
+    required: true
+    nullable: false
+    min: 0
+  - name: "Total Experience"
+    dtype: float
+    required: true
+    nullable: false
+    min: 0
+
+business_rules:
+  - name: total_experience_sum
+    type: sum_equals
+    target: "Total Experience"
+    addends: ["Hexaware Experience (Years)", "Before Hexaware Experience"]
+    tolerance: 0.01
+    severity: error
+    reason: "Total Experience must equal Hexaware Experience + Before Hexaware Experience"
+
+  - name: doj_dept_date_or_token
+    type: date_or_token
+    column: "DOJ (DEPT)"
+    allowed_tokens: ["TBD"]
+    allow_null: false
+    severity: error
+    reason: "DOJ (DEPT) must be a valid date or the literal 'TBD'"
+
+  # Soft rule (warning, not block): the model treats LWD and Status as
+  # independently-driven facts, so a mismatch is surfaced but never blocks.
+  - name: lwd_present_when_inactive
+    type: conditional_presence
+    when_column: "Status"
+    when_equals: "Inactive"
+    then_column: "LWD"
+    then: present
+    severity: warning
+    reason: "LWD is usually populated when Status is Inactive"

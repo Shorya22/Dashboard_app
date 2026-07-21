@@ -1,0 +1,107 @@
+# =============================================================================
+# Booking (time-booking) dataset validation contract
+# =============================================================================
+# Raw daily/weekly hours data — one row per employee/project/day/hours-type.
+# Drives all utilization and hours metrics. See roster.yaml header for how
+# this config is consumed (generic engine, edit-here-not-code).
+#
+# Built from the 2026-07-21 full-file audit. Note: this file has NO natural
+# single-row primary key (daily granularity means many legitimate rows share
+# Employee+Week+Project+Type), so no uniqueness check is defined — inventing
+# one would reject valid data.
+
+file_type: booking
+schema_version: 1
+display_name: Time-Booking Data
+source_file: "UTILIZATION DATA SHEET.xlsx"
+read:
+  sheet: 0
+  header: 0
+allow_unknown_columns: false
+
+columns:
+  # --- reporting hierarchy (open-growth: no allowed_values) ---
+  - name: "Region (EC)"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Market (EC)"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Segment (EC)"
+    dtype: categorical
+    required: false        # single-value (E&E) today, never read
+    nullable: false
+  - name: "Global Department"
+    dtype: categorical
+    required: false        # not read by booking metrics
+    nullable: false
+  - name: "Department"
+    dtype: categorical
+    required: true
+    nullable: false
+  - name: "Team (EC)"
+    dtype: categorical
+    required: true
+    nullable: false
+
+  # --- client / project ---
+  - name: "Holding"
+    dtype: categorical     # the clean, one-value-per-row client field
+    required: true
+    nullable: false
+  - name: "Project Name"
+    dtype: string
+    required: true
+    nullable: false
+  - name: "Project URL"
+    dtype: string
+    required: false
+    nullable: true
+
+  # --- employee (join key) ---
+  - name: "Employee"
+    dtype: string
+    required: true
+    nullable: false        # a row with no Employee is rejected, not dropped
+
+  # --- dates ---
+  - name: "Month"
+    dtype: date            # real datetime in source, not a display string
+    required: false
+    nullable: false
+  - name: "Monday of Week"
+    dtype: date
+    required: true
+    nullable: false
+  - name: "Date"
+    dtype: date
+    required: true
+    nullable: false
+
+  # --- hours ---
+  - name: "Booked Hours Type"
+    dtype: categorical
+    required: true
+    nullable: false
+    allowed_values: ["Client Hours", "Internal Hours"]
+  - name: "Employee Booked Hours"
+    dtype: float
+    required: true
+    nullable: false
+    min: 0                 # 0 is valid (logged, no work); negatives are not
+
+business_rules:
+  # Warning, not error: the current known-good file has 2 rows where Date
+  # is the Sunday immediately before its Monday of Week (a harmless
+  # boundary quirk). Blocking would reject re-uploading our own live data.
+  # The window is [-1, 6] days; anything further out is surfaced for review.
+  - name: date_within_week
+    type: date_within_offset
+    date_column: "Date"
+    base_column: "Monday of Week"
+    min_offset_days: -1
+    max_offset_days: 6
+    severity: warning
+    reason: "Date is outside the week it is bucketed under (Monday of Week)"

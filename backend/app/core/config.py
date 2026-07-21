@@ -61,6 +61,21 @@ class Settings:
         "DATABASE_URL", "sqlite:///./app/data/app.db"
     )
 
+    # --- Data upload / ingestion (Phase 8) ---
+    # Max accepted upload size, config-driven (never hardcoded in the
+    # upload route). Default 25 MB — the real source files are well under
+    # 1 MB, so this is generous headroom, not a real-world constraint.
+    max_upload_mb: int = int(os.environ.get("MAX_UPLOAD_MB", "25"))
+    # Where promoted/versioned uploads live (immutable, one file per
+    # dataset version). Relative to the backend/ working dir by default.
+    upload_storage_dir: str = os.environ.get(
+        "UPLOAD_STORAGE_DIR", "./data/uploads"
+    )
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
     # --- Dev seed user (local dev only) ---
     seed_admin_email: str = os.environ.get("SEED_ADMIN_EMAIL", "admin@example.com")
     seed_admin_password: str = os.environ.get("SEED_ADMIN_PASSWORD", "devpassword123")

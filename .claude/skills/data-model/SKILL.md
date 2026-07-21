@@ -28,8 +28,8 @@ not assumed generic dashboard metrics.
 | `Before Hexaware Experience` | Prior experience elsewhere | Decimal years |
 | `Total Experience` | Sum of the two experience columns | **Derived field — validate it always equals `Hexaware Experience + Before Hexaware Experience`; flag any row where it doesn't** |
 | `Primary Skill` | Core technical skill | e.g. `iOS`, `Salesforce`, `Drupal` |
-| `Working Entity` | Business unit code | e.g. `DTNL`, `DTIE`, `AMER`, or `Hexaware` for internal/corporate staff |
-| `Region` | Geography | `EMEA`, `AMER`, or `Hexaware` (internal) |
+| `Working Entity` | Business unit code | **UPDATE (2026-07-21):** the "or `Hexaware`" note is stale — the 2 rows that had `Hexaware` were the employees removed 2026-07-17. Real current values: `AMER`(15) `DTNL`(14) `DTIE`(12) `DTDE`(4) `DTUK`(2) `Entity TBD`(2) `DTAU`(1). Any schema enumerating this column must include the full current set, not just the originally-documented 4 |
+| `Region` | Geography | **UPDATE (2026-07-21):** stale — real current values are `EMEA`(32) `AMER`(15) `Region TBD`(2) `APAC`(1), no `Hexaware` value exists in the current file |
 | `Market` | Sub-region/market | e.g. `BENO`, `UKI`, `DACH`, `AMER` |
 | `Client as on June 2026` | Current client(s) | **Can contain multiple clients in one cell**, comma-separated (e.g. `"Managed Services, Scandlines, Inter Milan and Blackroll"`). `"Client TBD"` means unallocated/bench. See multi-value handling below. |
 | `Project Manager` | PM name(s) | **Also multi-value**, and the delimiter/order does not reliably align 1:1 with the Client column's entries — do not assume positional mapping between the two without explicit confirmation. `"PM TBD"` pairs with `"Client TBD"`. |
@@ -40,7 +40,7 @@ not assumed generic dashboard metrics.
 | `LWD` | Last working day | Only populated when `Status = Inactive` |
 | `Reason for Leaving` | Attrition reason | e.g. `Involuntary` — only populated when `Status = Inactive`; empty for active employees is expected, not missing data |
 | `Status` | Active / Inactive | Primary filter for headcount vs attrition metrics |
-| `Declaration Signed` | Compliance flag | `Yes`/`No` — likely a compliance-tracking metric, not a performance one |
+| `Declaration Signed` | Compliance flag | **UPDATE (2026-07-21):** not a binary — the real file has a 3rd value, `Pending` (1 row). Confirmed decision: schema should allow `Yes`/`No`/`Pending` as legitimate values. No code currently reads this column at all (not used by any function in `roster_metrics.py`), so this is a schema-completeness fix only, not a behavior change |
 | `DEPT ID` | Work email | Format `firstname.lastname@company.com` — do not treat as a unique ID with the same guarantees as `NEW_EMP_ID` (naming collisions possible) |
 
 ## RESOLVED (2026-07-16): `DOJ (DEPT) = "TBD"` (2 rows) — was a DAX BLANK() semantics bug, not a data gap
@@ -853,7 +853,7 @@ when this table is available.
 | `Project Name` | Specific project/engagement | e.g. `ARD26-88008 - Arcadis Website Launch` |
 | `Project URL` | Link to the internal project tool | Not needed for dashboard metrics |
 | `Employee` | Employee full name | **Free text, "First Last" format — see join risk below** |
-| `Month` | Reporting month | e.g. `Apr 26` |
+| `Month` | Reporting month | **UPDATE (2026-07-21):** stale — this is a real `datetime64` value (e.g. `2026-04-26`), not a display string. Every row within a given month shares the identical day value (`26`), a fixed arbitrary day chosen upstream to represent "this month" — not a meaningful varying date. Schema should type this as `date`/`datetime`, not `str`. Not read by any function in `booking_metrics.py` today |
 | `Monday of Week` | The week-bucket key (always a Monday) | Used to group daily entries into a week |
 | `Date` | The actual day the hours were logged | **Confirmed from the full file: this varies day-by-day within the week (e.g. `2026-04-13` through `2026-04-19`) — it does NOT always equal `Monday of Week`. This sheet is daily granularity, one row per employee/project/day/hours-type. An earlier read of a small sample wrongly suggested these were always equal — they are not, at full scale.** |
 | `Booked Hours Type` | `Client Hours` vs `Internal Hours` | Basis for utilization metrics |
@@ -987,12 +987,23 @@ the "Ankit" typo). Mapping added to `known-name-variants.md`. This also
 closes the earlier `Ankit Singh`-not-in-roster open question — it was
 the same underlying typo, not a separate unlisted employee.
 
-## Third data source — utilization summary (validation ground truth)
+## Third data source — utilization summary (ground truth AND a live data source)
 
 A third sheet exists: **one row per employee, per week**, with a
 pre-computed utilization percentage. This is almost certainly a DAX
-output from the current Power BI model — treat it as the **ground-truth
-reference for testing**, not as raw input to re-aggregate from scratch.
+output from the current Power BI model — it was originally introduced
+as the **ground-truth reference for testing** the independently-computed
+utilization formula (see below), not as raw input to re-aggregate from
+scratch.
+
+**Update (2026-07-21): this is not test-only.** `GET
+/api/utilization/overview` (`backend/app/api/utilization.py`) reads this
+file directly via `get_utilization_ground_truth_df()` and returns it as
+a live dashboard endpoint. So beyond validating the formula, this file
+also **is** the data behind the Utilization Overview screen — uploading
+a new one (covering a new `Week Start` range) is how that screen gets
+refreshed, exactly like roster/booking. Any future ingestion/upload
+work must treat this as a live input, not a one-off test fixture.
 
 ### Column dictionary (utilization summary sheet)
 
@@ -1002,7 +1013,7 @@ reference for testing**, not as raw input to re-aggregate from scratch.
 | `Employee` | Employee full name | Same `"First Last"` format and same join risk as the booking sheet's `Employee` column |
 | `Region (EC)` / `Market (EC)` | Same taxonomy as the booking sheet | |
 | `Week Start` | The Monday of that week | Format `YYYY-MM-DD` |
-| `Weekly Utilization %` | Utilization for that employee, that single week | Color-coded in the source (green ≥ ~90%, amber ~80%) — colors are presentation only, don't encode them as data |
+| `Weekly Utilization %` | Utilization for that employee, that single week | Color-coded in the source (green ≥ ~90%, amber ~80%) — colors are presentation only, don't encode them as data. **UPDATE (2026-07-21): genuinely nullable — 5 of 164 rows are null**, consistent with the `Reporting Employees` DAX's `NOT ISBLANK(...)` filter, but the actual count had never been quantified before. A schema must set `nullable=True` here specifically (unlike `Period Total Utilization %`, which is fully populated in every row) |
 | `Period Total Utilization %` | Utilization averaged/aggregated across the whole period shown for that employee | **Constant across every week-row for a given employee in this export** — confirm whether this is a fixed reporting-period average (e.g. the month or quarter) rather than a running/cumulative figure, since it does not change week to week per employee |
 
 ### Why this table matters more than it looks

@@ -13,3 +13,6 @@ dist/
 /*-390.png
 /*-390-*.png
 backend/data/backups/
+
+# LibreOffice/Excel transient lock files
+.~lock.*#

@@ -13,3 +13,8 @@ passlib==1.7.4
 bcrypt==4.0.1
 slowapi==0.1.9
 email-validator==2.3.0
+
+# Phase 8: data upload & ingestion validation
+pandera==0.20.4          # declarative DataFrame schema validation engine
+pyyaml==6.0.2            # reads the per-dataset validation config files
+python-multipart==0.0.9  # FastAPI file-upload (UploadFile) support
