@@ -41,6 +41,7 @@ class Stage(str, enum.Enum):
     SCHEMA = "schema"
     BUSINESS = "business"
     CROSS_DATASET = "cross_dataset"
+    METRICS = "metrics"
 
 
 @dataclass

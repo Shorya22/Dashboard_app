@@ -42,6 +42,35 @@ logger = logging.getLogger(__name__)
 CrossDatasetCheck = Callable[[pd.DataFrame], list[ValidationIssue]]
 
 
+def _metric_invariant_issues(
+    df: pd.DataFrame, file_type: str
+) -> list[ValidationIssue]:
+    """
+    Check that the dashboard's own measures would still agree with each
+    other if this file went live. Imported lazily so the validation
+    package stays independent of the metrics layer.
+    """
+    try:
+        from app.services import metric_invariants
+    except Exception:  # noqa: BLE001 - never let this block an upload
+        return []
+
+    issues: list[ValidationIssue] = []
+    for violation in metric_invariants.violations(df, file_type):
+        issues.append(
+            ValidationIssue(
+                stage=Stage.METRICS,
+                severity=Severity.WARNING,
+                reason=(
+                    f"Dashboard measures would disagree with each other: "
+                    f"{violation.detail}"
+                ),
+                rule=violation.name,
+            )
+        )
+    return issues
+
+
 def read_dataframe(path: str | Path, config: dict) -> pd.DataFrame:
     """Read an uploaded file exactly the way its config's `read:` block says."""
     read = config.get("read", {})
@@ -121,7 +150,17 @@ def validate_file(
     report.stage_reached = Stage.BUSINESS
     report.extend(run_business_stage(df, config))
 
-    # Stage 5: cross-dataset (warnings only; never blocks promotion).
+    # Stage 5a: metric invariants — would the dashboard's own measures
+    # still agree with each other if this file went live? Warnings only:
+    # a violation means two surfaces would show different numbers for the
+    # same label, which the admin should see before promoting, but it is
+    # a modelling problem rather than a defect in the uploaded file.
+    metric_violations = _metric_invariant_issues(df, file_type)
+    if metric_violations:
+        report.stage_reached = Stage.METRICS
+        report.extend(metric_violations)
+
+    # Stage 5b: cross-dataset (warnings only; never blocks promotion).
     if cross_dataset_checks:
         report.stage_reached = Stage.CROSS_DATASET
         for check in cross_dataset_checks:

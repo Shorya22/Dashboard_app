@@ -39,6 +39,12 @@ DEFAULT_ROSTER_PATH = (
 
 EXPERIENCE_TOLERANCE = 0.01  # years; float rounding tolerance
 
+# The one place the "Strategic Pool" status literal is written. Every
+# surface that reports Strategic Pool resolves through `get_strategic_pool`,
+# so the Home and HR Home donuts can never disagree again (see
+# metric_invariants.py, which asserts it).
+STRATEGIC_POOL_STATUS = "Strategic Pool"
+
 DATE_FORMAT = "%d-%b-%y"  # source format, e.g. "24-Nov-25"
 
 
@@ -798,10 +804,25 @@ def get_strategic_pool(df: pd.DataFrame) -> int:
     2000194634, 2000195658) -- returns 2 on the real file, matching the
     Power BI reference. See data-model SKILL.md "Known open data gap"
     (now resolved) for the full root-cause writeup.
-    Reads: `DOJ (DEPT)`, `NEW_EMP_ID`.
+
+    SUPERSEDED (2026-07-21) — now defined as `Status == "Strategic Pool"`.
+
+    The ISBLANK(DOJ (DEPT)) definition above was a proxy that held only
+    while the blank-DOJ rows happened to be exactly the rows marked
+    Strategic Pool. A roster arrived where they diverged (3 employees
+    marked Strategic Pool, only 1 of them with a blank DOJ (DEPT)), so
+    Home ("Workforce Category", DOJ-based) showed 1 while HR Home
+    ("Status Split", Status-based) showed 3 — the same label reporting
+    two different numbers.
+
+    `Status` is the explicit business marker and is now the single
+    definition, confirmed by the business owner. Every surface that shows
+    "Strategic Pool" routes through THIS function so the two can never
+    drift apart again; `metric_invariants.py` asserts that.
+    A blank DOJ (DEPT) is incidental missing data, not an intent.
+    Reads: `Status`, `NEW_EMP_ID`.
     """
-    blank_mask = _parse_dept_dates(df).isna()
-    return get_total_employees(df[blank_mask])
+    return get_total_employees(df[df["Status"] == STRATEGIC_POOL_STATUS])
 
 
 @cache_on_df
@@ -925,7 +946,9 @@ def get_status_split(df: pd.DataFrame) -> dict[str, int]:
     return {
         "Active": get_active_employees(df),
         "Inactive": get_inactive_employees(df),
-        "Strategic Pool": get_total_employees(df[df["Status"] == "Strategic Pool"]),
+        # Routed through the single definition rather than recomputed —
+        # recomputing it here is exactly how Home and HR Home drifted apart.
+        "Strategic Pool": get_strategic_pool(df),
     }
 
 

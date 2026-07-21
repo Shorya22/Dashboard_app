@@ -184,13 +184,19 @@ def sample_roster() -> pd.DataFrame:
 
 
 def test_get_strategic_pool(sample_roster):
-    # DOJ (DEPT) blank (true NaN, not "TBD" string): only E6 -> 1
-    assert get_strategic_pool(sample_roster) == 1
+    # Strategic Pool is now `Status == "Strategic Pool"` (2026-07-21), not
+    # blank DOJ (DEPT). No fixture row carries that status, so -> 0.
+    # Under the old blank-DOJ definition this returned 1 (E6), while E6 was
+    # ALSO counted as Active — the double-count that made Home and HR Home
+    # disagree. See metric_invariants.py.
+    assert get_strategic_pool(sample_roster) == 0
 
 
 def test_get_workforce_category_split(sample_roster):
-    # Active: E1,E2,E5,E6 -> 4; Strategic Pool (blank DOJ (DEPT)): E6 -> 1
-    assert get_workforce_category_split(sample_roster) == {"Active": 4, "Strategic Pool": 1}
+    # Active: E1,E2,E5,E6 -> 4; Strategic Pool is Status-based and no
+    # fixture row has that status -> 0. Both buckets now come from the same
+    # `Status` column, so they can never double-count the same employee.
+    assert get_workforce_category_split(sample_roster) == {"Active": 4, "Strategic Pool": 0}
 
 
 def test_get_status_split(sample_roster):
