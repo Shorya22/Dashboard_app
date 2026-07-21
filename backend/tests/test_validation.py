@@ -225,7 +225,15 @@ def test_roster_blank_new_emp_id_still_blocks(tmp_path):
     df.loc[0, "NEW_EMP_ID"] = None
     report = _validate_df(df, "roster", tmp_path)
     assert not report.passed
-    assert any(i.column == "NEW_EMP_ID" for i in report.errors)
+    id_errors = [i for i in report.errors if i.column == "NEW_EMP_ID"]
+    # One blank cell must produce exactly ONE actionable error, not the
+    # three pandera raises for it (not_nullable + coerce_dtype + a
+    # column-level dtype mismatch caused by the resulting float column).
+    assert len(id_errors) == 1
+    assert id_errors[0].rule == "not_nullable"
+    assert "empty" in id_errors[0].reason
+    # ...and the message must not leak pandera jargon at the reader.
+    assert "coerce_dtype" not in id_errors[0].reason
 
 
 def test_roster_lwd_inactive_is_warning_not_error(tmp_path):

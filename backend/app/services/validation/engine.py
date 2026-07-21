@@ -127,22 +127,61 @@ def build_schema(config: dict) -> pa.DataFrameSchema:
 # Human-readable reasons for pandera's built-in check names, so a
 # non-technical admin sees "value not in the allowed list" rather than
 # "isin(...)". Falls back to the raw check string for anything unmapped.
+# Plain-language wording for pandera's built-in checks. The raw check name
+# is kept on the issue's `rule` field for debugging, so it is deliberately
+# NOT repeated in the message — a data person reading the report should see
+# "NEW_EMP_ID is required but this cell is empty", not "coerce_dtype('int64')".
 _CHECK_REASONS = {
-    "coerce_dtype": "value is not the expected type",
-    "dtype": "column is not the expected type",
-    "not_nullable": "value is missing (blank) but this column is required",
-    "field_uniqueness": "duplicate value in a column that must be unique",
-    "isin": "value is not one of the allowed values",
-    "greater_than_or_equal_to": "value is below the allowed minimum",
-    "less_than_or_equal_to": "value is above the allowed maximum",
+    "coerce_dtype": "{col} has a value that isn't the expected type",
+    "dtype": "{col} is not the expected type",
+    "not_nullable": "{col} is required but this cell is empty",
+    "field_uniqueness": "{col} must be unique, but this value is duplicated",
+    "isin": "{col} has a value that isn't allowed",
+    "greater_than_or_equal_to": "{col} is below the allowed minimum",
+    "less_than_or_equal_to": "{col} is above the allowed maximum",
 }
 
 
-def _reason_for_check(check: str) -> str:
-    for key, reason in _CHECK_REASONS.items():
+def _reason_for_check(check: str, column: str | None) -> str:
+    col = column or "This column"
+    for key, template in _CHECK_REASONS.items():
         if check.startswith(key):
-            return f"{reason} ({check})"
+            return template.format(col=col)
     return check
+
+
+def _drop_null_consequences(issues: list[ValidationIssue]) -> list[ValidationIssue]:
+    """
+    Collapse the several errors a single blank cell produces into one.
+
+    A blank in an int column makes pandas read the whole column as float
+    and makes per-cell coercion fail, so pandera reports the same empty
+    cell up to three ways (not_nullable + coerce_dtype + a column-level
+    dtype mismatch). Only the `not_nullable` one is actionable — "fill
+    this cell" — so the type complaints that are merely consequences of
+    the blank are dropped. A type error on a genuinely non-blank value is
+    kept.
+    """
+    null_cols = {i.column for i in issues if i.rule == "not_nullable"}
+    if not null_cols:
+        return issues
+
+    def is_blank_consequence(i: ValidationIssue) -> bool:
+        if i.column not in null_cols:
+            return False
+        if not (i.rule or "").startswith(("coerce_dtype", "dtype")):
+            return False
+        # column-level dtype mismatch (no row), or a per-cell coercion
+        # failure whose offending value is itself the blank
+        return i.row is None or str(i.value).strip().lower() in {
+            "nan",
+            "nat",
+            "none",
+            "<na>",
+            "",
+        }
+
+    return [i for i in issues if not is_blank_consequence(i)]
 
 
 def _unknown_columns_stage(
@@ -345,14 +384,14 @@ def run_schema_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
                 ValidationIssue(
                     stage=Stage.SCHEMA,
                     severity=Severity.ERROR,
-                    reason=_reason_for_check(check),
+                    reason=_reason_for_check(check, column),
                     column=column,
                     row=row,
                     rule=check,
                     value=failure_case,
                 )
             )
-    return issues
+    return _drop_null_consequences(issues)
 
 
 def run_business_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
