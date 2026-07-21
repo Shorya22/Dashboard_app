@@ -18,7 +18,7 @@ import { useRosterBreakdowns, type EmployeeRecord } from '@/lib/roster-api'
 import { VOLUNTARY_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { applyEmployeeFilters } from '@/lib/employee-filters'
-import { demoHeadcount } from '@/lib/demo-headcount' // TEMPORARY demo branch only
+import { demoHeadcount, isUnfiltered } from '@/lib/demo-headcount' // TEMPORARY demo branch only
 import { useHrAnalyticsFilters } from '@/lib/use-hr-analytics-filters'
 
 // EmployeeRecord doesn't carry LWD/Reason for Leaving (see employee-filters.ts
@@ -129,13 +129,18 @@ export function HrAnalyticsPage() {
   const voluntaryData = useMemo(
     () =>
       Object.entries(
-        filteredExitsForDonut.reduce<Record<string, number>>((acc, e) => {
-          const reason = e.reason_for_leaving ?? 'Unknown'
-          acc[reason] = (acc[reason] ?? 0) + 1
-          return acc
-        }, {}),
+        // TEMPORARY demo branch only — unfiltered, use the (overridden)
+        // server split so this donut totals Exits instead of counting the
+        // real exits_table rows. See lib/demo-headcount.ts.
+        isUnfiltered(filters) && attrition.data?.voluntary_involuntary_split
+          ? attrition.data.voluntary_involuntary_split
+          : filteredExitsForDonut.reduce<Record<string, number>>((acc, e) => {
+              const reason = e.reason_for_leaving ?? 'Unknown'
+              acc[reason] = (acc[reason] ?? 0) + 1
+              return acc
+            }, {}),
       ).map(([name, value]) => ({ name, value })),
-    [filteredExitsForDonut],
+    [filteredExitsForDonut, filters, attrition.data],
   )
   const voluntaryColors = useMemo(
     () => colorsForLabels(voluntaryData.map((d) => d.name), VOLUNTARY_COLORS),
