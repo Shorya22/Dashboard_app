@@ -22,7 +22,11 @@ file_type: roster
 # those 2 rows were deleted 2026-07-17), and set the org-structure enums
 # (GRADE/Region/Working Entity) to warn-not-block on an unrecognized value
 # so a genuinely new region/grade/entity never freezes the dashboard.
-schema_version: 2
+# v3 (2026-07-21): made the two UNUSED legacy columns EMP ID and
+# DOJ (Hexaware) nullable — a blank in a column no metric reads must not
+# block an upload (e.g. a newly-added employee whose legacy id isn't set).
+# Required USED fields (NEW_EMP_ID, experience, Today) stay non-null.
+schema_version: 3
 display_name: Employee Roster
 source_file: "DEPT - Master Data(Sheet1).xlsx"
 read:
@@ -35,7 +39,7 @@ columns:
   - name: "EMP ID"
     dtype: string          # legacy id, mixed int/str in source — never math on it
     required: false        # present in file but never read by app code
-    nullable: false
+    nullable: true         # v3: unused legacy id — a blank must not block an upload
   - name: "NEW_EMP_ID"
     dtype: int             # primary key used by every roster metric
     required: true
@@ -137,7 +141,7 @@ columns:
   - name: "DOJ (Hexaware)"
     dtype: string
     required: false
-    nullable: false
+    nullable: true         # v3: unused by any metric — a blank must not block
   - name: "DOJ (DEPT)"
     dtype: string          # real date OR the literal "TBD" (2 rows)
     required: true

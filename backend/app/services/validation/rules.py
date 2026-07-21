@@ -82,8 +82,11 @@ def sum_equals(df: pd.DataFrame, rule: dict) -> list[ValidationIssue]:
     numeric = {c: pd.to_numeric(df[c], errors="coerce") for c in [target, *addends]}
     computed = sum(numeric[a] for a in addends)
     diff = (computed - numeric[target]).abs()
-    # A NaN diff means some operand didn't parse as a number -> also a violation.
-    bad = diff.isna() | (diff > tol)
+    # Only flag rows where every operand is present — a blank operand is
+    # already reported once by the schema stage's not_nullable check, so
+    # flagging it here too would double-report the same empty cell.
+    all_present = df[[target, *addends]].notna().all(axis=1)
+    bad = all_present & (diff > tol)
 
     issues: list[ValidationIssue] = []
     for idx in df.index[bad]:
