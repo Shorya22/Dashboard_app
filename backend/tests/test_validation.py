@@ -92,40 +92,30 @@ def test_available_file_types():
 # --------------------------------------------------------------------------- #
 # roster
 # --------------------------------------------------------------------------- #
-def test_roster_unknown_grade_is_warning_not_error(tmp_path):
-    # Org-structure enums (GRADE/Region/Working Entity) warn on an
-    # unrecognized value rather than blocking — a new grade band must not
-    # freeze the dashboard.
+# LIGHT MODE (schema v7): no `allowed_values` literals anywhere, so any
+# value in a classification column is accepted. These columns legitimately
+# gain values over time (a new grade band, region, entity, status), and a
+# fixed list would freeze the dashboard the day one appears. Structural
+# checks (below) are what still catch a genuinely wrong file.
+@pytest.mark.parametrize(
+    "column,value",
+    [
+        ("GRADE", "G99"),
+        ("Region", "MARS"),
+        ("Region", "Hexaware"),          # legitimate internal-staff value
+        ("Working Entity", "Hexaware"),
+        ("Status", "Retired"),
+        ("Type", "Contractor"),
+        ("Declaration Signed", "Pending"),
+        ("Seniorirty Level", "Brand New Band"),
+    ],
+)
+def test_roster_any_classification_value_is_accepted(column, value, tmp_path):
     df = _read_real("roster")
-    df.loc[0, "GRADE"] = "G99"
-    report = _validate_df(df, "roster", tmp_path)
-    assert report.passed  # warning-only, still promotable
-    warned = [i for i in report.warnings if i.column == "GRADE"]
-    assert warned and warned[0].rule == "allowed_values"
-
-
-def test_roster_hexaware_region_and_entity_allowed(tmp_path):
-    # Regression: "Hexaware" is a legitimate value for internal staff and
-    # must pass cleanly (v2 contract fix).
-    df = _read_real("roster")
-    df.loc[0, "Region"] = "Hexaware"
-    df.loc[0, "Working Entity"] = "Hexaware"
+    df.loc[0, column] = value
     report = _validate_df(df, "roster", tmp_path)
     assert report.passed, [i.to_dict() for i in report.errors]
-    assert not any(
-        i.column in {"Region", "Working Entity"} for i in report.issues
-    )
-
-
-def test_roster_unknown_region_is_warning(tmp_path):
-    df = _read_real("roster")
-    df.loc[0, "Region"] = "MARS"
-    report = _validate_df(df, "roster", tmp_path)
-    assert report.passed
-    assert any(
-        i.column == "Region" and i.severity is Severity.WARNING
-        for i in report.warnings
-    )
+    assert not any(i.column == column for i in report.issues)
 
 
 def test_roster_total_experience_taken_as_given(tmp_path):
@@ -156,39 +146,25 @@ def test_roster_missing_required_column(tmp_path):
     )
 
 
-def test_roster_unknown_column_rejected(tmp_path):
+def test_roster_extra_column_is_warning_not_error(tmp_path):
+    # Light mode: an added column is reported so it's visible, but a file
+    # that gained a column is not rejected.
     df = _read_real("roster")
     df["SOME_NEW_COL"] = "x"
     report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
+    assert report.passed, [i.to_dict() for i in report.errors]
     assert "unknown_column" in _rules_fired(report)
 
 
-def test_roster_bad_status(tmp_path):
+def test_roster_date_columns_accept_any_format(tmp_path):
+    # Date columns are untyped in light mode — they arrive as DD-Mon-YY
+    # text or real dates depending on the export, and the app parses them
+    # itself with coercion.
     df = _read_real("roster")
-    df.loc[0, "Status"] = "Retired"
-    report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
-    assert any(i.column == "Status" for i in report.errors)
-
-
-def test_roster_declaration_pending_is_allowed(tmp_path):
-    # Regression for the 2026-07-21 audit finding: "Pending" is a real,
-    # legitimate 3rd value and must not be rejected.
-    df = _read_real("roster")
-    df.loc[0, "Declaration Signed"] = "Pending"
+    df.loc[0, "DOJ (DEPT)"] = "TBD"
+    df.loc[1, "DOJ (DEPT)"] = "not-a-date"
     report = _validate_df(df, "roster", tmp_path)
     assert report.passed, [i.to_dict() for i in report.errors]
-
-
-def test_roster_doj_dept_tbd_ok_but_garbage_flagged(tmp_path):
-    df = _read_real("roster")
-    df.loc[0, "DOJ (DEPT)"] = "TBD"           # allowed token
-    df.loc[1, "DOJ (DEPT)"] = "not-a-date"    # should fire
-    report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
-    bad = [i for i in report.errors if i.rule == "doj_dept_date_or_token"]
-    assert [i.row for i in bad] == [1]
 
 
 def test_roster_blank_experience_defaults_to_zero(tmp_path):
@@ -262,31 +238,32 @@ def test_existing_ids_render_without_float_artifacts(tmp_path):
     assert not any(str(v).endswith(".0") for v in filled["NEW_EMP_ID"])
 
 
-def test_roster_lwd_inactive_is_warning_not_error(tmp_path):
-    # Blank LWD on an Inactive row is a warning, never a hard block.
+def test_roster_blank_lwd_on_inactive_is_accepted(tmp_path):
+    # Light mode: no cross-field rules, so Status/LWD are not reconciled.
     df = _read_real("roster")
     inactive_idx = df.index[df["Status"] == "Inactive"]
     assert len(inactive_idx) > 0
     df.loc[inactive_idx[0], "LWD"] = None
     report = _validate_df(df, "roster", tmp_path)
-    assert report.passed  # warning-only rule doesn't fail the file
-    assert "lwd_present_when_inactive" in _rules_fired_at(report, Severity.WARNING)
+    assert report.passed, [i.to_dict() for i in report.errors]
 
 
 # --------------------------------------------------------------------------- #
 # booking
 # --------------------------------------------------------------------------- #
-def test_booking_bad_hours_type(tmp_path):
+def test_booking_any_hours_type_accepted(tmp_path):
+    # No fixed list — a new booking category must not block the upload.
     df = _read_real("booking")
     df.loc[0, "Booked Hours Type"] = "Holiday Hours"
     report = _validate_df(df, "booking", tmp_path)
-    assert not report.passed
-    assert any(i.column == "Booked Hours Type" for i in report.errors)
+    assert report.passed, [i.to_dict() for i in report.errors]
 
 
-def test_booking_negative_hours(tmp_path):
+def test_booking_hours_stay_numeric(tmp_path):
+    # The one thing still enforced on hours: it must be a number, because
+    # every utilization metric sums it. Text here would break the charts.
     df = _read_real("booking")
-    df.loc[0, "Employee Booked Hours"] = -3.0
+    df["Employee Booked Hours"] = "not a number"
     report = _validate_df(df, "booking", tmp_path)
     assert not report.passed
     assert any(i.column == "Employee Booked Hours" for i in report.errors)
@@ -295,7 +272,7 @@ def test_booking_negative_hours(tmp_path):
 def test_booking_month_as_display_string_accepted(tmp_path):
     # Regression: `Month` is an unused display column whose format varies
     # across exports (a real date, or the label "Jun 26"). Neither should
-    # be rejected (v2 contract: dtype any).
+    # be rejected.
     df = _read_real("booking")
     df["Month"] = "Jun 26"
     report = _validate_df(df, "booking", tmp_path)
@@ -303,40 +280,41 @@ def test_booking_month_as_display_string_accepted(tmp_path):
     assert not any(i.column == "Month" for i in report.issues)
 
 
-def test_booking_missing_employee_rejected(tmp_path):
+def test_booking_missing_employee_is_warning(tmp_path):
+    # A row with no Employee is dropped downstream anyway; surfaced as a
+    # warning so it's visible, but it no longer blocks.
     df = _read_real("booking")
     df.loc[0, "Employee"] = None
     report = _validate_df(df, "booking", tmp_path)
-    assert not report.passed
-    assert any(i.column == "Employee" for i in report.errors)
+    assert report.passed, [i.to_dict() for i in report.errors]
+    assert "empty_optional_value" in _rules_fired_at(report, Severity.WARNING)
 
 
 # --------------------------------------------------------------------------- #
 # ground truth
 # --------------------------------------------------------------------------- #
-def test_ground_truth_weekly_null_ok_but_period_null_fails(tmp_path):
+def test_ground_truth_blank_utilization_accepted(tmp_path):
+    # Both utilization columns are nullable in light mode. Weekly blanks are
+    # meaningful (no booking-based rate that week) and must NOT be defaulted
+    # to 0, which would drag the average down with a fake zero.
     df = _read_real("ground_truth")
-    df.loc[0, "Weekly Utilization %"] = None       # nullable -> ok
-    df.loc[1, "Period Total Utilization %"] = None  # non-nullable -> error
+    df.loc[0, "Weekly Utilization %"] = None
+    df.loc[1, "Period Total Utilization %"] = None
     report = _validate_df(df, "ground_truth", tmp_path)
-    assert not report.passed
-    cols = {i.column for i in report.errors}
-    assert "Period Total Utilization %" in cols
-    assert "Weekly Utilization %" not in cols
+    assert report.passed, [i.to_dict() for i in report.errors]
 
 
-def test_ground_truth_duplicate_employee_week(tmp_path):
-    df = _read_real("ground_truth")
-    dup = df.iloc[[0]].copy()
-    df = pd.concat([df, dup], ignore_index=True)
-    report = _validate_df(df, "ground_truth", tmp_path)
-    assert not report.passed
-    assert "employee_week_unique" in _rules_fired(report)
-
-
-def test_ground_truth_utilization_out_of_range(tmp_path):
+def test_ground_truth_utilization_above_100_pct_accepted(tmp_path):
+    # No upper bound: overtime can legitimately exceed 100%.
     df = _read_real("ground_truth")
     df.loc[0, "Weekly Utilization %"] = 1.5
+    report = _validate_df(df, "ground_truth", tmp_path)
+    assert report.passed, [i.to_dict() for i in report.errors]
+
+
+def test_ground_truth_utilization_stays_numeric(tmp_path):
+    df = _read_real("ground_truth")
+    df["Weekly Utilization %"] = "high"
     report = _validate_df(df, "ground_truth", tmp_path)
     assert not report.passed
     assert any(i.column == "Weekly Utilization %" for i in report.errors)

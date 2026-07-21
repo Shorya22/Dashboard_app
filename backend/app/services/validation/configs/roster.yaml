@@ -1,235 +1,169 @@
 # =============================================================================
-# Roster dataset validation contract
+# Roster dataset validation contract  — LIGHT MODE
 # =============================================================================
 # The single source of truth for what a valid employee-roster upload looks
 # like. The validation ENGINE (engine.py / rules.py) is generic and reads
 # this file — it contains no roster-specific knowledge. To change what is
-# valid (add a GRADE, allow a new Region, adjust a rule), edit THIS file and
-# bump schema_version. Never edit Python for a value/rule change.
+# valid, edit THIS file and bump schema_version. Never edit Python for a
+# value/rule change.
 #
-# Built from the 2026-07-21 full-file audit (see .claude/skills/data-model).
-# `required`/`nullable`/`allowed_values` reflect the REAL current file and
-# which columns the app actually reads today.
-#
-# allowed_values is set ONLY on genuinely closed, stable sets (grade, status,
-# type, region, working entity, declaration). Open-growth columns (skills,
-# clients, PMs, designations, markets, locations, names) are intentionally
-# left unconstrained so a legitimate new value never blocks an upload.
+# v7 (2026-07-21) — DELIBERATELY LIGHT. Validation is now structural only:
+#   * which columns must exist (this is what still catches a wrong file)
+#   * a type only where the app does maths on the value
+#   * blanks filled from `default` / `default_unique_prefix`
+# Everything value-level was removed on purpose:
+#   * no `allowed_values` literals — grade/region/entity/status/type/... may
+#     hold any value, so a new one can never block an upload
+#   * no min/max bounds
+#   * no cross-field business rules
+# Deeper rules get layered back on later, once the real variety of
+# production files is known. Listing the columns is still worthwhile: it
+# documents the expected shape and drives the template / "expected format"
+# screen.
 
 file_type: roster
-# v2 (2026-07-21): added "Hexaware" to Region/Working Entity (a legitimate
-# value for internal/corporate staff, absent from the sample only because
-# those 2 rows were deleted 2026-07-17), and set the org-structure enums
-# (GRADE/Region/Working Entity) to warn-not-block on an unrecognized value
-# so a genuinely new region/grade/entity never freezes the dashboard.
-# v3 (2026-07-21): made the two UNUSED legacy columns EMP ID and
-# DOJ (Hexaware) nullable — a blank in a column no metric reads must not
-# block an upload (e.g. a newly-added employee whose legacy id isn't set).
-# v4 (2026-07-21): blank experience values now default to 0 and blank
-# `Today` is tolerated (both warned, never silent) — verified safe against
-# the metric code. NEW_EMP_ID deliberately still blocks: it is the only
-# blank that makes numbers WRONG rather than merely incomplete, since
-# `get_total_employees` is nunique(dropna=True) and would drop that
-# employee from every headcount.
-# v5 (2026-07-21): removed the Total Experience sum cross-check — experience
-# is taken exactly as given (blank -> 0), never recomputed or reconciled.
-# v6 (2026-07-21): a blank NEW_EMP_ID becomes a numbered "NEW_EMP_ID TBD n"
-# marker rather than blocking. Numbered (not one shared marker) so the
-# nunique()-based headcounts still count each such employee separately.
-schema_version: 6
+schema_version: 7
 display_name: Employee Roster
 source_file: "DEPT - Master Data(Sheet1).xlsx"
 read:
   sheet: 0
   header: 0
-allow_unknown_columns: false
+# Extra/unrecognized columns are reported but never block.
+allow_unknown_columns: true
 
 columns:
   # --- identifiers ---
   - name: "EMP ID"
-    dtype: string          # legacy id, mixed int/str in source — never math on it
-    required: false        # present in file but never read by app code
-    nullable: true         # v3: unused legacy id — a blank must not block an upload
-  # v6: a blank id becomes a "NEW_EMP_ID TBD n" marker (same convention as
-  # Client TBD / PM TBD) instead of blocking. It is NUMBERED per blank row
-  # on purpose: the headcount measures are `NEW_EMP_ID.nunique()`, so one
-  # shared marker would merge every TBD employee into a single distinct
-  # value and under-count headcount. dtype is `any` because the column
-  # then legitimately holds real ids alongside text markers.
+    dtype: any
+    required: false
+    nullable: true
+  # Blank -> "NEW_EMP_ID TBD n". Numbered per blank row on purpose: the
+  # headcount measures are `NEW_EMP_ID.nunique()`, so one shared marker
+  # would merge those employees into a single distinct value and
+  # under-count headcount.
   - name: "NEW_EMP_ID"
-    dtype: any             # primary key used by every roster metric
+    dtype: any
     required: true
     nullable: true
     unique: true
     default_unique_prefix: "NEW_EMP_ID TBD"
   - name: "NAME"
-    dtype: string
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
 
-  # --- classification (closed sets: allowed_values enforced) ---
-  # Org-structure enums: known values listed (so clean data has no noise),
-  # but severity=warning so a genuinely new grade/region/entity/market is
-  # surfaced for review rather than blocking the upload.
+  # --- classification (no fixed value lists — any value is accepted) ---
   - name: "GRADE"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
-    allowed_values: ["G3A", "G4", "G5", "G6", "G7", "G8", "Grade TBD"]
-    allowed_values_severity: warning
+    nullable: true
   - name: "Working Entity"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
-    allowed_values: ["AMER", "DTNL", "DTIE", "DTDE", "DTUK", "DTAU", "Hexaware", "Entity TBD"]
-    allowed_values_severity: warning
+    nullable: true
   - name: "Region"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
-    allowed_values: ["EMEA", "AMER", "APAC", "Hexaware", "Region TBD"]
-    allowed_values_severity: warning
+    nullable: true
   - name: "Type"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
-    allowed_values: ["GCC", "Non GCC"]
+    nullable: true
   - name: "Status"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
-    allowed_values: ["Active", "Inactive", "Strategic Pool"]
+    nullable: true
   - name: "Declaration Signed"
-    dtype: categorical
-    required: false        # never read by app code today
-    nullable: true         # ~20% blank in real file
-    allowed_values: ["Yes", "No", "Pending"]
-
-  # --- classification (open-growth: no allowed_values) ---
+    dtype: any
+    required: false
+    nullable: true
   - name: "DEPUTATION"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Market"
-    dtype: categorical
+    dtype: any
     required: false
-    nullable: false
+    nullable: true
   - name: "Primary Skill"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Skill"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Designation"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Seniorirty Level"   # source-file typo kept verbatim — do not "fix"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Client as on June 2026"
-    dtype: string          # multi-value free text, "Client TBD" = bench
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Project Manager"
-    dtype: string          # multi-value, "PM TBD" pairs with Client TBD
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "WORK_LOCATION"
-    dtype: categorical
+    dtype: any
     required: false
-    nullable: false
+    nullable: true
   - name: "SUPERVISOR (Hexaware)"
-    dtype: string
+    dtype: any
     required: false
-    nullable: false
+    nullable: true
   - name: "DEPT ID"
-    dtype: string          # work email — not a guaranteed-unique key
+    dtype: any
     required: false
     nullable: true
 
-  # --- dates (stored as DD-Mon-YY strings in source; validated as text,
-  #     with date-ness enforced by the date_or_token business rule where it
-  #     matters, matching how the app itself parses these with coerce) ---
+  # --- dates: left untyped. They arrive as DD-Mon-YY text or as real dates
+  #     depending on the export, and the app parses them itself with
+  #     coercion, so pinning a type here only creates false rejections.
   - name: "DOJ (Hexaware)"
-    dtype: string
+    dtype: any
     required: false
-    nullable: true         # v3: unused by any metric — a blank must not block
-  - name: "DOJ (DEPT)"
-    dtype: string          # real date OR the literal "TBD" (2 rows)
-    required: true
-    nullable: false
-  - name: "Today"
-    dtype: string          # snapshot "as of" date, constant across rows
-    required: true
-    # v4: blank tolerated — calendar.py takes `today.max()` with blanks
-    # excluded, and the value is identical on every row, so other rows
-    # supply it. Still warned so an admin sees the gap.
     nullable: true
-    warn_if_null: true
+  - name: "DOJ (DEPT)"
+    dtype: any
+    required: true
+    nullable: true
+  - name: "Today"
+    dtype: any
+    required: true
+    nullable: true
   - name: "LWD"
-    dtype: string          # last working day — blank unless Status=Inactive
+    dtype: any
     required: true
     nullable: true
   - name: "Reason for Leaving"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: true         # blank for active employees is expected
-    allowed_values: ["Voluntary", "Involuntary"]
+    nullable: true
 
-  # --- experience (numeric, non-negative) ---
-  # v4: a blank means "no recorded experience" and defaults to 0 (business
-  # owner's call), so a new hire whose details aren't filled in yet doesn't
-  # block the upload and lands in the 0-1 Years band rather than "Unknown".
-  # Every defaulted cell is still reported as a warning. Note the sum rule
-  # below runs on the DEFAULTED values, so a partly-filled row whose
-  # numbers genuinely don't add up is still caught.
+  # --- experience: the only typed columns, because the app averages and
+  #     buckets these. Blank means "no recorded experience" -> 0.
   - name: "Hexaware Experience (Years)"
     dtype: float
     required: true
     nullable: true
     default: 0
-    min: 0
   - name: "Before Hexaware Experience"
     dtype: float
     required: true
     nullable: true
     default: 0
-    min: 0
   - name: "Total Experience"
     dtype: float
     required: true
     nullable: true
     default: 0
-    min: 0
 
-business_rules:
-  # v5: the Total Experience = Hexaware + Before cross-check was REMOVED at
-  # the business owner's direction. Experience values are taken exactly as
-  # given in the file (blank -> 0 via the column defaults above); the app
-  # never recomputes Total Experience, it only reads it, so trusting the
-  # source value is safe for the dashboard. Trade-off accepted knowingly:
-  # a row whose Total disagrees with its parts is no longer flagged, so it
-  # will chart in whatever experience band its stated Total implies.
-
-  - name: doj_dept_date_or_token
-    type: date_or_token
-    column: "DOJ (DEPT)"
-    allowed_tokens: ["TBD"]
-    allow_null: false
-    severity: error
-    reason: "DOJ (DEPT) must be a valid date or the literal 'TBD'"
-
-  # Soft rule (warning, not block): the model treats LWD and Status as
-  # independently-driven facts, so a mismatch is surfaced but never blocks.
-  - name: lwd_present_when_inactive
-    type: conditional_presence
-    when_column: "Status"
-    when_equals: "Inactive"
-    then_column: "LWD"
-    then: present
-    severity: warning
-    reason: "LWD is usually populated when Status is Inactive"
+# No cross-field rules in light mode — experience is taken exactly as
+# given and nothing is reconciled. Re-add here when ready.
+business_rules: []

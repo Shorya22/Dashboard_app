@@ -1,111 +1,105 @@
 # =============================================================================
-# Booking (time-booking) dataset validation contract
+# Booking (time-booking) dataset validation contract  — LIGHT MODE
 # =============================================================================
 # Raw daily/weekly hours data — one row per employee/project/day/hours-type.
 # Drives all utilization and hours metrics. See roster.yaml header for how
 # this config is consumed (generic engine, edit-here-not-code).
 #
-# Built from the 2026-07-21 full-file audit. Note: this file has NO natural
-# single-row primary key (daily granularity means many legitimate rows share
-# Employee+Week+Project+Type), so no uniqueness check is defined — inventing
-# one would reject valid data.
+# v3 (2026-07-21) — DELIBERATELY LIGHT, matching roster.yaml: structural
+# checks only (which columns must exist), plus a type on the three columns
+# the app actually computes with. No `allowed_values` literals, no bounds,
+# no cross-field rules — those get layered back on later.
+#
+# Note: this file has NO natural single-row primary key (daily granularity
+# means many legitimate rows share Employee+Week+Project+Type), so no
+# uniqueness check is defined — inventing one would reject valid data.
 
 file_type: booking
-# v2 (2026-07-21): `Month` is no longer type-checked (dtype: any). It's an
-# unused display column whose format varies across exports — a real date
-# in some (2026-06-26), the label "Jun 26" in others — so requiring a
-# datetime rejected legitimate files for no benefit (no code reads it).
-schema_version: 2
+schema_version: 3
 display_name: Time-Booking Data
 source_file: "UTILIZATION DATA SHEET.xlsx"
 read:
   sheet: 0
   header: 0
-allow_unknown_columns: false
+allow_unknown_columns: true
 
 columns:
-  # --- reporting hierarchy (open-growth: no allowed_values) ---
+  # --- reporting hierarchy (any value accepted) ---
   - name: "Region (EC)"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Market (EC)"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Segment (EC)"
-    dtype: categorical
-    required: false        # single-value (E&E) today, never read
-    nullable: false
+    dtype: any
+    required: false
+    nullable: true
   - name: "Global Department"
-    dtype: categorical
-    required: false        # not read by booking metrics
-    nullable: false
+    dtype: any
+    required: false
+    nullable: true
   - name: "Department"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Team (EC)"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
 
   # --- client / project ---
   - name: "Holding"
-    dtype: categorical     # the clean, one-value-per-row client field
+    dtype: any             # the clean, one-value-per-row client field
     required: true
-    nullable: false
+    nullable: true
   - name: "Project Name"
-    dtype: string
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Project URL"
-    dtype: string
+    dtype: any
     required: false
     nullable: true
 
   # --- employee (join key) ---
+  # Rows with no Employee carry no attributable data and are dropped
+  # downstream by prepare_booking_df; surfaced here as a warning so the
+  # admin knows, but never blocking.
   - name: "Employee"
-    dtype: string
+    dtype: any
     required: true
-    nullable: false        # a row with no Employee is rejected, not dropped
+    nullable: true
+    warn_if_null: true
 
   # --- dates ---
   - name: "Month"
     dtype: any             # unused; format varies across exports (date OR "Jun 26")
     required: false
     nullable: true
+  # Typed: these two drive every weekly grouping/filter, so a non-date here
+  # would break the charts rather than just look odd.
   - name: "Monday of Week"
     dtype: date
     required: true
-    nullable: false
+    nullable: true
   - name: "Date"
     dtype: date
     required: true
-    nullable: false
+    nullable: true
 
   # --- hours ---
   - name: "Booked Hours Type"
-    dtype: categorical
+    dtype: any             # no fixed list; utilization splits on whatever is here
     required: true
-    nullable: false
-    allowed_values: ["Client Hours", "Internal Hours"]
+    nullable: true
+  # Typed: this is summed for every hours/utilization metric.
   - name: "Employee Booked Hours"
     dtype: float
     required: true
-    nullable: false
-    min: 0                 # 0 is valid (logged, no work); negatives are not
+    nullable: true
+    default: 0
 
-business_rules:
-  # Warning, not error: the current known-good file has 2 rows where Date
-  # is the Sunday immediately before its Monday of Week (a harmless
-  # boundary quirk). Blocking would reject re-uploading our own live data.
-  # The window is [-1, 6] days; anything further out is surfaced for review.
-  - name: date_within_week
-    type: date_within_offset
-    date_column: "Date"
-    base_column: "Monday of Week"
-    min_offset_days: -1
-    max_offset_days: 6
-    severity: warning
-    reason: "Date is outside the week it is bucketed under (Monday of Week)"
+business_rules: []

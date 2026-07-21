@@ -145,8 +145,7 @@ def test_validate_good_file_passes_and_stores_nothing(client):
 
 def test_validate_bad_file_reports_errors(client):
     token = _admin_token(client)
-    df = pd.read_excel(REAL_ROSTER)
-    df.loc[0, "Status"] = "Retired"  # system-fixed enum -> hard error
+    df = pd.read_excel(REAL_ROSTER).drop(columns=["NAME"])  # missing required column
     resp = client.post(
         "/api/v1/data/validate/roster",
         files=_files(_xlsx_bytes(df)),
@@ -155,7 +154,7 @@ def test_validate_bad_file_reports_errors(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["passed"] is False
-    assert any(i["column"] == "Status" for i in body["issues"])
+    assert any(i["column"] == "NAME" for i in body["issues"])
 
 
 # --------------------------------------------------------------------------- #
@@ -188,9 +187,8 @@ def test_upload_rejects_bad_file_with_422_and_keeps_active_unchanged(client):
         files=_files(_real_roster_bytes()),
         headers=_auth(token),
     )
-    # then a broken one (unrecognized Status -> hard error)
-    df = pd.read_excel(REAL_ROSTER)
-    df.loc[0, "Status"] = "Retired"
+    # then a broken one (missing required column -> hard error)
+    df = pd.read_excel(REAL_ROSTER).drop(columns=["NAME"])
     resp = client.post(
         "/api/v1/data/upload/roster",
         files=_files(_xlsx_bytes(df)),
@@ -259,9 +257,14 @@ def test_schema_endpoint_serializes_contract(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["file_type"] == "roster"
+    # The contract still documents the full expected column list (that's
+    # what the "expected format" screen and template are built from), even
+    # though light mode pins no value literals on them.
+    names = {c["name"] for c in body["columns"]}
+    assert {"NEW_EMP_ID", "NAME", "GRADE", "Status"} <= names
     grade = next(c for c in body["columns"] if c["name"] == "GRADE")
-    assert "Grade TBD" in grade["allowed_values"]
-    assert any(r["name"] == "doj_dept_date_or_token" for r in body["business_rules"])
+    assert grade["allowed_values"] is None  # light mode: no fixed value list
+    assert next(c for c in body["columns"] if c["name"] == "NAME")["required"]
 
 
 def test_template_download_has_expected_columns(client):

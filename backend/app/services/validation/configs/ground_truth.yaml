@@ -1,78 +1,65 @@
 # =============================================================================
-# Utilization ground-truth dataset validation contract
+# Utilization ground-truth dataset validation contract  — LIGHT MODE
 # =============================================================================
 # The Utilization_Long sheet of PowerBI_Ready_Utilization_May_2026.xlsx —
 # one row per employee per week, with pre-computed utilization %. This is
 # NOT test-only: GET /api/utilization/overview reads it directly, so it gets
-# the same rigor as roster/booking. See roster.yaml header for how configs
-# are consumed.
+# the same treatment as roster/booking. See roster.yaml header for how
+# configs are consumed.
 #
-# Built from the 2026-07-21 full-file audit. Note the read block targets a
-# specific named sheet (the workbook's first sheet is a README preamble).
+# v2 (2026-07-21) — DELIBERATELY LIGHT, matching the other two: structural
+# checks only, plus a type on the columns the app computes with. No bounds
+# (utilization is NOT capped at 1 — overtime can legitimately exceed 100%)
+# and no cross-field rules. Those get layered back on later.
+#
+# Note the read block targets a specific named sheet (the workbook's first
+# sheet is a README preamble).
 
 file_type: ground_truth
-schema_version: 1
+schema_version: 2
 display_name: Utilization Ground Truth
 source_file: "PowerBI_Ready_Utilization_May_2026.xlsx"
 read:
   sheet: "Utilization_Long"
   header: 0
-allow_unknown_columns: false
+allow_unknown_columns: true
 
 columns:
   - name: "Global Department"
-    dtype: categorical
+    dtype: any
     required: true
-    nullable: false
+    nullable: true
   - name: "Department"
-    dtype: categorical
+    dtype: any
     required: false
-    nullable: false
+    nullable: true
   - name: "Employee"
-    dtype: string          # join key to booking + roster
+    dtype: any             # join key to booking + roster
     required: true
-    nullable: false
+    nullable: true
   - name: "Region (EC)"
-    dtype: categorical
+    dtype: any
     required: false
-    nullable: false
+    nullable: true
   - name: "Market (EC)"
-    dtype: categorical
+    dtype: any
     required: false
-    nullable: false
+    nullable: true
+  # Typed: drives the weekly trend grouping.
   - name: "Week Start"
-    dtype: date            # always a Monday
+    dtype: date
     required: true
-    nullable: false
+    nullable: true
+  # Typed: averaged for the overview. Genuinely nullable — a blank week is
+  # expected and meaningful (no booking-based rate that week), so it is NOT
+  # defaulted to 0, which would drag the average down with a fake zero.
   - name: "Weekly Utilization %"
     dtype: float
-    required: true         # column must exist...
-    nullable: true         # ...but 5/164 values are genuinely blank by design
-    min: 0
-    max: 1
+    required: true
+    nullable: true
   - name: "Period Total Utilization %"
     dtype: float
     required: true
-    nullable: false        # fully populated, unlike Weekly
-    min: 0
-    max: 1
+    nullable: true
 
-business_rules:
-  # (Employee, Week Start) is a genuine composite primary key (0 dups in
-  # real data) — a duplicate would double-count that employee's week.
-  - name: employee_week_unique
-    type: unique_together
-    columns: ["Employee", "Week Start"]
-    severity: error
-    reason: "Each (Employee, Week Start) pair must appear only once"
-
-  # Period Total is a period aggregate, so it is the same on every week-row
-  # for a given employee. Surfaced as a warning (not a hard block) since a
-  # future reporting change could legitimately alter this.
-  - name: period_total_constant_per_employee
-    type: constant_per_group
-    group_by: "Employee"
-    value_column: "Period Total Utilization %"
-    tolerance: 0.0005
-    severity: warning
-    reason: "Period Total Utilization % should be constant across all weeks for an employee"
+business_rules: []
