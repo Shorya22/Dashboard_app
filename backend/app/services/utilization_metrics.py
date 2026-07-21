@@ -82,8 +82,18 @@ INTERNAL_HOURS_LABEL = "Internal Hours"
 # directly, so translating it through the old mapping would look up a
 # name that no longer exists in the ground truth file and silently drop
 # those employee/weeks from every reconciliation.
+#
+# RESOLVED AT SOURCE (2026-07-21): "Pramod Kabugande" -> "Pramod Kabugade"
+# corrected directly in the ground-truth Excel (5 cells across
+# Utilization_Long + Employee_Weekly_Wide), confirmed by the business
+# owner -- the roster and booking sheets already used the correct
+# "Kabugade". Its map entry is removed for the same reason as the
+# 2026-07-17 fixes: with the ground truth now spelling it "Kabugade",
+# mapping booking's (correct) "Kabugade" to the old typo would look up a
+# name that no longer exists and silently drop those employee/weeks from
+# reconciliation. A backup of the pre-fix workbook is in
+# `backend/data/backups/`.
 BOOKING_TO_GROUND_TRUTH_NAME_MAP: dict[str, str] = {
-    "Pramod Kabugade": "Pramod Kabugande",
     # "Amit Singh" (booking) vs "Ankit Singh" (ground truth) is NEW as of
     # this pass and NOT in known-name-variants.md -- deliberately left
     # UNMAPPED here. Could be a genuine typo-variant of the same person,

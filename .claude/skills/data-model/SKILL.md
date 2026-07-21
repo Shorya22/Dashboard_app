@@ -896,8 +896,14 @@ names and whitespace):
   - `Kaginthala Reddy` → likely `KAGITHALA  LOKESH REDDY` in the roster
     (transposed letters: "Kaginthala" vs "Kagithala", plus a dropped
     middle name)
-  - `Pramod Kabugande` → likely `PRAMOD  KABUGADE` in the roster (extra
-    "n" — "Kabugande" vs "Kabugade")
+  - `Pramod Kabugande` → `PRAMOD  KABUGADE` in the roster (extra "n").
+    **RESOLVED AT SOURCE (2026-07-21): corrected directly in the
+    ground-truth Excel (5 cells across `Utilization_Long` +
+    `Employee_Weekly_Wide`) to `Pramod Kabugade`, confirmed by the
+    business owner — roster and booking already used the correct
+    spelling. Its `BOOKING_TO_GROUND_TRUTH_NAME_MAP` entry was removed
+    for the same reason as the 2026-07-17 fixes. Backup in
+    `backend/data/backups/`.**
   - `Saumyarajan Kanungo` → likely `SAUMYARANJAN  KANUNGO` in the roster
     ("Saumyarajan" vs "Saumyaranjan")
   - `Suraj Kayade` → likely `SURAJ CHHATRAPATI KAVADE` in the roster
