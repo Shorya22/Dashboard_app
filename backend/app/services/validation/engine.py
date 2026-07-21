@@ -35,13 +35,19 @@ CONFIG_DIR = Path(__file__).resolve().parent / "configs"
 # literal "nan" and break nullable columns. Value-level correctness for
 # text columns is enforced by `allowed_values` and business rules, not by
 # a strict element-type check.
-_DTYPE_MAP: dict[str, tuple[str, bool]] = {
+# dtype token -> (pandera/pandas dtype or None, coerce?). "any" means no
+# type check at all — for columns whose representation legitimately varies
+# across exports (e.g. a display "Month" that's a real date in one export
+# and the label "Jun 26" in another) AND that no code reads, so enforcing a
+# type buys nothing and only risks rejecting valid files.
+_DTYPE_MAP: dict[str, tuple[str | None, bool]] = {
     "string": ("object", False),
     "categorical": ("object", False),
     "int": ("int64", True),
     "float": ("float64", True),
     "date": ("datetime64[ns]", True),
     "bool": ("bool", True),
+    "any": (None, False),
 }
 
 

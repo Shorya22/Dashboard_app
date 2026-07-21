@@ -11,7 +11,11 @@
 # one would reject valid data.
 
 file_type: booking
-schema_version: 1
+# v2 (2026-07-21): `Month` is no longer type-checked (dtype: any). It's an
+# unused display column whose format varies across exports — a real date
+# in some (2026-06-26), the label "Jun 26" in others — so requiring a
+# datetime rejected legitimate files for no benefit (no code reads it).
+schema_version: 2
 display_name: Time-Booking Data
 source_file: "UTILIZATION DATA SHEET.xlsx"
 read:
@@ -68,9 +72,9 @@ columns:
 
   # --- dates ---
   - name: "Month"
-    dtype: date            # real datetime in source, not a display string
+    dtype: any             # unused; format varies across exports (date OR "Jun 26")
     required: false
-    nullable: false
+    nullable: true
   - name: "Monday of Week"
     dtype: date
     required: true

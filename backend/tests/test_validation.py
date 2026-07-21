@@ -220,6 +220,17 @@ def test_booking_negative_hours(tmp_path):
     assert any(i.column == "Employee Booked Hours" for i in report.errors)
 
 
+def test_booking_month_as_display_string_accepted(tmp_path):
+    # Regression: `Month` is an unused display column whose format varies
+    # across exports (a real date, or the label "Jun 26"). Neither should
+    # be rejected (v2 contract: dtype any).
+    df = _read_real("booking")
+    df["Month"] = "Jun 26"
+    report = _validate_df(df, "booking", tmp_path)
+    assert report.passed, [i.to_dict() for i in report.errors]
+    assert not any(i.column == "Month" for i in report.issues)
+
+
 def test_booking_missing_employee_rejected(tmp_path):
     df = _read_real("booking")
     df.loc[0, "Employee"] = None
