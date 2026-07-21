@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.security import get_current_user
+from app.db.models import User
 from app.models.booking import BookingSummary
 from app.services import booking_metrics
 from app.services.data_loader import get_booking_df
@@ -21,7 +23,7 @@ router = APIRouter(prefix="/booking", tags=["booking"])
 
 
 @router.get("/summary", response_model=BookingSummary)
-def booking_summary() -> BookingSummary:
+def booking_summary(user: User = Depends(get_current_user)) -> BookingSummary:
     try:
         df = get_booking_df()
         return BookingSummary(

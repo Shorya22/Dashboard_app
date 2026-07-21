@@ -23,6 +23,7 @@ if str(ROOT_DIR) not in sys.path:
 
 import anyio.to_thread
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
@@ -62,6 +63,13 @@ app.state.limiter = limiter
 # /utilization/records with large limits) — only compresses responses
 # above the default 500-byte minimum, so small responses are untouched.
 app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(RateLimitExceeded)

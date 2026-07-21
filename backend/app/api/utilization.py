@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core.security import get_current_user
+from app.db.models import User
 from app.models.utilization import (
     BookingRecord,
     EmployeeUtilizationDetail,
@@ -42,7 +44,7 @@ router = APIRouter(prefix="/utilization", tags=["utilization"])
 
 
 @router.get("/summary", response_model=UtilizationSummary)
-def utilization_summary() -> UtilizationSummary:
+def utilization_summary(user: User = Depends(get_current_user)) -> UtilizationSummary:
     try:
         df = get_booking_df()
         return UtilizationSummary(
@@ -58,7 +60,7 @@ def utilization_summary() -> UtilizationSummary:
 
 
 @router.get("/weekly-trend", response_model=WeeklyHoursTrend)
-def utilization_weekly_trend() -> WeeklyHoursTrend:
+def utilization_weekly_trend(user: User = Depends(get_current_user)) -> WeeklyHoursTrend:
     try:
         df = get_booking_df()
         items = [WeeklyHoursPoint(**row) for row in booking_metrics.get_weekly_hours_trend(df)]
@@ -69,7 +71,7 @@ def utilization_weekly_trend() -> WeeklyHoursTrend:
 
 
 @router.get("/by-region", response_model=HoursByRegion)
-def utilization_by_region() -> HoursByRegion:
+def utilization_by_region(user: User = Depends(get_current_user)) -> HoursByRegion:
     try:
         df = get_booking_df()
         items = [RegionHours(**row) for row in booking_metrics.get_hours_by_region(df)]
@@ -80,7 +82,7 @@ def utilization_by_region() -> HoursByRegion:
 
 
 @router.get("/by-region-market", response_model=HoursByRegionMarket)
-def utilization_by_region_market() -> HoursByRegionMarket:
+def utilization_by_region_market(user: User = Depends(get_current_user)) -> HoursByRegionMarket:
     """Region + Market (EC) hours breakdown.
 
     Not a confirmed named DAX measure — see data-model SKILL.md and
@@ -98,7 +100,7 @@ def utilization_by_region_market() -> HoursByRegionMarket:
 
 
 @router.get("/filter-options", response_model=FilterOptions)
-def utilization_filter_options() -> FilterOptions:
+def utilization_filter_options(user: User = Depends(get_current_user)) -> FilterOptions:
     try:
         df = get_booking_df()
         return FilterOptions(**booking_metrics.get_filter_options(df))
@@ -118,6 +120,7 @@ def utilization_records(
     hours_type: list[str] | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
 ) -> RecordsResponse:
     """
     Filter params each accept a single value or multiple repeated query
@@ -146,7 +149,9 @@ def utilization_records(
 
 
 @router.get("/employees/{employee}", response_model=EmployeeUtilizationDetail)
-def utilization_employee_detail(employee: str) -> EmployeeUtilizationDetail:
+def utilization_employee_detail(
+    employee: str, user: User = Depends(get_current_user)
+) -> EmployeeUtilizationDetail:
     try:
         df = get_booking_df()
         detail = booking_metrics.get_employee_detail(df, employee)
@@ -167,7 +172,9 @@ def utilization_employee_detail(employee: str) -> EmployeeUtilizationDetail:
 
 
 @router.get("/projects/{holding}", response_model=ProjectUtilizationDetail)
-def utilization_project_detail(holding: str) -> ProjectUtilizationDetail:
+def utilization_project_detail(
+    holding: str, user: User = Depends(get_current_user)
+) -> ProjectUtilizationDetail:
     try:
         df = get_booking_df()
         detail = booking_metrics.get_project_detail(df, holding)
@@ -180,7 +187,7 @@ def utilization_project_detail(holding: str) -> ProjectUtilizationDetail:
 
 
 @router.get("/holdings-projects", response_model=HoldingsProjectsResponse)
-def utilization_holdings_projects() -> HoldingsProjectsResponse:
+def utilization_holdings_projects(user: User = Depends(get_current_user)) -> HoldingsProjectsResponse:
     """
     Static holding -> distinct project-name hierarchy, for populating the
     Search page's filter dropdown without fetching every booking record
@@ -198,7 +205,7 @@ def utilization_holdings_projects() -> HoldingsProjectsResponse:
 
 
 @router.get("/overview", response_model=UtilizationOverview)
-def utilization_overview() -> UtilizationOverview:
+def utilization_overview(user: User = Depends(get_current_user)) -> UtilizationOverview:
     try:
         df = get_utilization_ground_truth_df()
         return UtilizationOverview(**utilization_metrics.get_utilization_overview(df))

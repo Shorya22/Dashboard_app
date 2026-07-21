@@ -93,7 +93,7 @@ def login(
 
     user = get_user_by_email(db, body.email)
     if user is None or not verify_password(body.password, user.hashed_password):
-        logger.info("login: failed attempt for email=%s", body.email)
+        logger.info("login: failed attempt")
         raise invalid_creds
 
     access_token = create_access_token(user)

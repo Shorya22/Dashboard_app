@@ -28,6 +28,13 @@ class Settings:
     port: int = int(os.environ.get("PORT", "8000"))
     frontend_url: str = os.environ.get("FRONTEND_URL", "http://localhost:5173")
     api_base_url: str = os.environ.get("API_BASE_URL", "/api")
+    cors_origins: list[str] = [
+        origin.strip()
+        for origin in os.environ.get(
+            "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
+        ).split(",")
+        if origin.strip()
+    ]
 
     # --- Auth / JWT ---
     # Local-dev default secret. MUST be overridden via the JWT_SECRET_KEY
@@ -44,10 +51,10 @@ class Settings:
         os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", "7")
     )
     refresh_cookie_name: str = "refresh_token"
-    # Secure=True requires HTTPS. Local dev over plain http://localhost
-    # needs this off, or browsers silently drop the cookie. Flip via env
-    # once served over TLS.
-    cookie_secure: bool = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
+    # Secure=True requires HTTPS and is the safe default for production.
+    # Local dev over plain http://localhost must explicitly set
+    # COOKIE_SECURE=false in .env, or browsers silently drop the cookie.
+    cookie_secure: bool = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
 
     # --- Database ---
     database_url: str = os.environ.get(

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core.security import get_current_user
+from app.db.models import User
 from app.models.roster import (
     EmployeeDirectoryResponse,
     RosterAttritionDetail,
@@ -28,7 +30,7 @@ router = APIRouter(prefix="/roster", tags=["roster"])
 
 
 @router.get("/summary", response_model=RosterSummary)
-def roster_summary() -> RosterSummary:
+def roster_summary(user: User = Depends(get_current_user)) -> RosterSummary:
     try:
         df = get_roster_df()
         return RosterSummary(
@@ -62,7 +64,7 @@ def roster_summary() -> RosterSummary:
 
 
 @router.get("/breakdowns", response_model=RosterBreakdowns)
-def roster_breakdowns() -> RosterBreakdowns:
+def roster_breakdowns(user: User = Depends(get_current_user)) -> RosterBreakdowns:
     try:
         df = get_roster_df()
         return RosterBreakdowns(
@@ -84,7 +86,7 @@ def roster_breakdowns() -> RosterBreakdowns:
 
 
 @router.get("/trends", response_model=RosterTrends)
-def roster_trends() -> RosterTrends:
+def roster_trends(user: User = Depends(get_current_user)) -> RosterTrends:
     try:
         df = get_roster_df()
         return RosterTrends(
@@ -97,7 +99,7 @@ def roster_trends() -> RosterTrends:
 
 
 @router.get("/attrition-detail", response_model=RosterAttritionDetail)
-def roster_attrition_detail() -> RosterAttritionDetail:
+def roster_attrition_detail(user: User = Depends(get_current_user)) -> RosterAttritionDetail:
     try:
         df = get_roster_df()
         return RosterAttritionDetail(
@@ -111,7 +113,7 @@ def roster_attrition_detail() -> RosterAttritionDetail:
 
 
 @router.get("/skills", response_model=RosterSkills)
-def roster_skills() -> RosterSkills:
+def roster_skills(user: User = Depends(get_current_user)) -> RosterSkills:
     try:
         df = get_roster_df()
         return RosterSkills(
@@ -133,6 +135,7 @@ def roster_skills() -> RosterSkills:
 def roster_employees(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
 ) -> EmployeeDirectoryResponse:
     try:
         df = get_roster_df()
