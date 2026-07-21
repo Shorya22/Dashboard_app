@@ -96,8 +96,10 @@ def build_schema(config: dict) -> pa.DataFrameSchema:
     for col in config["columns"]:
         dtype, coerce = _DTYPE_MAP[col["dtype"]]
         checks: list[pa.Check] = []
-        if "allowed_values" in col:
-            checks.append(pa.Check.isin(col["allowed_values"]))
+        # NB: `allowed_values` is intentionally NOT enforced here via
+        # pandera's isin — a pandera check can only ever be a hard error,
+        # but we want per-column severity (a new region/grade should warn,
+        # not block). It's handled in `run_allowed_values_stage` instead.
         if "min" in col:
             checks.append(pa.Check.ge(col["min"]))
         if "max" in col:
@@ -169,12 +171,54 @@ def _unknown_columns_stage(
     ]
 
 
+def run_allowed_values_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
+    """
+    Check closed-set columns against their `allowed_values`, at each
+    column's configured severity.
+
+    `allowed_values_severity` (per column) defaults to "error". Set it to
+    "warning" for org-structure enums that legitimately grow over time
+    (grade bands, regions, entities, markets) — an unrecognized value is
+    then surfaced for review instead of blocking the whole upload and
+    freezing the dashboard. System-fixed sets (Status, Type, ...) keep
+    the default error severity. Null values are skipped here — nullability
+    is the schema stage's job.
+    """
+    issues: list[ValidationIssue] = []
+    for col in config["columns"]:
+        allowed = col.get("allowed_values")
+        if not allowed or col["name"] not in df.columns:
+            continue
+        severity = Severity(col.get("allowed_values_severity", "error"))
+        allowed_set = set(allowed)
+        series = df[col["name"]]
+        bad = series.notna() & ~series.isin(allowed_set)
+        for idx in df.index[bad]:
+            issues.append(
+                ValidationIssue(
+                    stage=Stage.SCHEMA,
+                    severity=severity,
+                    reason=(
+                        f"{series.at[idx]!r} is not one of the recognized "
+                        f"{col['name']} values ({', '.join(map(str, allowed))})"
+                    ),
+                    column=col["name"],
+                    row=int(idx),
+                    rule="allowed_values",
+                    value=series.at[idx],
+                )
+            )
+    return issues
+
+
 def run_schema_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
     """
-    Structural + type + allowed-value + uniqueness validation via pandera,
-    plus unknown-column detection. Returns all violations (lazy mode).
+    Structural + type + uniqueness validation via pandera, plus
+    unknown-column detection and closed-set (allowed_values) checks.
+    Returns all violations (lazy mode).
     """
     issues: list[ValidationIssue] = _unknown_columns_stage(df, config)
+    issues.extend(run_allowed_values_stage(df, config))
     schema = build_schema(config)
     try:
         schema.validate(df, lazy=True)

@@ -17,7 +17,12 @@
 # left unconstrained so a legitimate new value never blocks an upload.
 
 file_type: roster
-schema_version: 1
+# v2 (2026-07-21): added "Hexaware" to Region/Working Entity (a legitimate
+# value for internal/corporate staff, absent from the sample only because
+# those 2 rows were deleted 2026-07-17), and set the org-structure enums
+# (GRADE/Region/Working Entity) to warn-not-block on an unrecognized value
+# so a genuinely new region/grade/entity never freezes the dashboard.
+schema_version: 2
 display_name: Employee Roster
 source_file: "DEPT - Master Data(Sheet1).xlsx"
 read:
@@ -43,21 +48,27 @@ columns:
     nullable: false
 
   # --- classification (closed sets: allowed_values enforced) ---
+  # Org-structure enums: known values listed (so clean data has no noise),
+  # but severity=warning so a genuinely new grade/region/entity/market is
+  # surfaced for review rather than blocking the upload.
   - name: "GRADE"
     dtype: categorical
     required: true
     nullable: false
-    allowed_values: ["G3A", "G4", "G5", "G6", "G8", "Grade TBD"]
+    allowed_values: ["G3A", "G4", "G5", "G6", "G7", "G8", "Grade TBD"]
+    allowed_values_severity: warning
   - name: "Working Entity"
     dtype: categorical
     required: true
     nullable: false
-    allowed_values: ["AMER", "DTNL", "DTIE", "DTDE", "DTUK", "DTAU", "Entity TBD"]
+    allowed_values: ["AMER", "DTNL", "DTIE", "DTDE", "DTUK", "DTAU", "Hexaware", "Entity TBD"]
+    allowed_values_severity: warning
   - name: "Region"
     dtype: categorical
     required: true
     nullable: false
-    allowed_values: ["EMEA", "AMER", "APAC", "Region TBD"]
+    allowed_values: ["EMEA", "AMER", "APAC", "Hexaware", "Region TBD"]
+    allowed_values_severity: warning
   - name: "Type"
     dtype: categorical
     required: true

@@ -146,7 +146,7 @@ def test_validate_good_file_passes_and_stores_nothing(client):
 def test_validate_bad_file_reports_errors(client):
     token = _admin_token(client)
     df = pd.read_excel(REAL_ROSTER)
-    df.loc[0, "GRADE"] = "G99"
+    df.loc[0, "Status"] = "Retired"  # system-fixed enum -> hard error
     resp = client.post(
         "/api/v1/data/validate/roster",
         files=_files(_xlsx_bytes(df)),
@@ -155,7 +155,7 @@ def test_validate_bad_file_reports_errors(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["passed"] is False
-    assert any(i["column"] == "GRADE" for i in body["issues"])
+    assert any(i["column"] == "Status" for i in body["issues"])
 
 
 # --------------------------------------------------------------------------- #

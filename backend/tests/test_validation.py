@@ -92,12 +92,40 @@ def test_available_file_types():
 # --------------------------------------------------------------------------- #
 # roster
 # --------------------------------------------------------------------------- #
-def test_roster_bad_grade(tmp_path):
+def test_roster_unknown_grade_is_warning_not_error(tmp_path):
+    # Org-structure enums (GRADE/Region/Working Entity) warn on an
+    # unrecognized value rather than blocking — a new grade band must not
+    # freeze the dashboard.
     df = _read_real("roster")
     df.loc[0, "GRADE"] = "G99"
     report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
-    assert any(i.column == "GRADE" for i in report.errors)
+    assert report.passed  # warning-only, still promotable
+    warned = [i for i in report.warnings if i.column == "GRADE"]
+    assert warned and warned[0].rule == "allowed_values"
+
+
+def test_roster_hexaware_region_and_entity_allowed(tmp_path):
+    # Regression: "Hexaware" is a legitimate value for internal staff and
+    # must pass cleanly (v2 contract fix).
+    df = _read_real("roster")
+    df.loc[0, "Region"] = "Hexaware"
+    df.loc[0, "Working Entity"] = "Hexaware"
+    report = _validate_df(df, "roster", tmp_path)
+    assert report.passed, [i.to_dict() for i in report.errors]
+    assert not any(
+        i.column in {"Region", "Working Entity"} for i in report.issues
+    )
+
+
+def test_roster_unknown_region_is_warning(tmp_path):
+    df = _read_real("roster")
+    df.loc[0, "Region"] = "MARS"
+    report = _validate_df(df, "roster", tmp_path)
+    assert report.passed
+    assert any(
+        i.column == "Region" and i.severity is Severity.WARNING
+        for i in report.warnings
+    )
 
 
 def test_roster_total_experience_mismatch(tmp_path):
