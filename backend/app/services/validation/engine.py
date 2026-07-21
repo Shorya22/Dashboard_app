@@ -267,44 +267,88 @@ def default_fill_warnings(df: pd.DataFrame, config: dict) -> list[ValidationIssu
     """
     issues: list[ValidationIssue] = []
     for col in config["columns"]:
-        if "default" not in col or col["name"] not in df.columns:
+        name = col["name"]
+        if name not in df.columns:
             continue
-        for idx in df.index[df[col["name"]].isna()]:
+        prefix = col.get("default_unique_prefix")
+        if "default" not in col and not prefix:
+            continue
+        counter = 0
+        for idx in df.index[df[name].isna()]:
+            if prefix:
+                counter += 1
+                substituted: object = f"{prefix} {counter}"
+            else:
+                substituted = col["default"]
             issues.append(
                 ValidationIssue(
                     stage=Stage.SCHEMA,
                     severity=Severity.WARNING,
-                    reason=(
-                        f"{col['name']} was empty — defaulted to "
-                        f"{col['default']!r}"
-                    ),
-                    column=col["name"],
+                    reason=f"{name} was empty — set to {substituted!r}",
+                    column=name,
                     row=int(idx),
                     rule="defaulted_value",
-                    value=col["default"],
+                    value=substituted,
                 )
             )
     return issues
 
 
+def _clean_scalar(value: object) -> object:
+    """
+    Render an existing cell as text without float artifacts.
+
+    A single blank makes pandas read a whole integer column as float64,
+    so a real id would otherwise stringify as "2000194634.0". Whole
+    floats are narrowed back to their integer form.
+    """
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return value if isinstance(value, str) else str(value)
+
+
 def apply_defaults(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     """
-    Fill blanks in columns that declare a `default:` in the config.
+    Fill blanks in columns that declare `default:` (a constant) or
+    `default_unique_prefix:` (a distinct placeholder per blank row).
 
     Applied both during validation (so downstream checks see the same
     values the dashboard will) and at load time in `data_loader`, so the
     contract's defaults are the single definition of "what an empty cell
     means" rather than being reimplemented per metric.
+
+    `default_unique_prefix` exists for identity columns: the headcount
+    measures are `nunique()`, so filling every blank id with one shared
+    marker would merge those employees into a single distinct value and
+    under-count. Numbering each placeholder keeps them distinct.
     """
     filled = df
     for col in config["columns"]:
         name = col["name"]
-        if "default" not in col or name not in filled.columns:
+        if name not in filled.columns:
             continue
-        if filled[name].isna().any():
-            if filled is df:
-                filled = df.copy()
+        has_const = "default" in col
+        prefix = col.get("default_unique_prefix")
+        if not (has_const or prefix):
+            continue
+        if not filled[name].isna().any():
+            continue
+        if filled is df:
+            filled = df.copy()
+        if has_const:
             filled[name] = filled[name].fillna(col["default"])
+            continue
+        # Distinct placeholder per blank row, existing values kept as
+        # clean text so ids and markers can coexist in one column.
+        counter = 0
+        values: list[object] = []
+        for raw in filled[name]:
+            if pd.isna(raw):
+                counter += 1
+                values.append(f"{prefix} {counter}")
+            else:
+                values.append(_clean_scalar(raw))
+        filled[name] = pd.Series(values, index=filled.index, dtype="object")
     return filled
 
 

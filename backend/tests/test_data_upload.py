@@ -188,9 +188,9 @@ def test_upload_rejects_bad_file_with_422_and_keeps_active_unchanged(client):
         files=_files(_real_roster_bytes()),
         headers=_auth(token),
     )
-    # then a broken one (blank primary key -> hard error)
+    # then a broken one (unrecognized Status -> hard error)
     df = pd.read_excel(REAL_ROSTER)
-    df.loc[0, "NEW_EMP_ID"] = None
+    df.loc[0, "Status"] = "Retired"
     resp = client.post(
         "/api/v1/data/upload/roster",
         files=_files(_xlsx_bytes(df)),

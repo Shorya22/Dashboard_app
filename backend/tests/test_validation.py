@@ -219,22 +219,47 @@ def test_roster_partial_blank_experience_accepted_as_given(tmp_path):
     assert report.passed, [i.to_dict() for i in report.errors]
 
 
-def test_roster_blank_new_emp_id_still_blocks(tmp_path):
-    # NEW_EMP_ID is the one blank that makes numbers wrong (dropped by
-    # nunique(dropna=True)), so it must remain a hard error.
+def test_roster_blank_new_emp_id_becomes_numbered_tbd_marker(tmp_path):
+    # v6: a blank id no longer blocks — it becomes "NEW_EMP_ID TBD n".
     df = _read_real("roster")
     df.loc[0, "NEW_EMP_ID"] = None
+    df.loc[1, "NEW_EMP_ID"] = None
     report = _validate_df(df, "roster", tmp_path)
-    assert not report.passed
-    id_errors = [i for i in report.errors if i.column == "NEW_EMP_ID"]
-    # One blank cell must produce exactly ONE actionable error, not the
-    # three pandera raises for it (not_nullable + coerce_dtype + a
-    # column-level dtype mismatch caused by the resulting float column).
-    assert len(id_errors) == 1
-    assert id_errors[0].rule == "not_nullable"
-    assert "empty" in id_errors[0].reason
-    # ...and the message must not leak pandera jargon at the reader.
-    assert "coerce_dtype" not in id_errors[0].reason
+    assert report.passed, [i.to_dict() for i in report.errors]
+    defaulted = [
+        i
+        for i in report.warnings
+        if i.rule == "defaulted_value" and i.column == "NEW_EMP_ID"
+    ]
+    # Distinct markers, NOT one shared value — see below for why.
+    assert [i.value for i in defaulted] == ["NEW_EMP_ID TBD 1", "NEW_EMP_ID TBD 2"]
+
+
+def test_blank_ids_do_not_undercount_headcount(tmp_path):
+    """
+    The headcount measures are `NEW_EMP_ID.nunique()`, so two blank ids
+    filled with one shared marker would collapse into a single distinct
+    value and silently under-count. Numbering keeps them separate.
+    """
+    from app.services import roster_metrics
+    from app.services.validation.engine import apply_dataset_defaults
+
+    df = _read_real("roster")
+    df.loc[0, "NEW_EMP_ID"] = None
+    df.loc[1, "NEW_EMP_ID"] = None
+    filled = apply_dataset_defaults(df, "roster")
+    assert roster_metrics.get_total_employees(filled) == len(df)
+
+
+def test_existing_ids_render_without_float_artifacts(tmp_path):
+    # A single blank makes pandas read the id column as float64; real ids
+    # must not end up rendered as "2000194634.0".
+    from app.services.validation.engine import apply_dataset_defaults
+
+    df = _read_real("roster")
+    df.loc[0, "NEW_EMP_ID"] = None
+    filled = apply_dataset_defaults(df, "roster")
+    assert not any(str(v).endswith(".0") for v in filled["NEW_EMP_ID"])
 
 
 def test_roster_lwd_inactive_is_warning_not_error(tmp_path):
