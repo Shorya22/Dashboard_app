@@ -143,7 +143,7 @@ export function HomePage() {
           reference Home page layout (donuts moved into their own row below). */}
       <ChartCard
         title="Month-wise Workforce Growth"
-        subtitle="Closing headcount, Jul 2025 – Jun 2026"
+        subtitle="Closing headcount, Jul 2025 – Jul 2026 (as of today)"
         isLoading={trends.isLoading}
         isError={trends.isError}
         isEmpty={growthData.length === 0}

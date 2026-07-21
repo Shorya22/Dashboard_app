@@ -11,22 +11,29 @@ calls in `app/api/roster.py`.
 Requested vs. real (as computed from the current roster file):
 
     measure              demo    real
-    Active Employees       35      33
-    Inactive Employees      8      14
+    Active Employees       35      43
+    Inactive Employees     17       5
     Total Employees        55      50
-    Strategic Pool          3       3
+    Strategic Pool          3       2
     Closing Headcount      38      45
-    Exits                   9       5
+    Exits                  17       5
 
 Everything below those six is derived so the screen doesn't contradict
-itself. The reconciling identity (confirmed with the requester) is:
+itself. Per the requester, Inactive and Exits are the same population for
+DEPT (an inactive employee is one who exited), which makes the whole set
+reconcile without a padding category:
 
-    Total 55 = Active 35 + Inactive 8 + Strategic Pool 3 + Exited 9
-    Closing Headcount 38 = Active 35 + Strategic Pool 3
-    Opening 2 + Joiners 45 - Exits 9 = Closing 38
+    Total 55 = Active 35 + Inactive 17 + Strategic Pool 3
+    Closing Headcount 38 = Active 35 + Strategic Pool 3   (as of today)
+    Total 55 = Closing 38 + Exits 17
+    Opening 2 + Joiners 53 - Exits 17 = Closing 38
 
-so `joiners` moves 48 -> 45 to keep that identity true, and every
+so `joiners` moves 48 -> 53 to keep that last identity true, and every
 category breakdown is padded from its real shape to total 55.
+
+Closing Headcount is "as of today" (July 2026), so the monthly series
+runs Jul 2025 - Jul 2026 and lands on 38 in the current month rather than
+stopping at Jun 2026.
 
 Set `DEMO_MODE=0` in the environment to serve the real numbers instead.
 """
@@ -44,12 +51,13 @@ enabled: bool = os.environ.get("DEMO_MODE", "1").lower() not in {"0", "false", "
 
 TOTAL = 55
 ACTIVE = 35
-INACTIVE = 8
 STRATEGIC = 3
-EXITED = 9
-CLOSING = ACTIVE + STRATEGIC  # 38
+# Inactive and Exits are the same population for DEPT — one constant, used
+# for both measures so they can never drift apart on screen.
+INACTIVE = EXITED = 17
+CLOSING = ACTIVE + STRATEGIC  # 38, as of today
 OPENING = 2
-JOINERS = CLOSING - OPENING + EXITED  # 45
+JOINERS = CLOSING - OPENING + EXITED  # 53
 
 SUMMARY_OVERRIDES: dict[str, int | float] = {
     "active_employees": ACTIVE,
@@ -64,8 +72,8 @@ SUMMARY_OVERRIDES: dict[str, int | float] = {
     "active_pct": ACTIVE / TOTAL * 100,
     "attrition_pct": EXITED / TOTAL * 100,
     # Must sum to Exits.
-    "voluntary_leavers": 5,
-    "involuntary_leavers": 4,
+    "voluntary_leavers": 9,
+    "involuntary_leavers": 8,
     # Padded from 47/3 so GCC + Non GCC = Total.
     "gcc_employees": 51,
     "non_gcc_employees": 4,
@@ -78,11 +86,12 @@ BREAKDOWN_OVERRIDES: dict[str, object] = {
     # Home "Workforce Category" donut — Active vs Strategic Pool, so it
     # totals Closing Headcount (38), matching the card above it.
     "workforce_category_split": {"Active": ACTIVE, "Strategic Pool": STRATEGIC},
+    # Inactive == Exits for DEPT, so these three categories already total
+    # 55 — no synthetic "Exited" slice needed.
     "status_split": {
         "Active": ACTIVE,
         "Inactive": INACTIVE,
         "Strategic Pool": STRATEGIC,
-        "Exited": EXITED,
     },
     "workforce_by_type": {"GCC": 51, "Non GCC": 4},
     "headcount_by_region": {"AMER": 17, "APAC": 1, "EMEA": 35, "Region TBD": 2},
@@ -121,23 +130,26 @@ BREAKDOWN_OVERRIDES: dict[str, object] = {
 }
 
 # Monthly series, built so the running total (Opening 2, then +joiners
-# -exits each month) lands exactly on Closing Headcount 38 in Jun 2026,
-# joiners sum to 45 and exits sum to 9. Keeps the real curve's shape,
-# including the April dip.
+# -exits each month) lands exactly on Closing Headcount 38 in the CURRENT
+# month (Jul 2026 — "as of today", per the requester), with joiners
+# summing to 53 and exits to 17. Runs Jul 2025 - Jul 2026 (13 points) so
+# the trend reaches today rather than stopping at Jun 2026, and keeps the
+# real curve's shape including the April dip.
 _MONTHLY = [
     # (month,      joiners, exits, closing)
-    ("Jul 2025", 1, 0, 3),
-    ("Aug 2025", 2, 0, 5),
-    ("Sep 2025", 3, 0, 8),
-    ("Oct 2025", 3, 1, 10),
-    ("Nov 2025", 4, 0, 14),
-    ("Dec 2025", 6, 1, 19),
-    ("Jan 2026", 8, 1, 26),
-    ("Feb 2026", 6, 0, 32),
-    ("Mar 2026", 6, 1, 37),
-    ("Apr 2026", 1, 4, 34),
-    ("May 2026", 3, 0, 37),
-    ("Jun 2026", 2, 1, 38),
+    ("Jul 2025", 3, 0, 5),
+    ("Aug 2025", 4, 1, 8),
+    ("Sep 2025", 4, 0, 12),
+    ("Oct 2025", 4, 1, 15),
+    ("Nov 2025", 5, 1, 19),
+    ("Dec 2025", 6, 1, 24),
+    ("Jan 2026", 7, 2, 29),
+    ("Feb 2026", 5, 1, 33),
+    ("Mar 2026", 5, 2, 36),
+    ("Apr 2026", 3, 4, 35),
+    ("May 2026", 3, 1, 37),
+    ("Jun 2026", 2, 2, 37),
+    ("Jul 2026", 2, 1, 38),
 ]
 
 TREND_OVERRIDES: dict[str, object] = {
@@ -159,7 +171,8 @@ ATTRITION_OVERRIDES: dict[str, object] = {
     "month_wise_resignation": [
         {"month": month, "exits": exits} for month, _, exits, _ in _MONTHLY
     ],
-    "voluntary_involuntary_split": {"Voluntary": 5, "Involuntary": 4},
+    # Must match voluntary_leavers / involuntary_leavers above, and sum to Exits.
+    "voluntary_involuntary_split": {"Voluntary": 9, "Involuntary": 8},
 }
 
 
