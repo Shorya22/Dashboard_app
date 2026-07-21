@@ -16,3 +16,6 @@ backend/data/backups/
 
 # LibreOffice/Excel transient lock files
 .~lock.*#
+
+# Phase 8 runtime upload storage (versioned datasets + manifests)
+backend/data/uploads/
