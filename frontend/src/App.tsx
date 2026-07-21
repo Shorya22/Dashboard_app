@@ -6,6 +6,7 @@ import { queryClient } from '@/lib/query-client'
 import { AuthProvider, useAuth } from '@/lib/auth-context'
 import { apiClient, setOnAuthLost, setOnTokenRefreshed } from '@/lib/api-client'
 import { ProtectedRoute } from '@/components/protected-route'
+import { AdminRoute } from '@/components/admin-route'
 import { AppLayout } from '@/components/app-shell/app-layout'
 import { PageLoadingFallback } from '@/components/dashboard/page-loading-fallback'
 
@@ -81,6 +82,11 @@ const UtilizationOverviewPage = React.lazy(() =>
 const SettingsPage = React.lazy(() =>
   routeImporters['/settings']().then((m) => ({
     default: (m as typeof import('@/pages/settings-page')).SettingsPage,
+  })),
+)
+const DataManagementPage = React.lazy(() =>
+  import('@/pages/data-management-page').then((m) => ({
+    default: m.DataManagementPage,
   })),
 )
 
@@ -284,6 +290,16 @@ function AppRoutes() {
             <React.Suspense fallback={<PageLoadingFallback />}>
               <SettingsPage />
             </React.Suspense>
+          }
+        />
+        <Route
+          path="data-management"
+          element={
+            <AdminRoute>
+              <React.Suspense fallback={<PageLoadingFallback />}>
+                <DataManagementPage />
+              </React.Suspense>
+            </AdminRoute>
           }
         />
       </Route>

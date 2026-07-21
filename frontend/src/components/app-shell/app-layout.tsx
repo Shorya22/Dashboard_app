@@ -20,6 +20,7 @@ const pageTitles: Record<string, string> = {
   '/utilization/projects': 'Project Utilization',
   '/utilization/overview-summary': 'Utilization Overview',
   '/settings': 'Settings',
+  '/data-management': 'Data Management',
 }
 
 const pageSubtitles: Record<string, string> = {
@@ -35,6 +36,7 @@ const pageSubtitles: Record<string, string> = {
   '/utilization/projects': 'Review project utilization detail',
   '/utilization/overview-summary': 'Period utilization rate and employee-level breakdown',
   '/settings': 'Customize chart colors and other app preferences',
+  '/data-management': 'Upload and version the roster, booking, and utilization data',
 }
 
 export function AppLayout() {

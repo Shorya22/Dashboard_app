@@ -14,11 +14,13 @@ import {
   Building2,
   User,
   FolderKanban,
+  Database,
   X,
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { preloadRoute } from '@/lib/route-preload'
+import { useAuth } from '@/lib/auth-context'
 
 import deptLogo from '@/assets/dept-logo-white.png'
 
@@ -51,6 +53,14 @@ const navGroups = [
   },
 ]
 
+// Admin-only. Appended to the nav for users whose role is 'admin' — the
+// route itself is also guarded server-side + by AdminRoute, this just
+// hides the link from viewers.
+const adminNavGroup = {
+  label: 'System',
+  items: [{ to: '/data-management', label: 'Data Management', icon: Database }],
+}
+
 export function Sidebar({
   mobileOpen = false,
   onMobileClose,
@@ -59,6 +69,9 @@ export function Sidebar({
   onMobileClose?: () => void
 }) {
   const [collapsed, setCollapsed] = React.useState(false)
+  const { user } = useAuth()
+  const groups =
+    user?.role === 'admin' ? [...navGroups, adminNavGroup] : navGroups
 
   return (
     <>
@@ -122,7 +135,7 @@ export function Sidebar({
         </div>
 
         <nav className="flex-1 space-y-3 overflow-y-auto p-2.5 pt-4">
-          {navGroups.map((group) => (
+          {groups.map((group) => (
             <div key={group.label}>
               {!collapsed && (
                 <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/50">
