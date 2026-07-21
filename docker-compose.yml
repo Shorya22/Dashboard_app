@@ -1,27 +1,11 @@
 # Docker Compose stack: backend (FastAPI) + frontend (React/Vite, built
-# and served by nginx) + cloudflared (public tunnel).
+# and served by nginx).
 #
 # Ports: frontend is published on host port 8080 and backend on 8000, so
 # this stack can run ALONGSIDE local `npm run dev` (5173) / `uvicorn`
 # (127.0.0.1:8000 bound differently) without colliding. If you run local
 # dev's uvicorn on 0.0.0.0:8000 at the same time you'll get a port
 # conflict on 8000 — stop one or the other.
-#
-# --- Cloudflare tunnel: two modes ---
-# 1. STABLE URL (recommended once you have a Cloudflare account):
-#    Cloudflare Zero Trust dashboard -> Networks -> Tunnels -> Create a
-#    tunnel -> choose "Docker" as the connector -> copy the token shown
-#    (a long string, the `--token` argument in the sample command) into
-#    CLOUDFLARE_TUNNEL_TOKEN in your .env file. Point the tunnel's public
-#    hostname at http://frontend:80 in the Cloudflare dashboard. This
-#    gives a permanent URL (e.g. https://dashboard.yourdomain.com) that
-#    stays the same across restarts.
-# 2. QUICK TUNNEL (zero setup, works immediately): leave
-#    CLOUDFLARE_TUNNEL_TOKEN unset/blank. cloudflared will start a
-#    temporary tunnel and print a random https://<random>.trycloudflare.com
-#    URL in `docker compose logs cloudflared`. This URL changes every
-#    time the container restarts — fine for quick testing, not for
-#    sharing a link that needs to stay valid.
 
 services:
   backend:
@@ -69,34 +53,6 @@ services:
         condition: service_healthy
     ports:
       - "8080:80"
-
-  # cloudflared has TWO alternative service definitions below, gated by
-  # Compose "profiles" rather than shell conditionals — the official
-  # cloudflare/cloudflared image is distroless (no /bin/sh), so an
-  # `if [ -n "$TOKEN" ]; then ... else ... fi` entrypoint isn't possible
-  # inside the container. Instead, pick a profile via COMPOSE_PROFILES in
-  # .env: `COMPOSE_PROFILES=quick` (default, zero setup) or
-  # `COMPOSE_PROFILES=named` (stable URL, requires CLOUDFLARE_TUNNEL_TOKEN).
-
-  cloudflared-quick:
-    image: cloudflare/cloudflared:latest
-    container_name: dashboard-cloudflared
-    restart: unless-stopped
-    profiles: ["quick"]
-    depends_on:
-      - frontend
-    command: ["tunnel", "--url", "http://frontend:80"]
-
-  cloudflared-named:
-    image: cloudflare/cloudflared:latest
-    container_name: dashboard-cloudflared
-    restart: unless-stopped
-    profiles: ["named"]
-    depends_on:
-      - frontend
-    env_file:
-      - .env
-    command: ["tunnel", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN}"]
 
 volumes:
   backend-data:
