@@ -217,14 +217,106 @@ def run_allowed_values_stage(df: pd.DataFrame, config: dict) -> list[ValidationI
     return issues
 
 
+def default_fill_warnings(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
+    """
+    Warn for each blank cell that `apply_defaults` is about to fill.
+
+    Filling a blank asserts a fact that wasn't in the file (e.g. "no
+    recorded experience" -> 0), so it is never done silently — every
+    substituted cell is reported so an admin can spot an omission that
+    should have been real data.
+    """
+    issues: list[ValidationIssue] = []
+    for col in config["columns"]:
+        if "default" not in col or col["name"] not in df.columns:
+            continue
+        for idx in df.index[df[col["name"]].isna()]:
+            issues.append(
+                ValidationIssue(
+                    stage=Stage.SCHEMA,
+                    severity=Severity.WARNING,
+                    reason=(
+                        f"{col['name']} was empty — defaulted to "
+                        f"{col['default']!r}"
+                    ),
+                    column=col["name"],
+                    row=int(idx),
+                    rule="defaulted_value",
+                    value=col["default"],
+                )
+            )
+    return issues
+
+
+def apply_defaults(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """
+    Fill blanks in columns that declare a `default:` in the config.
+
+    Applied both during validation (so downstream checks see the same
+    values the dashboard will) and at load time in `data_loader`, so the
+    contract's defaults are the single definition of "what an empty cell
+    means" rather than being reimplemented per metric.
+    """
+    filled = df
+    for col in config["columns"]:
+        name = col["name"]
+        if "default" not in col or name not in filled.columns:
+            continue
+        if filled[name].isna().any():
+            if filled is df:
+                filled = df.copy()
+            filled[name] = filled[name].fillna(col["default"])
+    return filled
+
+
+def apply_dataset_defaults(df: pd.DataFrame, file_type: str) -> pd.DataFrame:
+    """`apply_defaults` keyed by file type — the entry point data_loader uses."""
+    return apply_defaults(df, load_config(file_type))
+
+
+def run_null_warnings_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
+    """
+    Report blanks in columns marked `warn_if_null: true`.
+
+    For columns the dashboard tolerates being empty (the metric code
+    already skips or buckets blanks) we allow the upload through, but
+    still surface each blank as a warning so an admin knows the record is
+    incomplete rather than it passing silently. Columns whose blankness
+    would silently corrupt a metric (e.g. NEW_EMP_ID, which is dropped by
+    `nunique(dropna=True)` and would under-count headcount) stay
+    `nullable: false` and remain hard errors.
+    """
+    issues: list[ValidationIssue] = []
+    for col in config["columns"]:
+        if not col.get("warn_if_null") or col["name"] not in df.columns:
+            continue
+        series = df[col["name"]]
+        for idx in df.index[series.isna()]:
+            issues.append(
+                ValidationIssue(
+                    stage=Stage.SCHEMA,
+                    severity=Severity.WARNING,
+                    reason=(
+                        f"{col['name']} is empty — this employee will be "
+                        f"left out of any metric based on it"
+                    ),
+                    column=col["name"],
+                    row=int(idx),
+                    rule="empty_optional_value",
+                )
+            )
+    return issues
+
+
 def run_schema_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:
     """
     Structural + type + uniqueness validation via pandera, plus
-    unknown-column detection and closed-set (allowed_values) checks.
-    Returns all violations (lazy mode).
+    unknown-column detection, closed-set (allowed_values) checks, and
+    blank-value warnings. Returns all violations (lazy mode).
     """
     issues: list[ValidationIssue] = _unknown_columns_stage(df, config)
     issues.extend(run_allowed_values_stage(df, config))
+    issues.extend(run_null_warnings_stage(df, config))
     schema = build_schema(config)
     try:
         schema.validate(df, lazy=True)

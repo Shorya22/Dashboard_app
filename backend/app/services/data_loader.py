@@ -24,6 +24,7 @@ from app.services.booking_metrics import load_booking_data, prepare_booking_df
 from app.services.roster_metrics import load_roster
 from app.services.utilization_metrics import load_ground_truth_long
 from app.services.validation import storage
+from app.services.validation.engine import apply_dataset_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ def get_roster_df() -> pd.DataFrame:
     if _roster_cache is None:
         with _load_lock:
             if _roster_cache is None:  # re-check: lost the race while waiting
-                _roster_cache = load_roster(storage.resolved_path("roster"))
+                _roster_cache = apply_dataset_defaults(load_roster(storage.resolved_path("roster")), "roster")
     return _roster_cache
 
 
@@ -57,7 +58,7 @@ def get_booking_df() -> pd.DataFrame:
     if _booking_cache is None:
         with _load_lock:
             if _booking_cache is None:
-                _booking_cache = load_booking_data(storage.resolved_path("booking"))
+                _booking_cache = apply_dataset_defaults(load_booking_data(storage.resolved_path("booking")), "booking")
     return _booking_cache
 
 
@@ -90,7 +91,7 @@ def get_utilization_ground_truth_df() -> pd.DataFrame:
     if _utilization_ground_truth_cache is None:
         with _load_lock:
             if _utilization_ground_truth_cache is None:
-                _utilization_ground_truth_cache = load_ground_truth_long(storage.resolved_path("ground_truth"))
+                _utilization_ground_truth_cache = apply_dataset_defaults(load_ground_truth_long(storage.resolved_path("ground_truth")), "ground_truth")
     return _utilization_ground_truth_cache
 
 
@@ -98,7 +99,7 @@ def reload_roster() -> pd.DataFrame:
     """Force a re-read of the roster Excel file, refreshing the cache."""
     global _roster_cache
     with _load_lock:
-        _roster_cache = load_roster(storage.resolved_path("roster"))
+        _roster_cache = apply_dataset_defaults(load_roster(storage.resolved_path("roster")), "roster")
     logger.info("reload_roster: cache refreshed")
     return _roster_cache
 
@@ -107,7 +108,7 @@ def reload_booking_data() -> pd.DataFrame:
     """Force a re-read of the booking Excel file, refreshing the cache."""
     global _booking_cache, _booking_prepared_cache
     with _load_lock:
-        _booking_cache = load_booking_data(storage.resolved_path("booking"))
+        _booking_cache = apply_dataset_defaults(load_booking_data(storage.resolved_path("booking")), "booking")
         _booking_prepared_cache = None  # recomputed lazily from the new df
     logger.info("reload_booking_data: cache refreshed")
     return _booking_cache
@@ -117,6 +118,6 @@ def reload_utilization_ground_truth() -> pd.DataFrame:
     """Force a re-read of the utilization ground-truth Excel file, refreshing the cache."""
     global _utilization_ground_truth_cache
     with _load_lock:
-        _utilization_ground_truth_cache = load_ground_truth_long(storage.resolved_path("ground_truth"))
+        _utilization_ground_truth_cache = apply_dataset_defaults(load_ground_truth_long(storage.resolved_path("ground_truth")), "ground_truth")
     logger.info("reload_utilization_ground_truth: cache refreshed")
     return _utilization_ground_truth_cache

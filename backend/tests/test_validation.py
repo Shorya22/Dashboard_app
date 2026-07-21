@@ -190,6 +190,44 @@ def test_roster_doj_dept_tbd_ok_but_garbage_flagged(tmp_path):
     assert [i.row for i in bad] == [1]
 
 
+def test_roster_blank_experience_defaults_to_zero(tmp_path):
+    # A new hire whose experience isn't filled in yet must not block the
+    # upload: blanks default to 0 (warned, never silent).
+    df = _read_real("roster")
+    for col in (
+        "Hexaware Experience (Years)",
+        "Before Hexaware Experience",
+        "Total Experience",
+    ):
+        df.loc[0, col] = None
+    report = _validate_df(df, "roster", tmp_path)
+    assert report.passed, [i.to_dict() for i in report.errors]
+    defaulted = [i for i in report.warnings if i.rule == "defaulted_value"]
+    assert len(defaulted) == 3
+
+
+def test_roster_partial_blank_experience_still_caught_by_sum_rule(tmp_path):
+    # Defaulting must not hide a genuine inconsistency: if only one operand
+    # is blank and the remaining numbers don't add up, the sum rule fires.
+    df = _read_real("roster")
+    df.loc[0, "Hexaware Experience (Years)"] = None
+    df.loc[0, "Before Hexaware Experience"] = 7.4
+    df.loc[0, "Total Experience"] = 0.01  # 0 + 7.4 != 0.01
+    report = _validate_df(df, "roster", tmp_path)
+    assert not report.passed
+    assert "total_experience_sum" in _rules_fired(report)
+
+
+def test_roster_blank_new_emp_id_still_blocks(tmp_path):
+    # NEW_EMP_ID is the one blank that makes numbers wrong (dropped by
+    # nunique(dropna=True)), so it must remain a hard error.
+    df = _read_real("roster")
+    df.loc[0, "NEW_EMP_ID"] = None
+    report = _validate_df(df, "roster", tmp_path)
+    assert not report.passed
+    assert any(i.column == "NEW_EMP_ID" for i in report.errors)
+
+
 def test_roster_lwd_inactive_is_warning_not_error(tmp_path):
     # Blank LWD on an Inactive row is a warning, never a hard block.
     df = _read_real("roster")

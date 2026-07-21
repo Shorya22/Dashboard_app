@@ -21,6 +21,8 @@ from typing import Callable
 import pandas as pd
 
 from app.services.validation.engine import (
+    apply_defaults,
+    default_fill_warnings,
     load_config,
     run_business_stage,
     run_schema_stage,
@@ -104,6 +106,12 @@ def validate_file(
         return report
     report.rows_total = len(df)
     report.rows_checked = len(df)
+
+    # Apply the contract's declared defaults before any check runs, so
+    # every stage (and the dashboard, via data_loader) sees the same
+    # values. Each substituted cell is reported as a warning first.
+    report.extend(default_fill_warnings(df, config))
+    df = apply_defaults(df, config)
 
     # Stage 3: schema (structural + type + allowed values + uniqueness).
     report.stage_reached = Stage.SCHEMA

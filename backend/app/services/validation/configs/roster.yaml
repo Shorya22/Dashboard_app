@@ -25,8 +25,13 @@ file_type: roster
 # v3 (2026-07-21): made the two UNUSED legacy columns EMP ID and
 # DOJ (Hexaware) nullable — a blank in a column no metric reads must not
 # block an upload (e.g. a newly-added employee whose legacy id isn't set).
-# Required USED fields (NEW_EMP_ID, experience, Today) stay non-null.
-schema_version: 3
+# v4 (2026-07-21): blank experience values now default to 0 and blank
+# `Today` is tolerated (both warned, never silent) — verified safe against
+# the metric code. NEW_EMP_ID deliberately still blocks: it is the only
+# blank that makes numbers WRONG rather than merely incomplete, since
+# `get_total_employees` is nunique(dropna=True) and would drop that
+# employee from every headcount.
+schema_version: 4
 display_name: Employee Roster
 source_file: "DEPT - Master Data(Sheet1).xlsx"
 read:
@@ -40,6 +45,11 @@ columns:
     dtype: string          # legacy id, mixed int/str in source — never math on it
     required: false        # present in file but never read by app code
     nullable: true         # v3: unused legacy id — a blank must not block an upload
+  # MUST stay non-nullable: `get_total_employees` is
+  # `NEW_EMP_ID.nunique(dropna=True)`, so a blank id silently drops that
+  # employee from every headcount metric (roster would read 50 when the
+  # file has 52). A missing id is the one blank that corrupts numbers
+  # rather than just leaving a gap — so it blocks.
   - name: "NEW_EMP_ID"
     dtype: int             # primary key used by every roster metric
     required: true
@@ -149,7 +159,11 @@ columns:
   - name: "Today"
     dtype: string          # snapshot "as of" date, constant across rows
     required: true
-    nullable: false
+    # v4: blank tolerated — calendar.py takes `today.max()` with blanks
+    # excluded, and the value is identical on every row, so other rows
+    # supply it. Still warned so an admin sees the gap.
+    nullable: true
+    warn_if_null: true
   - name: "LWD"
     dtype: string          # last working day — blank unless Status=Inactive
     required: true
@@ -161,20 +175,29 @@ columns:
     allowed_values: ["Voluntary", "Involuntary"]
 
   # --- experience (numeric, non-negative) ---
+  # v4: a blank means "no recorded experience" and defaults to 0 (business
+  # owner's call), so a new hire whose details aren't filled in yet doesn't
+  # block the upload and lands in the 0-1 Years band rather than "Unknown".
+  # Every defaulted cell is still reported as a warning. Note the sum rule
+  # below runs on the DEFAULTED values, so a partly-filled row whose
+  # numbers genuinely don't add up is still caught.
   - name: "Hexaware Experience (Years)"
     dtype: float
     required: true
-    nullable: false
+    nullable: true
+    default: 0
     min: 0
   - name: "Before Hexaware Experience"
     dtype: float
     required: true
-    nullable: false
+    nullable: true
+    default: 0
     min: 0
   - name: "Total Experience"
     dtype: float
     required: true
-    nullable: false
+    nullable: true
+    default: 0
     min: 0
 
 business_rules:
