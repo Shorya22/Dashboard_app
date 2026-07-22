@@ -191,6 +191,31 @@ columns:
     nullable: true
     default: 0
 
-# No cross-field rules in light mode — experience is taken exactly as
-# given and nothing is reconciled. Re-add here when ready.
-business_rules: []
+# Kept deliberately minimal. Experience is taken exactly as given and
+# nothing is reconciled — see the light-mode note at the top.
+#
+# These two exist because an Inactive employee with no leaving date is the
+# one gap that visibly breaks a chart: Exits counts 14 from Status, but the
+# month-by-month trends can only place someone in a month if `LWD` says
+# when they left, and Voluntary vs Involuntary can only classify them if
+# `Reason for Leaving` says why. Both are WARNINGS — the upload still goes
+# through and the dashboard still works, they just name the rows the data
+# person needs to complete.
+business_rules:
+  - name: lwd_missing_for_inactive
+    type: conditional_presence
+    when_column: "Status"
+    when_equals: "Inactive"
+    then_column: "LWD"
+    then: present
+    severity: warning
+    reason: "Employee is Inactive but has no LWD — they can't be placed in the monthly leavers trend"
+
+  - name: reason_missing_for_inactive
+    type: conditional_presence
+    when_column: "Status"
+    when_equals: "Inactive"
+    then_column: "Reason for Leaving"
+    then: present
+    severity: warning
+    reason: "Employee is Inactive but has no Reason for Leaving — they can't be counted as Voluntary or Involuntary"

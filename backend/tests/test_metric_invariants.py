@@ -140,3 +140,31 @@ def test_blank_group_by_values_are_labelled_not_dropped(real_roster):
     assert sum(regions.values()) == total
     assert sum(entities.values()) == total
     assert metric_invariants.violations(df, "roster") == []
+
+
+def test_filling_in_lwd_makes_the_exit_numbers_reconcile(real_roster):
+    """
+    The whole HR Analytics gap is a DATA gap, not a code one: Exits counts
+    Inactive employees, but the monthly leavers trend needs a leaving date
+    to place them in a month. Filling in LWD closes it with no code change
+    — which is exactly what the upload warnings ask the data person to do.
+    """
+    from app.services import roster_metrics
+
+    df = real_roster.copy()
+    gap = (df["Status"] == "Inactive") & df["LWD"].isna()
+
+    if gap.any():  # snapshot may already be complete
+        assert roster_metrics.get_dated_exits(df) < roster_metrics.get_exits(df)
+        assert "every_exit_has_a_leaving_date" in {
+            r.name for r in metric_invariants.violations(df, "roster")
+        }
+
+    df.loc[gap, "LWD"] = "15-May-26"
+    df.loc[gap, "Reason for Leaving"] = "Voluntary"
+
+    # card and trend now describe the same people
+    assert roster_metrics.get_dated_exits(df) == roster_metrics.get_exits(df)
+    assert "every_exit_has_a_leaving_date" not in {
+        r.name for r in metric_invariants.violations(df, "roster")
+    }

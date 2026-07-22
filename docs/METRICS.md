@@ -399,21 +399,46 @@ Unchanged formula: **Exits ÷ (Closing Headcount + Exits)**.
 > that is *not* filtered, because it needs Closing Headcount, which is
 > date-based and not derivable from the employee rows the page filters on.
 
-### Charts: Month Wise Headcount, Monthly Joiners vs Leavers, Month-Wise Resignation, Voluntary vs Involuntary
-**Left as they are** — still driven by `LWD` dates via `get_dated_exits`.
+### Charts: Monthly Joiners vs Leavers, Month-Wise Resignation
+- **Joiners** come from **`DOJ (DEPT)`** — the month someone joined.
+- **Leavers** come from **`LWD`** — the month someone left.
 
-⚠️ **Known and accepted difference:** the Exits card says `14`, but the
-month-by-month charts total `5`, and Voluntary vs Involuntary classifies
-`5`. Placing an exit in a month needs a date, and only 5 of the 14
-Inactive employees have an `LWD`; only the same 5 have a
-`Reason for Leaving`.
+That is the intended logic and is unchanged.
 
-So the card answers *"how many have left"* and the trend answers *"when
-did the ones we have dates for leave"*. Filling in `LWD` and
-`Reason for Leaving` for the other 9 would close the gap — a data fix,
-not a code change.
+### The one thing the data person has to keep filled in
 
-*These four charts have not otherwise been reviewed yet.*
+Everyone who leaves must get an **`LWD`** and a **`Reason for Leaving`**.
+Those two fields are what let a departure appear in a *month* and be
+classified as Voluntary or Involuntary. Status alone can't do it — it says
+someone left, not when or why.
+
+Today 9 of the 14 Inactive employees are missing both, so:
+
+| | Card | Charts |
+|---|---|---|
+| Exits | **14** | monthly leavers total **5** |
+| Voluntary vs Involuntary | — | classifies **5** |
+
+**This is a data gap, not a code one.** Verified by simulation: filling in
+those 9 rows makes everything reconcile with no code change —
+`get_dated_exits` becomes 14, the monthly trend totals 14, and Voluntary
+vs Involuntary covers all 14.
+
+**The upload tells the data person exactly what to fix**, both as a
+summary and as a row list:
+
+> ⚠ exits=14, of which 5 have a leaving date; 9 exit(s) have no LWD, so
+> the monthly leavers trend and the Voluntary/Involuntary split cannot
+> include them
+
+> ⚠ 9 rows missing LWD — Excel rows 6, 14, 15, 21, 23, 29, 32, 35, 46
+> ⚠ 9 rows missing Reason for Leaving — same rows
+
+Both are **warnings**, never blockers: the upload still goes through and
+the dashboard still works.
+
+*Month Wise Headcount and the two charts above have not otherwise been
+reviewed yet.*
 
 ---
 
@@ -433,6 +458,7 @@ flagged before it goes live:
 | `charts_account_for_everyone` | Every breakdown chart totals to the population it describes — blanks counted, never dropped |
 | `every_status_has_a_workforce_meaning` | No status is left without a decision on whether it counts as present |
 | `exits_equals_inactive` | Exits and Inactive stay the same number — they are the same people |
+| `every_exit_has_a_leaving_date` | Every exit has an `LWD`, so the monthly leavers trend can account for all of them |
 | `hours_split_covers_all_hours` | Client + Internal = total booked hours, so no hours category is silently missing from the donut |
 
 Each one exists because of a real failure, not a hypothetical: the

@@ -208,9 +208,34 @@ def _exits_equals_inactive(df: pd.DataFrame) -> tuple[bool, str]:
     return ok, f"exits={exits}, inactive={inactive}"
 
 
+def _every_exit_has_a_leaving_date(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Every exit should have an `LWD`, so the monthly leavers trend can
+    account for all of them.
+
+    Exits is a Status count (14 today) but the month-by-month trend is
+    built from leaving dates, so an Inactive employee with no `LWD` can
+    never appear in it — the card and the chart then describe different
+    totals. This is a data gap, not a code one: filling in the dates
+    closes it, and the row-level warnings on the upload name exactly who
+    is missing.
+    """
+    exits = roster_metrics.get_exits(df)
+    dated = roster_metrics.get_dated_exits(df)
+    ok = exits == dated
+    detail = f"exits={exits}, of which {dated} have a leaving date"
+    if not ok:
+        detail += (
+            f"; {exits - dated} exit(s) have no LWD, so the monthly leavers "
+            "trend and the Voluntary/Involuntary split cannot include them"
+        )
+    return ok, detail
+
+
 ROSTER_INVARIANTS: dict[str, InvariantCheck] = {
     "charts_account_for_everyone": _charts_account_for_everyone,
     "exits_equals_inactive": _exits_equals_inactive,
+    "every_exit_has_a_leaving_date": _every_exit_has_a_leaving_date,
     "closing_headcount_is_present_workforce": _closing_headcount_is_present_workforce,
     "seniority_split_covers_present_workforce": _seniority_split_covers_present_workforce,
     "strategic_pool_same_everywhere": _same_label_same_number,
