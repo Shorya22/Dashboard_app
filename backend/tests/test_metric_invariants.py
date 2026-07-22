@@ -17,12 +17,19 @@ import pytest
 from app.services import metric_invariants, roster_metrics
 from app.services.roster_metrics import DEFAULT_ROSTER_PATH, load_roster
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+# Frozen snapshots — invariants must hold for LOGIC reasons, so they are
+# checked against stable data rather than the live files (which change with
+# every business upload).
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 @pytest.fixture
 def real_roster() -> pd.DataFrame:
-    return load_roster(DEFAULT_ROSTER_PATH)
+    from app.services.validation.engine import apply_dataset_defaults
+
+    return apply_dataset_defaults(
+        load_roster(FIXTURES_DIR / "roster_snapshot.xlsx"), "roster"
+    )
 
 
 def test_real_roster_satisfies_all_invariants(real_roster):
@@ -65,6 +72,30 @@ def test_invariant_catches_the_original_divergence(real_roster):
     assert roster_metrics.get_strategic_pool(df) == int(
         (df["Status"] == "Strategic Pool").sum()
     )
+
+
+def test_booking_hours_split_covers_all_hours():
+    """Client + Internal must account for every booked hour."""
+    from app.services.roster_metrics import load_roster  # noqa: F401  (path style)
+    from app.services.booking_metrics import load_booking_data
+
+    df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
+    assert metric_invariants.violations(df, "booking") == []
+
+
+def test_booking_invariant_catches_a_new_hours_category():
+    """
+    A category the donut doesn't know about (e.g. "Leave Hours") would
+    still count toward total hours but appear in neither slice, quietly
+    under-reporting. That must be flagged, and the culprit named.
+    """
+    from app.services.booking_metrics import load_booking_data
+
+    df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx").copy()
+    df.loc[df.index[:40], "Booked Hours Type"] = "Leave Hours"
+    bad = metric_invariants.violations(df, "booking")
+    assert [r.name for r in bad] == ["hours_split_covers_all_hours"]
+    assert "Leave Hours" in bad[0].detail
 
 
 def test_invariant_fails_loudly_on_an_unaccounted_status(real_roster):

@@ -98,12 +98,25 @@ Scope: **current workforce only** (Active + Strategic Pool), so it totals
 Current: Senior `15`, Lead `13`, Mid `5`, TBD `4`, Other `1`.
 
 ### Chart: Internal v Client Utilization (donut) — `17.15K` hours
-From the **booking** sheet, summing `Employee Booked Hours` split by
-`Booked Hours Type`:
+From the **booking** (utilization) sheet. The `Booked Hours Type` column
+holds the category; hours are summed from `Employee Booked Hours` for
+each one:
 
-- **Client Hours** — `11,433.6` (66.7%)
-- **Internal Hours** — `5,719.2` (33.3%)
-- Total — `17,152.8`
+| Category (`Booked Hours Type`) | Rows | Sum of `Employee Booked Hours` | Share |
+|---|---|---|---|
+| Client Hours | 1,929 | **11,433.6** | 66.66% |
+| Internal Hours | 1,032 | **5,719.2** | 33.34% |
+| **Total** | 2,961 | **17,152.8** | 100% |
+
+The donut's centre figure (`17.15K`) is that total. Verified 2026-07-22
+directly against the raw file — Client + Internal equals the total
+exactly, so no hours are unaccounted for.
+
+The two category labels are configured in `booking_metrics.yaml`, so
+renaming one is a config edit. If a **third** category ever appears
+(e.g. "Leave Hours"), those hours would count toward the total but land
+in neither slice — the `hours_split_covers_all_hours` invariant catches
+exactly that and names the offending category.
 
 ---
 
@@ -115,9 +128,12 @@ flagged before it goes live:
 
 1. Strategic Pool is the same number everywhere it appears.
 2. Closing Headcount = Active + Strategic Pool.
-3. The Status breakdown accounts for every employee (no status silently
+3. The Workforce-by-Seniority split covers exactly the present workforce.
+4. The Status breakdown accounts for every employee (no status silently
    uncounted).
-4. Active + Inactive + Strategic Pool = Total Employees.
+5. Active + Inactive + Strategic Pool = Total Employees.
+6. Client Hours + Internal Hours = total booked hours (no hours category
+   silently excluded from the donut).
 
 ---
 

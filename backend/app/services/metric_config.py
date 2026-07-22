@@ -19,16 +19,35 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-CONFIG_PATH = Path(__file__).resolve().parent / "configs" / "roster_metrics.yaml"
+CONFIG_DIR = Path(__file__).resolve().parent / "configs"
 
 
-@functools.lru_cache(maxsize=1)
-def load_metric_config() -> dict:
-    """Load and cache the roster metric-semantics config."""
-    with CONFIG_PATH.open("r", encoding="utf-8") as fh:
+@functools.lru_cache(maxsize=None)
+def load_metric_config(dataset: str = "roster") -> dict:
+    """Load and cache a dataset's metric-semantics config."""
+    path = CONFIG_DIR / f"{dataset}_metrics.yaml"
+    with path.open("r", encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
 
+# --- booking ------------------------------------------------------------- #
+def hours_value_column() -> str:
+    return load_metric_config("booking")["hours"]["value_column"]
+
+
+def hours_type_column() -> str:
+    return load_metric_config("booking")["hours"]["type_column"]
+
+
+def client_hours_label() -> str:
+    return load_metric_config("booking")["hours"]["client_label"]
+
+
+def internal_hours_label() -> str:
+    return load_metric_config("booking")["hours"]["internal_label"]
+
+
+# --- roster -------------------------------------------------------------- #
 def status_column() -> str:
     return load_metric_config()["status"]["column"]
 

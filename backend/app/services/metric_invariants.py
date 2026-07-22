@@ -32,7 +32,7 @@ from typing import Callable
 
 import pandas as pd
 
-from app.services import roster_metrics
+from app.services import metric_config, roster_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +162,40 @@ ROSTER_INVARIANTS: dict[str, InvariantCheck] = {
     "status_measures_partition_roster": _active_plus_inactive_plus_pool_is_total,
 }
 
+def _hours_split_covers_all_hours(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Client Hours + Internal Hours must equal total booked hours.
+
+    The Internal-v-Client donut splits on two configured labels. If the
+    source ever adds or renames a category (e.g. "Leave Hours"), those
+    hours would still land in the total but in neither slice — the donut
+    would quietly under-report with nothing on screen to indicate it.
+    This turns that into a visible warning at upload time.
+    """
+    from app.services import booking_metrics
+
+    total = booking_metrics.get_total_hours(df)
+    client = booking_metrics.get_client_hours(df)
+    internal = booking_metrics.get_internal_hours(df)
+    ok = abs((client + internal) - total) < 0.01
+    detail = f"client={client:,.1f} + internal={internal:,.1f} vs total={total:,.1f}"
+    if not ok:
+        known = {
+            booking_metrics.CLIENT_HOURS_LABEL,
+            booking_metrics.INTERNAL_HOURS_LABEL,
+        }
+        extra = sorted(set(df[metric_config.hours_type_column()].dropna()) - known)
+        detail += f"; unaccounted Booked Hours Type values: {extra}"
+    return ok, detail
+
+
+BOOKING_INVARIANTS: dict[str, InvariantCheck] = {
+    "hours_split_covers_all_hours": _hours_split_covers_all_hours,
+}
+
 INVARIANTS_BY_FILE_TYPE: dict[str, dict[str, InvariantCheck]] = {
     "roster": ROSTER_INVARIANTS,
+    "booking": BOOKING_INVARIANTS,
 }
 
 

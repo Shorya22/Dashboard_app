@@ -1,0 +1,24 @@
+# =============================================================================
+# Booking METRIC semantics — business meaning, not file structure
+# =============================================================================
+# Companion to roster_metrics.yaml. The ingestion contract
+# (validation/configs/booking.yaml) says what a valid booking FILE looks
+# like; this says what its values MEAN to the dashboard.
+#
+# Confirmed with the business owner 2026-07-22:
+#   The `Booked Hours Type` column holds the split, and hours are summed
+#   from `Employee Booked Hours` per category.
+
+version: 1
+
+hours:
+  # Column holding the number of hours to sum.
+  value_column: "Employee Booked Hours"
+  # Column holding the client-vs-internal category.
+  type_column: "Booked Hours Type"
+  # The two categories the Internal-v-Client donut splits on. If a new
+  # category ever appears in the data it will NOT be silently dropped:
+  # the `hours_split_covers_all_hours` invariant compares these against
+  # the total and flags the difference on upload.
+  client_label: "Client Hours"
+  internal_label: "Internal Hours"

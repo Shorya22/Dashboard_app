@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.services import metric_config
 from app.services.cache_utils import cache_on_df
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,12 @@ DEFAULT_BOOKING_PATH = (
     Path(__file__).resolve().parents[2] / "data" / "UTILIZATION DATA SHEET.xlsx"
 )
 
-CLIENT_HOURS_LABEL = "Client Hours"
-INTERNAL_HOURS_LABEL = "Internal Hours"
+# Sourced from configs/booking_metrics.yaml so a relabelled or added hours
+# category is a config edit, not a code change. The
+# `hours_split_covers_all_hours` invariant catches a new category that
+# these two labels would otherwise silently exclude from the donut.
+CLIENT_HOURS_LABEL = metric_config.client_hours_label()
+INTERNAL_HOURS_LABEL = metric_config.internal_hours_label()
 
 
 def load_booking_data(path: str | Path = DEFAULT_BOOKING_PATH) -> pd.DataFrame:
