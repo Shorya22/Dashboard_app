@@ -69,6 +69,28 @@ cards:
     normalize_case: true             # "SalesForce" and "Salesforce" count once
     note: >-
       Counts distinct job titles from the Designation column.
+  strategic_pool:
+    label: "Strategic Pool"
+    counts: distinct
+    column_role: employee_id
+    status_filter: strategic_pool
+    note: Same definition as the Strategic Pool card on Home.
+
+  # Confirmed 2026-07-22: Exits and Inactive are the same people, so they
+  # are the same number — one definition, not two. This replaced an
+  # LWD-date-based count that returned 5 while Inactive returned 14.
+  #
+  # The month-by-month charts still need a DATE to place an exit in time,
+  # which only `LWD` provides, so they keep using `get_dated_exits` and
+  # currently cover 5 of these 14. That difference is known and accepted:
+  # this card answers "how many have left", the trend answers "when did
+  # the ones we have dates for leave".
+  exits:
+    label: "Exits"
+    counts: distinct
+    column_role: employee_id
+    status_filter: inactive
+
   projects:
     label: "Projects"
     counts: distinct

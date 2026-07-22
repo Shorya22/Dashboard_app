@@ -621,8 +621,37 @@ def get_joiners(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None
 
 
 @cache_on_df
-def get_exits(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None) -> int:
+def get_exits(df: pd.DataFrame) -> int:
     """
+    `Exits` — how many people have left. Confirmed 2026-07-22 to be the
+    same thing as Inactive: same people, same number.
+
+    Was previously counted from `LWD` dates, which returned 5 while
+    Inactive returned 14 — the same set of employees described two ways,
+    because 9 of them are marked Inactive with no last working day
+    recorded. There is one definition now, and it is the Status column.
+
+    Deliberately has NO period argument: a status is a current fact, not
+    a dated event. The month-by-month trends need a date to place an exit
+    in time, so they use `get_dated_exits` instead and currently cover 5
+    of these 14 — a known, accepted difference (this answers "how many
+    have left", the trend answers "when did the ones we have dates for
+    leave").
+    Reads: `Status`, `NEW_EMP_ID`.
+    """
+    return evaluate_card(df, "exits")
+
+
+@cache_on_df
+def get_dated_exits(df: pd.DataFrame, period_month: pd.Timestamp | str | None = None) -> int:
+    """
+    Exits placed in TIME, from `LWD` dates — the series behind the
+    month-by-month trends. Only counts employees whose last working day
+    is recorded and falls in the period, so it is a subset of `get_exits`
+    (5 of 14 today). See `get_exits` for why the two differ.
+
+    Original DAX this implements:
+
     `Exits` =
         VAR StartDate = MIN('Available Months'[Month Start])
         VAR EndDate = EOMONTH(MAX('Available Months'[Month Start]), 0)
@@ -667,7 +696,7 @@ def get_attrition_pct(
     `Today`, `NEW_EMP_ID`.
     Edge cases: returns 0.0 if Closing Headcount + Exits == 0.
     """
-    exits = get_exits(df, period_month)
+    exits = get_exits(df)
     closing = get_closing_headcount(df, period_month)
     denom = closing + exits
     if denom == 0:
@@ -964,7 +993,7 @@ def get_strategic_pool(df: pd.DataFrame) -> int:
     A blank DOJ (DEPT) is incidental missing data, not an intent.
     Reads: `Status`, `NEW_EMP_ID`.
     """
-    return get_total_employees(df[df["Status"] == STRATEGIC_POOL_STATUS])
+    return evaluate_card(df, "strategic_pool")
 
 
 @cache_on_df
@@ -1362,7 +1391,7 @@ def get_monthly_joiners_vs_leavers(df: pd.DataFrame) -> list[dict]:
         {
             "month": month_start.strftime("%b %Y"),
             "joiners": get_joiners(df, period_month=month_start),
-            "exits": get_exits(df, period_month=month_start),
+            "exits": get_dated_exits(df, period_month=month_start),
         }
         for month_start in available_months.month_starts
     ]

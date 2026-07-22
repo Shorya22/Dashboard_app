@@ -32,6 +32,7 @@ from app.services.roster_metrics import (
     get_closing_headcount,
     get_data_quality_warnings,
     get_exits,
+    get_dated_exits,
     get_gcc_employees,
     get_inactive_employees,
     get_involuntary_leavers,
@@ -245,19 +246,29 @@ def test_get_joiners(sample_roster):
 
 
 def test_get_exits(sample_roster):
-    # Explicit period_month=June 2026 -> LWD non-blank and within
-    # [2026-06-01, 2026-06-30]:
-    #   E5 LWD=10-Jun-26 -> yes
-    #   E6 LWD=15-Jan-26 -> outside the period -> no
-    # -> 1
-    assert get_exits(sample_roster, period_month=JUNE_2026) == 1
+    # REDEFINED (2026-07-22): Exits == Inactive, same people same number,
+    # so it is a Status count with no period. The fixture has 2 Inactive.
+    assert get_exits(sample_roster) == 2
+    assert get_exits(sample_roster) == get_inactive_employees(sample_roster)
+
+
+def test_get_dated_exits_is_the_time_series(sample_roster):
+    # The month-by-month trends still need a DATE, which only LWD gives,
+    # so they use get_dated_exits. June 2026 -> E5 (LWD 10-Jun-26) only;
+    # E6 (15-Jan-26) is outside the period.
+    assert get_dated_exits(sample_roster, period_month=JUNE_2026) == 1
+    # Both fixture leavers happen to have an LWD, so over the full range
+    # the dated series matches the headline. On the real roster it does
+    # not: 9 of the 14 Inactive have no LWD recorded.
+    assert get_dated_exits(sample_roster) == 2
 
 
 def test_get_attrition_pct(sample_roster):
-    # Explicit period_month=June 2026 -> Exits=1, Closing Headcount=5
-    # -> 1 / (5+1) * 100 = 16.6667
+    # Same formula, Exits / (Closing Headcount + Exits). Exits is now the
+    # Status-based total (2, period-independent) rather than the 1 dated
+    # exit that fell in June: 2 / (5 + 2) * 100 = 28.5714
     assert get_attrition_pct(sample_roster, period_month=JUNE_2026) == pytest.approx(
-        16.6667, abs=0.01
+        28.5714, abs=0.01
     )
 
 
@@ -527,7 +538,9 @@ def test_real_roster_date_based_headcount_explicit_june_2026(real_roster):
     assert get_closing_headcount(real_roster, period_month=june) == 45
     assert get_opening_headcount(real_roster, period_month=june) == 44
     assert get_joiners(real_roster, period_month=june) == 2
-    assert get_exits(real_roster, period_month=june) == 1
+    # dated series (LWD inside June) — the headline Exits card is the
+    # Status-based total, asserted separately below
+    assert get_dated_exits(real_roster, period_month=june) == 1
 
 
 def test_real_roster_date_based_headcount_default_full_range(real_roster):
@@ -579,9 +592,12 @@ def test_real_roster_attrition_explicit_june_2026(real_roster):
     # -- the 2 removed employees, `Milind Vijay Mokashi`/`Sakshi Madan
     # Agarwal`, both counted in June's Closing Headcount), Exits
     # unaffected at 1, so recomputed: 1 / (45 + 1) * 100 = 2.1739%
+    # UPDATED (2026-07-22): Exits is the Status-based total (5 Inactive in
+    # the snapshot), not the 1 exit dated inside June, so June attrition is
+    # 5 / (45 + 5) * 100 = 10.0%
     june = pd.Timestamp("2026-06-01")
     assert get_attrition_pct(real_roster, period_month=june) == pytest.approx(
-        2.1739, abs=0.01
+        10.0, abs=0.01
     )
     # Reason for Leaving among the 5 inactive rows: Involuntary=3, Voluntary=2
     assert get_involuntary_leavers(real_roster) == 3

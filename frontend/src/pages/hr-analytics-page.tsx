@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Users, UserCheck, UserX, UserPlus, UserMinus, TrendingDown, Layers } from 'lucide-react'
+import { Users, UserCheck, UserMinus, TrendingDown, Target } from 'lucide-react'
 import {
   flexRender,
   getCoreRowModel,
@@ -55,11 +55,12 @@ export function HrAnalyticsPage() {
     useHrAnalyticsFilters()
 
   // Status/Department/Region filter the roster directly (EmployeeRecord
-  // carries those fields), so Total/Active/Inactive are recomputed from
-  // the filtered employee list — same pattern as the exits table/donut
-  // below. Joiners/Exits/Attrition % are date-based (DOJ/LWD aren't
-  // exposed on EmployeeRecord — see employee-filters.ts caveat) so they
-  // stay as the server-computed, unfiltered values.
+  // carries those fields), so every Status-based card — Total, Active,
+  // Strategic Pool and Exits — is recomputed from the filtered employee
+  // list, same pattern as the exits table/donut below. Attrition % is the
+  // exception: it needs Closing Headcount, which is date-based (DOJ isn't
+  // exposed on EmployeeRecord — see employee-filters.ts caveat), so it
+  // stays the server-computed, unfiltered value.
   // Memoized to match the working-page pattern (see workforce-page.tsx):
   // `employeesQuery.data?.items` is a stable react-query reference, but the
   // `?? []` fallback and the filtered result must be memoized so the derived
@@ -78,7 +79,12 @@ export function HrAnalyticsPage() {
   )
   const totalEmployees = filteredEmployees.length
   const activeEmployees = filteredEmployees.filter((e) => e.status === 'Active').length
-  const inactiveEmployees = filteredEmployees.filter((e) => e.status === 'Inactive').length
+  const strategicPool = filteredEmployees.filter((e) => e.status === 'Strategic Pool').length
+  // Exits == Inactive (confirmed 2026-07-22), so it is a Status count like
+  // the two above and must react to the filters the same way. Reading it
+  // from the unfiltered server summary would leave it frozen while the
+  // other cards moved.
+  const exits = filteredEmployees.filter((e) => e.status === 'Inactive').length
 
   // Memoized so an unrelated page re-render (e.g. the exits table below
   // changing its internal TanStack Table sort state) doesn't recreate these
@@ -173,7 +179,7 @@ export function HrAnalyticsPage() {
     <div className="space-y-5">
       <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Total Employees"
           value={employeesQuery.data ? totalEmployees : '—'}
@@ -189,27 +195,16 @@ export function HrAnalyticsPage() {
           iconTone="emerald"
         />
         <KpiCard
-          label="Inactive"
-          value={employeesQuery.data ? inactiveEmployees : '—'}
+          label="Strategic Pool"
+          value={employeesQuery.data ? strategicPool : '—'}
           loading={employeesQuery.isLoading}
-          icon={UserX}
-          iconTone="red"
-        />
-        <KpiCard
-          label="Joiners"
-          value={summary.data?.joiners ?? '—'}
-          loading={summary.isLoading}
-          provisional
-          provisionalNote="Date-based (DOJ), not exposed on the employee directory row — not affected by Status/Department/Region filters above."
-          icon={UserPlus}
+          icon={Target}
           iconTone="emerald"
         />
         <KpiCard
           label="Exits"
-          value={summary.data?.exits ?? '—'}
-          loading={summary.isLoading}
-          provisional
-          provisionalNote="Date-based (LWD), not exposed on the employee directory row — not affected by Status/Department/Region filters above."
+          value={employeesQuery.data ? exits : '—'}
+          loading={employeesQuery.isLoading}
           icon={UserMinus}
           iconTone="red"
         />
@@ -220,15 +215,6 @@ export function HrAnalyticsPage() {
           provisional
           provisionalNote="Attrition % measure is PROVISIONAL, see the data-model skill. Also not affected by the filters above — see in-code note."
           icon={TrendingDown}
-          iconTone="blue"
-        />
-        <KpiCard
-          label="Closing Headcount"
-          value={summary.data?.closing_headcount ?? '—'}
-          loading={summary.isLoading}
-          provisional
-          provisionalNote="Server-computed month-end headcount, not exposed per-row on the employee directory — not affected by Status/Department/Region filters above."
-          icon={Layers}
           iconTone="blue"
         />
       </div>

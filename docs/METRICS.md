@@ -9,7 +9,7 @@ page as we verify them; anything not listed here has not been reviewed yet.
 |---|---|
 | Home | ✅ all 3 cards + 4 charts verified |
 | HR Home (HR Portal) | ✅ all 4 cards + 4 charts verified |
-| HR Analytics | ⬜ not reviewed |
+| HR Analytics | 🟡 5 cards verified; 4 charts not reviewed |
 | Workforce | ⬜ not reviewed |
 | Skills & Experience | ⬜ not reviewed |
 | Employee Directory | ⬜ not reviewed |
@@ -362,6 +362,61 @@ show Inactive at all; Home is headlined by Closing Headcount (38).
 
 ---
 
+## Page 3 — HR Analytics
+
+Cards reduced from 7 to 5 (2026-07-22): **Inactive**, **Joiners** and
+**Closing Headcount** were removed, and **Strategic Pool** added.
+
+### Card: Total Employees — `52`
+Same definition as HR Home: distinct `employee_id`, no status filter.
+
+### Card: Active — `35`
+Distinct `employee_id` where `Status` = "Active".
+
+### Card: Strategic Pool — `3`
+Distinct `employee_id` where `Status` = "Strategic Pool". Same definition
+as the Home card.
+
+### Card: Exits — `14`
+**Exits = Inactive.** Same people, same number — confirmed with the
+business, so there is one definition, not two.
+
+> Previously Exits was counted from `LWD` dates and returned **5** while
+> Inactive returned **14** — the same employees described two ways,
+> because 9 of them are marked Inactive with no last working day
+> recorded. Locked by the `exits_equals_inactive` invariant.
+
+The Exits card responds to the page's filters, like the other Status
+cards. (It used to read an unfiltered server value, so applying a filter
+moved Active but left Exits frozen.)
+
+### Card: Attrition % — `26.9%`
+Unchanged formula: **Exits ÷ (Closing Headcount + Exits)**.
+`14 ÷ (38 + 14) = 26.9%`.
+
+> It read 11.6% before, because Exits was 5. The formula didn't change —
+> only the Exits definition feeding it. Attrition is the one card here
+> that is *not* filtered, because it needs Closing Headcount, which is
+> date-based and not derivable from the employee rows the page filters on.
+
+### Charts: Month Wise Headcount, Monthly Joiners vs Leavers, Month-Wise Resignation, Voluntary vs Involuntary
+**Left as they are** — still driven by `LWD` dates via `get_dated_exits`.
+
+⚠️ **Known and accepted difference:** the Exits card says `14`, but the
+month-by-month charts total `5`, and Voluntary vs Involuntary classifies
+`5`. Placing an exit in a month needs a date, and only 5 of the 14
+Inactive employees have an `LWD`; only the same 5 have a
+`Reason for Leaving`.
+
+So the card answers *"how many have left"* and the trend answers *"when
+did the ones we have dates for leave"*. Filling in `LWD` and
+`Reason for Leaving` for the other 9 would close the gap — a data fix,
+not a code change.
+
+*These four charts have not otherwise been reviewed yet.*
+
+---
+
 ## Consistency rules we enforce automatically
 
 Checked by `metric_invariants.py` — in the test suite *and* on every
@@ -377,6 +432,7 @@ flagged before it goes live:
 | `seniority_split_covers_present_workforce` | The seniority donut covers exactly the current workforce |
 | `charts_account_for_everyone` | Every breakdown chart totals to the population it describes — blanks counted, never dropped |
 | `every_status_has_a_workforce_meaning` | No status is left without a decision on whether it counts as present |
+| `exits_equals_inactive` | Exits and Inactive stay the same number — they are the same people |
 | `hours_split_covers_all_hours` | Client + Internal = total booked hours, so no hours category is silently missing from the donut |
 
 Each one exists because of a real failure, not a hypothetical: the

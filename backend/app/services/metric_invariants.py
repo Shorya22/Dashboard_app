@@ -192,8 +192,25 @@ def _charts_account_for_everyone(df: pd.DataFrame) -> tuple[bool, str]:
     return not bad, ("all charts reconcile" if not bad else "; ".join(bad))
 
 
+def _exits_equals_inactive(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Exits and Inactive are the same people, so they must be the same
+    number (confirmed 2026-07-22).
+
+    They used to disagree — 5 vs 14 — because Exits was counted from LWD
+    dates while Inactive came from Status, and 9 employees are marked
+    Inactive with no last working day recorded. One definition now; this
+    keeps it that way.
+    """
+    exits = roster_metrics.get_exits(df)
+    inactive = roster_metrics.get_inactive_employees(df)
+    ok = exits == inactive
+    return ok, f"exits={exits}, inactive={inactive}"
+
+
 ROSTER_INVARIANTS: dict[str, InvariantCheck] = {
     "charts_account_for_everyone": _charts_account_for_everyone,
+    "exits_equals_inactive": _exits_equals_inactive,
     "closing_headcount_is_present_workforce": _closing_headcount_is_present_workforce,
     "seniority_split_covers_present_workforce": _seniority_split_covers_present_workforce,
     "strategic_pool_same_everywhere": _same_label_same_number,
