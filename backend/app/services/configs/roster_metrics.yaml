@@ -100,9 +100,12 @@ charts:
     type: count_by
     column_role: status
     scope: all
-    # Always rendered, even at zero, so a roster with nobody in a status
-    # doesn't silently lose a slice from the donut.
-    buckets: ["Active", "Inactive", "Strategic Pool"]
+    # No bucket list on purpose: the slices are simply whatever statuses
+    # the Status column contains. A status the business starts using shows
+    # up on its own, with nothing to declare first. The only thing config
+    # still decides is `counts_as_present` below — whether a status means
+    # the person is still here — because that is a business meaning that
+    # cannot be read off the data.
 
   headcount_by_region:
     label: "Headcount by Region"

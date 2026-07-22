@@ -206,11 +206,21 @@ def test_get_workforce_category_split(sample_roster):
 
 
 def test_get_status_split(sample_roster):
-    # UPDATED (2026-07-17): `get_status_split` now always enumerates all
-    # 3 Status buckets explicitly (see its docstring), so a fixture with
-    # no Strategic Pool rows still gets an explicit `0` rather than the
-    # key being absent.
-    assert get_status_split(sample_roster) == {"Active": 4, "Inactive": 2, "Strategic Pool": 0}
+    # UPDATED (2026-07-22): the donut simply reflects the Status column —
+    # slices are whatever statuses the data contains, nothing declared in
+    # config first. This fixture has no Strategic Pool rows, so that slice
+    # is absent rather than shown as an explicit 0.
+    assert get_status_split(sample_roster) == {"Active": 4, "Inactive": 2}
+    assert sum(get_status_split(sample_roster).values()) == len(sample_roster)
+
+
+def test_status_split_reflects_a_brand_new_status(sample_roster):
+    """A status the business starts using appears on its own."""
+    df = sample_roster.copy()
+    df.loc[df.index[0], "Status"] = "Sabbatical"
+    split = get_status_split(df)
+    assert split["Sabbatical"] == 1
+    assert sum(split.values()) == len(df)
 
 
 def test_get_workforce_by_type(sample_roster):

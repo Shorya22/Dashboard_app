@@ -98,13 +98,13 @@ def test_booking_invariant_catches_a_new_hours_category():
     assert "Leave Hours" in bad[0].detail
 
 
-def test_undeclared_status_is_shown_but_still_flagged(real_roster):
+def test_new_status_is_reflected_but_its_meaning_is_flagged(real_roster):
     """
-    An unrecognised Status no longer vanishes from the donut — it renders
-    as its own slice, so nobody is lost. It is still a config gap though:
-    nothing has decided whether those people count as present, so they sit
-    outside Closing Headcount while counting in Total Employees. Both
-    facts are asserted here.
+    The donut reflects the Status column, so a status the business starts
+    using shows up with nothing declared first. What config still decides
+    is whether it means the person is STILL HERE — until that is answered
+    they count in Total Employees but not in Closing Headcount, and that
+    is what gets flagged.
     """
     from app.services import roster_metrics
 
@@ -116,7 +116,7 @@ def test_undeclared_status_is_shown_but_still_flagged(real_roster):
     assert sum(split.values()) == roster_metrics.get_total_employees(df)
 
     bad = {r.name for r in metric_invariants.violations(df, "roster")}
-    assert "every_status_is_declared" in bad             # config gap surfaced
+    assert "every_status_has_a_workforce_meaning" in bad  # meaning undecided
     assert "status_measures_partition_roster" in bad
 
 

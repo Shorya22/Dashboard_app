@@ -55,10 +55,10 @@ def _same_label_same_number(df: pd.DataFrame) -> tuple[bool, str]:
     the exact invariant whose absence caused the 1-vs-3 discrepancy.
     """
     canonical = roster_metrics.get_strategic_pool(df)
-    in_status_split = roster_metrics.get_status_split(df)["Strategic Pool"]
-    in_category_split = roster_metrics.get_workforce_category_split(df)[
-        "Strategic Pool"
-    ]
+    in_status_split = roster_metrics.get_status_split(df).get("Strategic Pool", 0)
+    in_category_split = roster_metrics.get_workforce_category_split(df).get(
+        "Strategic Pool", 0
+    )
     ok = canonical == in_status_split == in_category_split
     return ok, (
         f"Strategic Pool: canonical={canonical}, "
@@ -66,30 +66,35 @@ def _same_label_same_number(df: pd.DataFrame) -> tuple[bool, str]:
     )
 
 
-def _every_status_is_declared(df: pd.DataFrame) -> tuple[bool, str]:
+def _every_status_has_a_workforce_meaning(df: pd.DataFrame) -> tuple[bool, str]:
     """
-    Every `Status` value in the data must be one the config knows about.
+    Every `Status` in the data must be known to mean either "still here"
+    or "gone".
 
-    The donut no longer drops an unrecognised status — it renders as its
-    own slice, so nobody vanishes. But an undeclared status is still a
-    config gap someone must resolve: nothing has decided whether those
-    people count as present, so they are missing from Closing Headcount
-    and from every "current workforce" chart while still appearing in
-    Total Employees.
+    The donut itself needs no configuration — it simply reflects whatever
+    statuses the column contains, so a new one appears on its own. But
+    one question can't be read off the data: does a person with that
+    status still count as part of the workforce? Until that's answered
+    they sit in Total Employees yet outside Closing Headcount, which is
+    a real (if conservative) inconsistency worth naming.
     """
     from app.services import metric_config
 
     split = roster_metrics.get_status_split(df)
     total = roster_metrics.get_total_employees(df)
     summed = sum(split.values())
-    declared = set(metric_config.chart("status_split").get("buckets", []))
-    undeclared = sorted(set(split) - declared)
-    ok = summed == total and not undeclared
+
+    accounted = set(metric_config.present_statuses()) | {
+        metric_config.status_value("inactive")
+    }
+    unknown = sorted(set(split) - accounted)
+    ok = summed == total and not unknown
     detail = f"status_split sums to {summed}, total employees {total}"
-    if undeclared:
+    if unknown:
         detail += (
-            f"; Status value(s) not declared in config: {undeclared} — decide "
-            "whether they count as present (status.counts_as_present)"
+            f"; new Status value(s) {unknown} — not currently counted as part "
+            "of the workforce. If they should be, add them to "
+            "status.counts_as_present"
         )
     return ok, detail
 
@@ -192,7 +197,7 @@ ROSTER_INVARIANTS: dict[str, InvariantCheck] = {
     "closing_headcount_is_present_workforce": _closing_headcount_is_present_workforce,
     "seniority_split_covers_present_workforce": _seniority_split_covers_present_workforce,
     "strategic_pool_same_everywhere": _same_label_same_number,
-    "every_status_is_declared": _every_status_is_declared,
+    "every_status_has_a_workforce_meaning": _every_status_has_a_workforce_meaning,
     "category_split_matches_status": _category_split_matches_status,
     "status_measures_partition_roster": _active_plus_inactive_plus_pool_is_total,
 }
