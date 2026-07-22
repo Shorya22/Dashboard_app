@@ -38,6 +38,46 @@ columns:
   working_entity: "Working Entity"
   seniority: "Seniorirty Level"      # source-file typo kept verbatim
   experience_total: "Total Experience"
+  primary_skill: "Primary Skill"
+  employment_type: "Type"                # GCC / Non GCC
+
+# ---------------------------------------------------------------------------
+# Filters — the dropdowns the HR pages filter by.
+# ---------------------------------------------------------------------------
+# Declared here so the API applies them against the same column roles the
+# metrics use. Previously each page re-implemented these filters in the
+# browser, comparing against hardcoded strings like `status === 'Active'`,
+# which meant a status renamed in this file would silently stop matching
+# on those pages while the backend followed along correctly.
+filters:
+  status:
+    column_role: status
+    label: "Status"
+  department:
+    column_role: designation
+    label: "Department"
+  region:
+    column_role: region
+    label: "Region/Market"
+  skill:
+    column_role: primary_skill
+    label: "Skill"
+  type:
+    column_role: employment_type
+    label: "Type"
+  allocation:
+    column_role: client
+    label: "Allocation"
+
+  # DERIVED filters — they reuse a chart's own bucketing rules rather than
+  # re-deriving the bands, so filtering by "5-8 Years" and the chart that
+  # draws that band can never disagree about where the boundary is.
+  experience:
+    derived_from_chart: workforce_by_experience_band
+    label: "Experience"
+  seniorityCategory:
+    derived_from_chart: workforce_by_seniority_category
+    label: "Seniority Category"
 
 # ---------------------------------------------------------------------------
 # Card definitions — what each KPI on the dashboard counts.

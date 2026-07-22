@@ -4,6 +4,7 @@ import {
   useRosterAttritionDetail,
   useRosterEmployeesAll,
   useRosterSummary,
+  useRosterBreakdowns,
   useRosterTrends,
 } from '@/lib/roster-api'
 import { ALL, buildOptions, distinctValues, type FilterValues } from '@/lib/employee-filters'
@@ -15,11 +16,12 @@ import { ALL, buildOptions, distinctValues, type FilterValues } from '@/lib/empl
  * filter state live here to avoid duplicating fetch/filter-option logic.
  */
 export function useHrAnalyticsFilters() {
-  const summary = useRosterSummary()
-  const trends = useRosterTrends()
-  const attrition = useRosterAttritionDetail()
-  const employeesQuery = useRosterEmployeesAll()
-  const employees = employeesQuery.data?.items ?? []
+
+
+  // Unfiltered list, used ONLY to populate the filter dropdowns — if this
+  // followed the filters, choosing one would erase the other options.
+  const allEmployeesQuery = useRosterEmployeesAll()
+  const employees = allEmployeesQuery.data?.items ?? []
 
   const [filters, setFilters] = React.useState<FilterValues>({
     monthYear: ALL,
@@ -29,6 +31,24 @@ export function useHrAnalyticsFilters() {
   })
   const setFilter = (key: string, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }))
+
+  // KPIs come from the server WITH the filters applied, so they use the
+  // YAML metric definitions rather than being recomputed here against
+  // hardcoded status strings. ALL means "no filter" and is dropped.
+  const serverFilters = React.useMemo(
+    () => ({
+      status: filters.status === ALL ? undefined : filters.status,
+      department: filters.department === ALL ? undefined : filters.department,
+      region: filters.region === ALL ? undefined : filters.region,
+    }),
+    [filters.status, filters.department, filters.region],
+  )
+  const summary = useRosterSummary(serverFilters)
+  const breakdowns = useRosterBreakdowns(serverFilters)
+  const trends = useRosterTrends(serverFilters)
+  const attrition = useRosterAttritionDetail(serverFilters)
+  // The rows the page actually displays, filtered server-side like the KPIs.
+  const employeesQuery = useRosterEmployeesAll(serverFilters)
 
   const monthOptions = buildOptions(
     (trends.data?.month_wise_closing_headcount ?? []).map((m) => m.month),
@@ -56,5 +76,15 @@ export function useHrAnalyticsFilters() {
     [filters.monthYear],
   )
 
-  return { summary, trends, attrition, employeesQuery, filters, setFilter, filterDefs, monthFilter }
+  return {
+    summary,
+    breakdowns,
+    trends,
+    attrition,
+    employeesQuery,
+    filters,
+    setFilter,
+    filterDefs,
+    monthFilter,
+  }
 }

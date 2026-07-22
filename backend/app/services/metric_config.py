@@ -77,6 +77,11 @@ def chart_names() -> list[str]:
     return list(load_metric_config()["charts"])
 
 
+def filters() -> dict[str, dict]:
+    """The declared page filters, keyed by filter name."""
+    return load_metric_config().get("filters", {})
+
+
 # --- roster: status ------------------------------------------------------- #
 def status_column() -> str:
     return column("status")

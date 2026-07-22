@@ -138,39 +138,67 @@ export interface BookingSummary {
   markets_covered: number
 }
 
-export function useRosterSummary() {
-  return useQuery({
-    queryKey: ['roster', 'summary'],
-    queryFn: async () => (await apiClient.get<RosterSummary>('/v1/roster/summary')).data,
-  })
+// Page filters are applied SERVER-side: the roster endpoints accept
+// status/department/region and compute every number from the YAML metric
+// definitions. Pages pass their filter state straight through rather than
+// re-deriving KPIs in the browser against hardcoded status strings, which
+// duplicated each definition and drifted the moment config changed.
+export type RosterFilterParams = {
+  status?: string
+  department?: string
+  region?: string
 }
 
-export function useRosterBreakdowns() {
-  return useQuery({
-    queryKey: ['roster', 'breakdowns'],
-    queryFn: async () => (await apiClient.get<RosterBreakdowns>('/v1/roster/breakdowns')).data,
-  })
+function filterQuery(filters?: RosterFilterParams) {
+  const params: Record<string, string> = {}
+  for (const [key, value] of Object.entries(filters ?? {})) {
+    if (value) params[key] = value
+  }
+  return params
 }
 
-export function useRosterTrends() {
+export function useRosterSummary(filters?: RosterFilterParams) {
+  const params = filterQuery(filters)
   return useQuery({
-    queryKey: ['roster', 'trends'],
-    queryFn: async () => (await apiClient.get<RosterTrends>('/v1/roster/trends')).data,
-  })
-}
-
-export function useRosterAttritionDetail() {
-  return useQuery({
-    queryKey: ['roster', 'attrition-detail'],
+    queryKey: ['roster', 'summary', params],
     queryFn: async () =>
-      (await apiClient.get<RosterAttritionDetail>('/v1/roster/attrition-detail')).data,
+      (await apiClient.get<RosterSummary>('/v1/roster/summary', { params })).data,
   })
 }
 
-export function useRosterSkills() {
+export function useRosterBreakdowns(filters?: RosterFilterParams) {
+  const params = filterQuery(filters)
   return useQuery({
-    queryKey: ['roster', 'skills'],
-    queryFn: async () => (await apiClient.get<RosterSkills>('/v1/roster/skills')).data,
+    queryKey: ['roster', 'breakdowns', params],
+    queryFn: async () =>
+      (await apiClient.get<RosterBreakdowns>('/v1/roster/breakdowns', { params })).data,
+  })
+}
+
+export function useRosterTrends(filters?: RosterFilterParams) {
+  const params = filterQuery(filters)
+  return useQuery({
+    queryKey: ['roster', 'trends', params],
+    queryFn: async () =>
+      (await apiClient.get<RosterTrends>('/v1/roster/trends', { params })).data,
+  })
+}
+
+export function useRosterAttritionDetail(filters?: RosterFilterParams) {
+  const params = filterQuery(filters)
+  return useQuery({
+    queryKey: ['roster', 'attrition-detail', params],
+    queryFn: async () =>
+      (await apiClient.get<RosterAttritionDetail>('/v1/roster/attrition-detail', { params })).data,
+  })
+}
+
+export function useRosterSkills(filters?: RosterFilterParams) {
+  const params = filterQuery(filters)
+  return useQuery({
+    queryKey: ['roster', 'skills', params],
+    queryFn: async () =>
+      (await apiClient.get<RosterSkills>('/v1/roster/skills', { params })).data,
   })
 }
 
@@ -190,15 +218,13 @@ export function useRosterEmployees(limit: number, offset: number) {
 // Fetches the full roster in one page for pages that need to filter/recompute
 // client-side (see lib/employee-filters.ts) — the roster is only 52 rows, so
 // one request comfortably covers it instead of paginating.
-export function useRosterEmployeesAll() {
+export function useRosterEmployeesAll(filters?: RosterFilterParams) {
+  const params = { limit: 500, offset: 0, ...filterQuery(filters) }
   return useQuery({
-    queryKey: ['roster', 'employees', 'all'],
+    queryKey: ['roster', 'employees', 'all', params],
     queryFn: async () =>
-      (
-        await apiClient.get<EmployeeDirectoryResponse>('/v1/roster/employees', {
-          params: { limit: 500, offset: 0 },
-        })
-      ).data,
+      (await apiClient.get<EmployeeDirectoryResponse>('/v1/roster/employees', { params }))
+        .data,
   })
 }
 

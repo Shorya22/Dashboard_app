@@ -67,7 +67,22 @@ def test_build_available_months_ignores_unparseable_doj():
     assert result.earliest_date == pd.Timestamp("2025-01-01")
 
 
-def test_build_available_months_raises_if_no_valid_doj():
-    df = pd.DataFrame([_row("TBD", None, "26-Jun-26")])
-    with pytest.raises(ValueError):
-        build_available_months(df)
+def test_build_available_months_returns_empty_when_no_valid_doj():
+    """
+    An empty calendar, not an error. Filtering is applied server-side, so a
+    legitimate filter combination can select zero rows (or rows with no
+    joining date) — that must give empty charts, not a 500. Downstream date
+    measures then correctly report zero.
+    """
+    df = pd.DataFrame(
+        {
+            "DOJ (DEPT)": ["TBD", None],
+            "LWD": [None, None],
+            "Today": ["30-Jun-26", "30-Jun-26"],
+        }
+    )
+    months = build_available_months(df)
+    assert months.month_starts == []
+    assert months.earliest_date is None
+    assert months.latest_date is None
+

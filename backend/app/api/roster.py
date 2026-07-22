@@ -29,10 +29,44 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/roster", tags=["roster"])
 
 
+
+# Page filters (Status / Department / Region) are declared in
+# configs/roster_metrics.yaml and applied here, so a filtered page asks the
+# API for its numbers rather than recomputing them in the browser against
+# hardcoded status strings. See roster_metrics.apply_filters.
+def _filter_params(
+    status: str | None = Query(None, description="Filter by Status"),
+    department: str | None = Query(None, description="Filter by Department"),
+    region: str | None = Query(None, description="Filter by Region/Market"),
+    skill: str | None = Query(None, description="Filter by Primary Skill"),
+    type: str | None = Query(None, description="Filter by Type (GCC / Non GCC)"),
+    allocation: str | None = Query(None, description="Filter by Client/Allocation"),
+    experience: str | None = Query(None, description="Filter by Experience Band"),
+    seniorityCategory: str | None = Query(None, description="Filter by Seniority Category"),
+) -> dict[str, str]:
+    return {
+        key: value
+        for key, value in (
+            ("status", status),
+            ("department", department),
+            ("region", region),
+            ("skill", skill),
+            ("type", type),
+            ("allocation", allocation),
+            ("experience", experience),
+            ("seniorityCategory", seniorityCategory),
+        )
+        if value
+    }
+
+
 @router.get("/summary", response_model=RosterSummary)
-def roster_summary(user: User = Depends(get_current_user)) -> RosterSummary:
+def roster_summary(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_filter_params),
+) -> RosterSummary:
     try:
-        df = get_roster_df()
+        df = roster_metrics.apply_filters(get_roster_df(), filters)
         return RosterSummary(
             active_employees=roster_metrics.get_active_employees(df),
             inactive_employees=roster_metrics.get_inactive_employees(df),
@@ -64,9 +98,12 @@ def roster_summary(user: User = Depends(get_current_user)) -> RosterSummary:
 
 
 @router.get("/breakdowns", response_model=RosterBreakdowns)
-def roster_breakdowns(user: User = Depends(get_current_user)) -> RosterBreakdowns:
+def roster_breakdowns(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_filter_params),
+) -> RosterBreakdowns:
     try:
-        df = get_roster_df()
+        df = roster_metrics.apply_filters(get_roster_df(), filters)
         return RosterBreakdowns(
             strategic_pool=roster_metrics.get_strategic_pool(df),
             workforce_category_split=roster_metrics.get_workforce_category_split(df),
@@ -86,9 +123,12 @@ def roster_breakdowns(user: User = Depends(get_current_user)) -> RosterBreakdown
 
 
 @router.get("/trends", response_model=RosterTrends)
-def roster_trends(user: User = Depends(get_current_user)) -> RosterTrends:
+def roster_trends(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_filter_params),
+) -> RosterTrends:
     try:
-        df = get_roster_df()
+        df = roster_metrics.apply_filters(get_roster_df(), filters)
         return RosterTrends(
             month_wise_closing_headcount=roster_metrics.get_month_wise_closing_headcount(df),
             monthly_joiners_vs_leavers=roster_metrics.get_monthly_joiners_vs_leavers(df),
@@ -99,9 +139,12 @@ def roster_trends(user: User = Depends(get_current_user)) -> RosterTrends:
 
 
 @router.get("/attrition-detail", response_model=RosterAttritionDetail)
-def roster_attrition_detail(user: User = Depends(get_current_user)) -> RosterAttritionDetail:
+def roster_attrition_detail(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_filter_params),
+) -> RosterAttritionDetail:
     try:
-        df = get_roster_df()
+        df = roster_metrics.apply_filters(get_roster_df(), filters)
         return RosterAttritionDetail(
             month_wise_resignation=roster_metrics.get_month_wise_resignation(df),
             voluntary_involuntary_split=roster_metrics.get_voluntary_involuntary_split(df),
@@ -113,9 +156,12 @@ def roster_attrition_detail(user: User = Depends(get_current_user)) -> RosterAtt
 
 
 @router.get("/skills", response_model=RosterSkills)
-def roster_skills(user: User = Depends(get_current_user)) -> RosterSkills:
+def roster_skills(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_filter_params),
+) -> RosterSkills:
     try:
-        df = get_roster_df()
+        df = roster_metrics.apply_filters(get_roster_df(), filters)
         return RosterSkills(
             skill_bifurcation_by_experience_band=(
                 roster_metrics.get_skill_bifurcation_by_experience_band(df)
@@ -136,9 +182,10 @@ def roster_employees(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
+    filters: dict = Depends(_filter_params),
 ) -> EmployeeDirectoryResponse:
     try:
-        df = get_roster_df()
+        df = roster_metrics.apply_filters(get_roster_df(), filters)
         records = roster_metrics.get_employee_directory(df)
         page = records[offset : offset + limit]
         return EmployeeDirectoryResponse(items=page, total=len(records))

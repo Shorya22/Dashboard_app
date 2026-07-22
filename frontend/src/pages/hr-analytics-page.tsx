@@ -17,7 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { type EmployeeRecord } from '@/lib/roster-api'
 import { VOLUNTARY_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
-import { applyEmployeeFilters } from '@/lib/employee-filters'
 import { useHrAnalyticsFilters } from '@/lib/use-hr-analytics-filters'
 
 // EmployeeRecord doesn't carry LWD/Reason for Leaving (see employee-filters.ts
@@ -51,8 +50,17 @@ const exitColumns: ColumnDef<EmployeeTableRow>[] = [
 ]
 
 export function HrAnalyticsPage() {
-  const { summary, trends, attrition, employeesQuery, filters, setFilter, filterDefs, monthFilter } =
-    useHrAnalyticsFilters()
+  const {
+    summary,
+    breakdowns,
+    trends,
+    attrition,
+    employeesQuery,
+    filters,
+    setFilter,
+    filterDefs,
+    monthFilter,
+  } = useHrAnalyticsFilters()
 
   // Status/Department/Region filter the roster directly (EmployeeRecord
   // carries those fields), so every Status-based card — Total, Active,
@@ -68,23 +76,18 @@ export function HrAnalyticsPage() {
   // re-renders (e.g. a KPI count-up animation frame) instead of being rebuilt
   // every render and forcing the TanStack table + every chart to reconcile.
   const employees = useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
-  const filteredEmployees = useMemo(
-    () =>
-      applyEmployeeFilters(employees, filters, {
-        status: 'status',
-        department: 'designation',
-        region: 'region',
-      }),
-    [employees, filters],
-  )
-  const totalEmployees = filteredEmployees.length
-  const activeEmployees = filteredEmployees.filter((e) => e.status === 'Active').length
-  const strategicPool = filteredEmployees.filter((e) => e.status === 'Strategic Pool').length
-  // Exits == Inactive (confirmed 2026-07-22), so it is a Status count like
-  // the two above and must react to the filters the same way. Reading it
-  // from the unfiltered server summary would leave it frozen while the
-  // other cards moved.
-  const exits = filteredEmployees.filter((e) => e.status === 'Inactive').length
+  // Every KPI comes from the server WITH this page's filters applied, so
+  // all five use the single YAML metric definitions. They used to be
+  // recomputed here from the filtered rows against hardcoded strings
+  // ("Active"/"Inactive"/"Strategic Pool"), which duplicated each
+  // definition in the browser: renaming a status in config would have
+  // updated the backend while silently breaking this page. Total
+  // Employees was also a row count here, where the definition is distinct
+  // employee ids — the two agreed only while no id was duplicated.
+  const totalEmployees = summary.data?.total_employees
+  const activeEmployees = summary.data?.active_employees
+  const strategicPool = breakdowns.data?.strategic_pool
+  const exits = summary.data?.exits
 
   // Memoized so an unrelated page re-render (e.g. the exits table below
   // changing its internal TanStack Table sort state) doesn't recreate these
@@ -115,29 +118,17 @@ export function HrAnalyticsPage() {
     [attrition.data, monthFilter],
   )
 
-  // Voluntary/Involuntary split still comes from the exits_table, filtered
-  // the same way as the KPIs above, so it stays in sync with the table below.
-  const filteredExitsForDonut = useMemo(
-    () =>
-      applyEmployeeFilters(attrition.data?.exits_table ?? [], filters, {
-        status: 'status',
-        department: 'designation',
-        region: 'region',
-      }),
-    [attrition.data, filters],
-  )
-
+  // The server returns the Voluntary/Involuntary split with this page's
+  // filters already applied, so the donut uses the same definition as
+  // everything else instead of re-deriving it from the exits table.
   const voluntaryData = useMemo(
     () =>
-      Object.entries(
-        filteredExitsForDonut.reduce<Record<string, number>>((acc, e) => {
-          const reason = e.reason_for_leaving ?? 'Unknown'
-          acc[reason] = (acc[reason] ?? 0) + 1
-          return acc
-        }, {}),
-      ).map(([name, value]) => ({ name, value })),
-    [filteredExitsForDonut],
+      Object.entries(attrition.data?.voluntary_involuntary_split ?? {}).map(
+        ([name, value]) => ({ name, value }),
+      ),
+    [attrition.data],
   )
+
   const voluntaryColors = useMemo(
     () => colorsForLabels(voluntaryData.map((d) => d.name), VOLUNTARY_COLORS),
     [voluntaryData],
@@ -153,11 +144,15 @@ export function HrAnalyticsPage() {
   // every unrelated re-render. Keyed only on the inputs that actually change
   // it, so the table now re-derives only when the filtered roster or the
   // exits join data changes — matching the working pages' memoized pattern.
+  // The directory rows come from the server with the filters applied; LWD /
+  // Reason for Leaving are joined in from exits_table (EmployeeRecord does
+  // not carry them). No client-side filtering — the table shows exactly the
+  // population the KPIs above describe.
   const employeeTableRows: EmployeeTableRow[] = useMemo(() => {
     const exitsByName = new Map(
       (attrition.data?.exits_table ?? []).map((e) => [e.name, e]),
     )
-    return [...filteredEmployees]
+    return [...employees]
       .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
       .map((e) => {
         const exit = e.name ? exitsByName.get(e.name) : undefined
@@ -167,7 +162,7 @@ export function HrAnalyticsPage() {
           reason_for_leaving: exit?.reason_for_leaving ?? null,
         }
       })
-  }, [filteredEmployees, attrition.data])
+  }, [employees, attrition.data])
 
   const table = useReactTable({
     data: employeeTableRows,
@@ -182,29 +177,29 @@ export function HrAnalyticsPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Total Employees"
-          value={employeesQuery.data ? totalEmployees : '—'}
-          loading={employeesQuery.isLoading}
+          value={totalEmployees ?? '—'}
+          loading={summary.isLoading}
           icon={Users}
           iconTone="blue"
         />
         <KpiCard
           label="Active"
-          value={employeesQuery.data ? activeEmployees : '—'}
-          loading={employeesQuery.isLoading}
+          value={activeEmployees ?? '—'}
+          loading={summary.isLoading}
           icon={UserCheck}
           iconTone="emerald"
         />
         <KpiCard
           label="Strategic Pool"
-          value={employeesQuery.data ? strategicPool : '—'}
-          loading={employeesQuery.isLoading}
+          value={strategicPool ?? '—'}
+          loading={breakdowns.isLoading}
           icon={Target}
           iconTone="emerald"
         />
         <KpiCard
           label="Exits"
-          value={employeesQuery.data ? exits : '—'}
-          loading={employeesQuery.isLoading}
+          value={exits ?? '—'}
+          loading={summary.isLoading}
           icon={UserMinus}
           iconTone="red"
         />

@@ -5,43 +5,22 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
-import { useRosterBreakdowns, useRosterEmployeesAll } from '@/lib/roster-api'
+import { useRosterBreakdowns, useRosterEmployeesAll, useRosterSummary } from '@/lib/roster-api'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import { TYPE_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import {
   ALL,
-  applyEmployeeFilters,
   buildOptions,
-  distinctDepartmentsCount,
   distinctValues,
-  groupCount,
   type FilterValues,
 } from '@/lib/employee-filters'
 
 const REGION_QUADRANTS = ['AMER', 'APAC', 'EMEA', 'Hexaware'] as const
 
-/** Mirrors the backend's `_normalize_seniority_label` (roster_metrics.py)
- * exactly: casing-duplicate `Seniorirty Level` source values (confirmed:
- * "Premium Lead"/"Premium lead", "Standard Senior"/"Standard senior")
- * collapse into one title-cased label instead of splitting a single
- * logical category into two bars. Without this, the client-side
- * recompute (needed so filters propagate, since /roster/breakdowns takes
- * no filter params) produced 11 raw categories instead of 9, and Tremor's
- * BarChart silently thinned its Y-axis ticks to fit — the chart looked
- * like it had only 6 categories even though ~11 bars were actually
- * rendered. Normalizing here fixes the category count at the source. */
-function normalizeSeniorityLabel(value: string): string {
-  const titleCased = value
-    .trim()
-    .split(' ')
-    .map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word))
-    .join(' ')
-  return titleCased.replace(/Tbd/g, 'TBD')
-}
 
 export function WorkforcePage() {
   
-  const breakdowns = useRosterBreakdowns()
+
   const employeesQuery = useRosterEmployeesAll()
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
@@ -76,59 +55,55 @@ export function WorkforcePage() {
   // Memoized: this page's charts are now React.memo'd (custom-bar-chart.tsx
   // / custom-donut-chart.tsx), so keeping stable references here means an
   // unrelated re-render doesn't force every chart to redraw.
-  const filtered = React.useMemo(
-    () =>
-      applyEmployeeFilters(employees, filters, {
-        region: 'region',
-        grade: 'grade',
-        department: 'designation',
-        skill: 'primary_skill',
-      }),
-    [employees, filters],
+  const serverFilters = React.useMemo(
+    () => ({
+      status: filters.status === ALL ? undefined : filters.status,
+      department: filters.department === ALL ? undefined : filters.department,
+      region: filters.region === ALL ? undefined : filters.region,
+    }),
+    [filters.status, filters.department, filters.region],
   )
-  const isLoading = employeesQuery.isLoading
+  const summary = useRosterSummary(serverFilters)
+  const breakdowns = useRosterBreakdowns(serverFilters)
+
+  const isLoading = employeesQuery.isLoading || summary.isLoading
   const isError = employeesQuery.isError
 
-  const totalEmployees = filtered.length
-  const activeEmployees = filtered.filter((e) => e.status === 'Active').length
-  const inactiveEmployees = filtered.filter((e) => e.status === 'Inactive').length
-  const departmentsCount = distinctDepartmentsCount(filtered)
-  const projectsCount = distinctValues(filtered, 'client').length
+  // KPIs come from the server WITH this page's filters applied, so they use
+  // the single YAML metric definitions instead of being recomputed here
+  // against hardcoded status strings.
+  const totalEmployees = summary.data?.total_employees
+  const activeEmployees = summary.data?.active_employees
+  const inactiveEmployees = summary.data?.inactive_employees
+  const departmentsCount = summary.data?.departments
+  const projectsCount = summary.data?.projects
+
+  // Charts come from the server WITH this page's filters applied, same as
+  // the KPIs. They were regrouped here from the filtered rows, which meant
+  // re-implementing the definitions in the browser — including a JS copy of
+  // the seniority normalisation and hardcoded "Seniority TBD" / "Type TBD"
+  // labels that had to be kept in step with config by hand.
+  const toChartData = (counts: Record<string, number> | undefined) =>
+    Object.entries(counts ?? {}).map(([name, value]) => ({ name, value }))
 
   const seniorityData = React.useMemo(
     () =>
-      withTruncatedLabels(
-        Object.entries(
-          groupCount(
-            filtered.map((e) => normalizeSeniorityLabel(e.seniority_level ?? 'Seniority TBD')),
-          ),
-        )
-          .map(([name, value]) => ({ name, value }))
-          .sort((a, b) => b.value - a.value),
-        'name',
-      ),
-    [filtered],
+      withTruncatedLabels(toChartData(breakdowns.data?.headcount_by_seniority), 'name'),
+    [breakdowns.data],
   )
 
   const typeData = React.useMemo(
-    () =>
-      Object.entries(groupCount(filtered.map((e) => e.type ?? 'Type TBD')))
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => (a.name === 'GCC' ? -1 : b.name === 'GCC' ? 1 : 0)),
-    [filtered],
+    () => toChartData(breakdowns.data?.workforce_by_type),
+    [breakdowns.data],
   )
   const typeColors = React.useMemo(
-    () =>
-      colorsForLabels(
-        typeData.map((d) => d.name),
-        TYPE_COLORS,
-      ),
+    () => colorsForLabels(typeData.map((d) => d.name), TYPE_COLORS),
     [typeData],
   )
 
   const regionCounts = REGION_QUADRANTS.map((region) => ({
     region,
-    count: filtered.filter((e) => e.region === region).length,
+    count: breakdowns.data?.headcount_by_region?.[region] ?? 0,
   }))
 
   return (
@@ -138,21 +113,21 @@ export function WorkforcePage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Total Employees"
-          value={isLoading ? '—' : totalEmployees}
+          value={totalEmployees ?? '—'}
           loading={isLoading}
           icon={Users}
           iconTone="blue"
         />
         <KpiCard
           label="Active Employees"
-          value={isLoading ? '—' : activeEmployees}
+          value={activeEmployees ?? '—'}
           loading={isLoading}
           icon={UserCheck}
           iconTone="emerald"
         />
         <KpiCard
           label="Inactive Employees"
-          value={isLoading ? '—' : inactiveEmployees}
+          value={inactiveEmployees ?? '—'}
           loading={isLoading}
           icon={UserX}
           iconTone="red"
@@ -164,18 +139,17 @@ export function WorkforcePage() {
           icon={Target}
           iconTone="blue"
           provisional
-          provisionalNote="Not affected by the filters above — Strategic Pool is date-based (ISBLANK(DOJ (DEPT))) and DOJ (DEPT) isn't exposed by /roster/employees, so it can't be recomputed client-side. Shows the global, unfiltered value."
         />
         <KpiCard
           label="Departments"
-          value={isLoading ? '—' : departmentsCount}
+          value={departmentsCount ?? '—'}
           loading={isLoading}
           icon={Building2}
           iconTone="blue"
         />
         <KpiCard
           label="Projects"
-          value={isLoading ? '—' : projectsCount}
+          value={projectsCount ?? '—'}
           loading={isLoading}
           icon={Briefcase}
           iconTone="blue"
@@ -190,7 +164,6 @@ export function WorkforcePage() {
           isEmpty={seniorityData.length === 0}
           height="h-80"
           provisional
-          provisionalNote="Recomputed client-side from the raw Seniorirty Level field per selected filters, with the same casing-collapse normalization as the backend's /roster/breakdowns (title-case + TBD restore) applied, so all 9 seniority categories render as 9 distinct bars matching the unfiltered totals."
         >
           {/* 9 rows in a fixed h-80 box reads tight — `rowHeightPx` gives
               each bar a fixed height and lets CustomBarChart scroll its

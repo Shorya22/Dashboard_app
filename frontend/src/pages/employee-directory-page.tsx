@@ -12,12 +12,15 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
-import { useRosterEmployeesAll, type EmployeeRecord } from '@/lib/roster-api'
+import {
+  useRosterBreakdowns,
+  useRosterEmployeesAll,
+  type EmployeeRecord,
+} from '@/lib/roster-api'
 import {
   ALL,
   buildOptions,
   compareGrade,
-  deriveSeniorityCategory,
   distinctNormalizedValues,
   distinctValues,
   normalizeDesignationLabel,
@@ -59,8 +62,10 @@ export function EmployeeDirectoryPage() {
   // Fetches the full 52-row roster once and does all filtering/pagination
   // client-side, since /roster/employees has no filter query params — see
   // lib/employee-filters.ts for the shared rationale.
-  const { data, isLoading, isError, isFetching } = useRosterEmployeesAll()
-  const allEmployees = data?.items ?? []
+  // Unfiltered, for the dropdown options only.
+  const allQuery = useRosterEmployeesAll()
+  const allEmployees = allQuery.data?.items ?? []
+  const breakdowns = useRosterBreakdowns()
 
   const [filters, setFilters] = React.useState<FilterValues>({
     department: ALL,
@@ -91,7 +96,7 @@ export function EmployeeDirectoryPage() {
       key: 'seniorityCategory',
       label: 'Seniority Category',
       options: buildOptions(
-        Array.from(new Set(allEmployees.map((e) => deriveSeniorityCategory(e.seniority_level)))).sort(),
+        Object.keys(breakdowns.data?.workforce_by_seniority_category ?? {}),
       ),
     },
     {
@@ -101,30 +106,30 @@ export function EmployeeDirectoryPage() {
     },
   ]
 
-  // NAME stays a free-text search-as-you-type field per the reference; the
-  // other four are proper dropdowns.
+  // Dropdown filters are applied SERVER-side against the YAML column roles,
+  // so the seniority buckets here are the same ones the charts use rather
+  // than a JS re-derivation. NAME stays a free-text search-as-you-type
+  // field per the reference — it is a text search over a displayed value,
+  // not a metric definition, so it is applied client-side over the
+  // already-filtered rows.
+  const serverFilters = React.useMemo(
+    () => ({
+      department: filters.department === ALL ? undefined : filters.department,
+      allocation: filters.allocation === ALL ? undefined : filters.allocation,
+      region: filters.region === ALL ? undefined : filters.region,
+      seniorityCategory:
+        filters.seniorityCategory === ALL ? undefined : filters.seniorityCategory,
+    }),
+    [filters],
+  )
+  const { data, isLoading, isError, isFetching } = useRosterEmployeesAll(serverFilters)
+
   const filtered = React.useMemo(() => {
-    return allEmployees.filter((e) => {
-      if (nameSearch.trim() && !(e.name ?? '').toLowerCase().includes(nameSearch.trim().toLowerCase())) {
-        return false
-      }
-      if (
-        filters.department !== ALL &&
-        normalizeDesignationLabel(e.designation ?? '') !== filters.department
-      ) {
-        return false
-      }
-      if (filters.allocation !== ALL && e.client !== filters.allocation) return false
-      if (filters.region !== ALL && e.region !== filters.region) return false
-      if (
-        filters.seniorityCategory !== ALL &&
-        deriveSeniorityCategory(e.seniority_level) !== filters.seniorityCategory
-      ) {
-        return false
-      }
-      return true
-    })
-  }, [allEmployees, nameSearch, filters])
+    const rows = data?.items ?? []
+    const needle = nameSearch.trim().toLowerCase()
+    if (!needle) return rows
+    return rows.filter((e) => (e.name ?? '').toLowerCase().includes(needle))
+  }, [data, nameSearch])
 
   // Sorting must apply to the full FILTERED set before pagination slices
   // it, not just to whichever rows happen to already be on the current

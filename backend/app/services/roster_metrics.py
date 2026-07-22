@@ -84,21 +84,7 @@ def evaluate_chart(df: pd.DataFrame, chart_name: str) -> dict[str, int]:
     """
     spec = metric_config.chart(chart_name)
     scope = _chart_scope(df, spec)
-    column = metric_config.column(spec["column_role"])
-    blank_label = spec.get("blank_label")
-    kind = spec["type"]
-
-    if kind == "count_by":
-        keys = scope[column]
-        if blank_label is not None:
-            keys = keys.where(keys.notna() & (keys.astype(str).str.strip() != ""), blank_label)
-    elif kind == "numeric_bands":
-        values = pd.to_numeric(scope[column], errors="coerce")
-        keys = values.apply(lambda v: _numeric_band(v, spec["bands"], blank_label))
-    elif kind == "keyword_bands":
-        keys = scope[column].apply(_seniority_category)
-    else:
-        raise ValueError(f"Chart {chart_name!r} declares unsupported type={kind!r}")
+    keys = chart_labels(scope, spec)
 
     counts = {
         str(label): get_total_employees(group)
@@ -107,10 +93,43 @@ def evaluate_chart(df: pd.DataFrame, chart_name: str) -> dict[str, int]:
 
     # Declared buckets/bands always appear, even at zero, so a slice never
     # silently disappears from a donut; declaration order is preserved.
-    declared = [b["label"] for b in spec["bands"]] if kind == "numeric_bands" else spec.get("buckets", [])
+    declared = (
+        [b["label"] for b in spec["bands"]]
+        if spec["type"] == "numeric_bands"
+        else spec.get("buckets", [])
+    )
     ordered = {label: counts.pop(label, 0) for label in declared}
     ordered.update(counts)  # anything unexpected still shows, after the declared ones
     return ordered
+
+
+def chart_labels(df: pd.DataFrame, spec: dict) -> pd.Series:
+    """
+    The bucket label each row falls into for a chart declaration.
+
+    Shared by `evaluate_chart` (to count them) and `apply_filters` (to
+    filter by one). A page filtering on "Experience Band = 5-8 Years" must
+    use the same thresholds the chart uses — deriving them separately, as
+    the frontend used to, is how a filter and the chart it filters end up
+    disagreeing.
+    """
+    column = metric_config.column(spec["column_role"])
+    blank_label = spec.get("blank_label")
+    kind = spec["type"]
+
+    if kind == "count_by":
+        keys = df[column]
+        if blank_label is not None:
+            keys = keys.where(
+                keys.notna() & (keys.astype(str).str.strip() != ""), blank_label
+            )
+        return keys
+    if kind == "numeric_bands":
+        values = pd.to_numeric(df[column], errors="coerce")
+        return values.apply(lambda v: _numeric_band(v, spec["bands"], blank_label))
+    if kind == "keyword_bands":
+        return df[column].apply(_seniority_category)
+    raise ValueError(f"Chart declares unsupported type={kind!r}")
 
 
 def _numeric_band(value: float, bands: list[dict], blank_label: str | None) -> str:
@@ -402,6 +421,12 @@ def _resolve_period(
     """
     if period_month is None:
         available_months = build_available_months(df)
+        if not available_months.month_starts:
+            # A filter can legitimately select zero rows (or rows with no
+            # joining date). Return an empty window so every date measure
+            # reports zero, rather than the page erroring out.
+            empty = pd.Timestamp.min + pd.Timedelta(days=1)
+            return empty, empty, empty
         start = available_months.min_month_start
         end = available_months.max_month_end
         previous = available_months.earliest_date - pd.Timedelta(days=1)
@@ -1652,3 +1677,49 @@ def get_employee_directory(df: pd.DataFrame) -> list[dict]:
 #   `UtilizationLongTable` whose formula bodies are still missing (only
 #   measures were exported) -- out of scope until those two formulas are
 #   provided, left untouched in this reconciliation pass.
+
+
+# --------------------------------------------------------------------------
+# Server-side filtering — one implementation, shared by every filtered page
+# --------------------------------------------------------------------------
+
+
+def apply_filters(df: pd.DataFrame, selected: dict[str, str] | None) -> pd.DataFrame:
+    """
+    Narrow the roster by the page filters declared in
+    `configs/roster_metrics.yaml` under `filters:`.
+
+    Exists so a filtered page can ask the API for its numbers instead of
+    recomputing them in the browser. Each HR page used to re-implement
+    these filters client-side against hardcoded strings
+    (`status === 'Active'`), which quietly duplicated every metric
+    definition: rename a status in config and the backend followed while
+    those pages did not. Filtering here means the page and the API can
+    only ever agree, because there is one implementation.
+
+    Unknown filter names and blank/"all" selections are ignored.
+    """
+    if not selected:
+        return df
+
+    declared = metric_config.filters()
+    out = df
+    for name, value in selected.items():
+        if not value or name not in declared:
+            continue
+        spec = declared[name]
+
+        # A filter can be a plain column, or a DERIVED bucket reusing a
+        # chart's own definition (e.g. "Experience = 5-8 Years"), so the
+        # filter and the chart it filters can never use different rules.
+        chart_name = spec.get("derived_from_chart")
+        if chart_name:
+            labels = chart_labels(out, metric_config.chart(chart_name))
+            out = out[labels.astype(str) == str(value)]
+            continue
+
+        column = metric_config.column(spec["column_role"])
+        if column not in out.columns:
+            continue
+        out = out[out[column].astype(str) == str(value)]
+    return out

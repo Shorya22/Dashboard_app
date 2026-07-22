@@ -5,17 +5,13 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterBar } from '@/components/dashboard/filter-bar'
 import { CustomDonutChart } from '@/components/dashboard/custom-donut-chart'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
-import { useRosterEmployeesAll } from '@/lib/roster-api'
+import { useRosterBreakdowns, useRosterEmployeesAll, useRosterSummary } from '@/lib/roster-api'
 import { STATUS_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
-  applyEmployeeFilters,
   buildOptions,
-  deriveExperienceBand,
-  distinctDepartmentsCount,
   distinctValues,
-  groupCount,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -58,33 +54,40 @@ export function HrPortalHomePage() {
     },
   ]
 
-  // Memoized: charts on this page are React.memo'd (custom-bar-chart.tsx /
-  // custom-donut-chart.tsx), so stable references here avoid redrawing all
-  // 4 charts whenever this page re-renders for an unrelated reason.
-  const filtered = React.useMemo(
-    () =>
-      applyEmployeeFilters(employees, filters, {
-        region: 'region',
-        status: 'status',
-        department: 'designation',
-      }),
-    [employees, filters],
-  )
 
-  const totalEmployees = filtered.length
-  const activeEmployees = filtered.filter((e) => e.status === 'Active').length
-  const departmentsCount = distinctDepartmentsCount(filtered)
-  // Projects mirrors the real DAX's naive DISTINCTCOUNT over the raw,
-  // messy `Client as on June 2026` string field (see data-model skill) —
-  // replicated here, not "fixed" to a per-client count.
-  const projectsCount = distinctValues(filtered, 'client').length
+  // KPIs come from the server WITH this page's filters applied, so they use
+  // the single YAML metric definitions. Recomputing them here meant
+  // hardcoding "Active" in the browser and counting ROWS for Total
+  // Employees where the definition is distinct employee ids — two silent
+  // ways to drift from the backend.
+  const serverFilters = React.useMemo(
+    () => ({
+      status: filters.status === ALL ? undefined : filters.status,
+      department: filters.department === ALL ? undefined : filters.department,
+      region: filters.region === ALL ? undefined : filters.region,
+    }),
+    [filters.status, filters.department, filters.region],
+  )
+  const summary = useRosterSummary(serverFilters)
+  const breakdowns = useRosterBreakdowns(serverFilters)
+  const totalEmployees = summary.data?.total_employees
+  const activeEmployees = summary.data?.active_employees
+  const departmentsCount = summary.data?.departments
+  const projectsCount = summary.data?.projects
+
+  // Charts come from the server WITH this page's filters applied, exactly
+  // like the KPIs above. They used to be regrouped here from the filtered
+  // rows, which re-implemented the definitions in the browser: the
+  // experience bands were a second hardcoded copy of the YAML thresholds
+  // (deriveExperienceBand), and the blank labels ("Region TBD", "Entity
+  // TBD") were hardcoded strings that had to be kept in step with config
+  // by hand. Now there is one definition and the two can't disagree.
+  const toChartData = (counts: Record<string, number> | undefined) =>
+    Object.entries(counts ?? {}).map(([name, value]) => ({ name, value }))
 
   const statusData = React.useMemo(
-    () =>
-      Object.entries(groupCount(filtered.map((e) => e.status ?? 'Unknown'))).map(
-        ([name, value]) => ({ name, value }),
-      ),
-    [filtered],
+    () => toChartData(breakdowns.data?.status_split),
+    [breakdowns.data],
   )
   const statusColors = React.useMemo(
     () => colorsForLabels(statusData.map((d) => d.name), STATUS_COLORS),
@@ -92,46 +95,35 @@ export function HrPortalHomePage() {
   )
 
   const regionData = React.useMemo(
-    () =>
-      withTruncatedLabels(
-        Object.entries(groupCount(filtered.map((e) => e.region ?? 'Region TBD'))).map(
-          ([name, value]) => ({ name, value }),
-        ),
-        'name',
-      ),
-    [filtered],
+    () => withTruncatedLabels(toChartData(breakdowns.data?.headcount_by_region), 'name'),
+    [breakdowns.data],
   )
 
   const entityData = React.useMemo(
     () =>
       withTruncatedLabels(
-        Object.entries(
-          groupCount(filtered.map((e) => e.working_entity ?? 'Entity TBD')),
-        ).map(([name, value]) => ({ name, value })),
+        toChartData(breakdowns.data?.workforce_by_working_entity),
         'name',
       ),
-    [filtered],
+    [breakdowns.data],
   )
-  // Working Entity has 8 distinct real values (AMER, DTAU, DTDE, DTIE,
-  // DTNL, DTUK, Entity TBD, Hexaware) — above the dashboard-design skill's
-  // 4-5 segment cap for donuts, so a bar chart is the CORRECT choice per
-  // our own chart-type rule, even though the Power BI reference PDF shows
-  // a donut for this metric. Keeping the bar chart; the reference is the
+  // Working Entity has more distinct values than the dashboard-design
+  // skill's 4-5 segment cap for donuts, so a bar chart is the correct
+  // choice per our own chart-type rule, even though the Power BI reference
+  // PDF shows a donut. Keeping the bar chart; the reference is the
   // inconsistent one here.
-  const entitySegmentCount = distinctValues(employees, 'working_entity').length
+  const entitySegmentCount = entityData.length
 
   const experienceBandData = React.useMemo(
     () =>
       withTruncatedLabels(
-        Object.entries(
-          groupCount(filtered.map((e) => deriveExperienceBand(e.total_experience))),
-        ).map(([name, value]) => ({ name, value })),
+        toChartData(breakdowns.data?.workforce_by_experience_band),
         'name',
       ),
-    [filtered],
+    [breakdowns.data],
   )
 
-  const isLoading = employeesQuery.isLoading
+  const isLoading = employeesQuery.isLoading || summary.isLoading || breakdowns.isLoading
   const isError = employeesQuery.isError
 
   return (
@@ -141,28 +133,28 @@ export function HrPortalHomePage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Total Employees"
-          value={isLoading ? '—' : totalEmployees}
+          value={totalEmployees ?? '—'}
           loading={isLoading}
           icon={Users}
           iconTone="blue"
         />
         <KpiCard
           label="Departments"
-          value={isLoading ? '—' : departmentsCount}
+          value={departmentsCount ?? '—'}
           loading={isLoading}
           icon={Building2}
           iconTone="blue"
         />
         <KpiCard
           label="Projects"
-          value={isLoading ? '—' : projectsCount}
+          value={projectsCount ?? '—'}
           loading={isLoading}
           icon={Briefcase}
           iconTone="blue"
         />
         <KpiCard
           label="Active Employees"
-          value={isLoading ? '—' : activeEmployees}
+          value={activeEmployees ?? '—'}
           loading={isLoading}
           icon={UserCheck}
           iconTone="emerald"

@@ -43,7 +43,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import logging
+
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 DATE_FORMAT = "%d-%b-%y"  # source format, e.g. "24-Nov-25" — matches roster_metrics.DATE_FORMAT
 
@@ -66,8 +70,8 @@ class AvailableMonths:
     """
 
     month_starts: list[pd.Timestamp]
-    earliest_date: pd.Timestamp
-    latest_date: pd.Timestamp
+    earliest_date: pd.Timestamp | None
+    latest_date: pd.Timestamp | None
 
     @property
     def min_month_start(self) -> pd.Timestamp:
@@ -103,10 +107,17 @@ def build_available_months(df: pd.DataFrame) -> AvailableMonths:
     today = pd.to_datetime(df["Today"], format=DATE_FORMAT, errors="coerce")
 
     if doj.notna().sum() == 0:
-        raise ValueError(
-            "build_available_months: no row has a parseable 'DOJ (DEPT)' date; "
-            "cannot derive a calendar range."
+        # An EMPTY calendar, not an error. Filtering is applied server-side
+        # now, so a legitimate filter combination can select zero rows (or
+        # rows with no joining date) — a user picking "Skill = X" that
+        # nobody has must get empty charts, not a 500. Downstream date
+        # measures see no months and correctly return zero.
+        logger.info(
+            "build_available_months: no parseable 'DOJ (DEPT)' in %d row(s) — "
+            "returning an empty calendar",
+            len(df),
         )
+        return AvailableMonths(month_starts=[], earliest_date=None, latest_date=None)
 
     earliest_date = doj.min()
 
