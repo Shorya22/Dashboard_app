@@ -12,8 +12,14 @@ comments).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
+
+from app.services.validation.engine import apply_dataset_defaults
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 from app.services.roster_metrics import (
     DEFAULT_ROSTER_PATH,
@@ -373,12 +379,14 @@ def test_seniority_category_mapping():
 
 
 def test_get_workforce_by_seniority_category(sample_roster):
-    # E1 Senior, E2 Lead, E3 Mid, E4 TBD, E5 Senior, E6 Other
+    # SCOPE (2026-07-22): current workforce only — Active + Strategic Pool.
+    # E3 (Mid) and E4 (TBD) are Inactive and so are excluded; a chart
+    # titled "Workforce" must describe the same people as the other
+    # workforce cards on the page.
+    # Remaining: E1 Senior, E2 Lead, E5 Senior, E6 Other.
     assert get_workforce_by_seniority_category(sample_roster) == {
         "Senior": 2,
         "Lead": 1,
-        "Mid": 1,
-        "TBD": 1,
         "Other": 1,
     }
 
@@ -531,9 +539,15 @@ def test_get_employee_directory(sample_roster):
 
 @pytest.fixture(scope="module")
 def real_roster() -> pd.DataFrame:
-    if not DEFAULT_ROSTER_PATH.exists():
+    if not (FIXTURES_DIR / "roster_snapshot.xlsx").exists():
         pytest.skip(f"real roster file not present at {DEFAULT_ROSTER_PATH}")
-    return load_roster()
+    # Loaded through the SAME path the dashboard uses — the ingestion
+    # contract's defaults applied (blank experience -> 0, blank employee id
+    # -> "NEW_EMP_ID TBD n"). Reading the file raw here would measure
+    # different data than the app actually shows: a blank NEW_EMP_ID is
+    # dropped by nunique(), so raw reads report 33 active where the
+    # dashboard reports 35.
+    return apply_dataset_defaults(load_roster(FIXTURES_DIR / "roster_snapshot.xlsx"), "roster")
 
 
 def test_real_roster_headcount_by_region_matches_reference(real_roster):
@@ -636,13 +650,18 @@ def test_real_roster_seniority_category(real_roster):
     # in the "Senior" seniority category -- removing them at the business
     # owner's direction drops that bucket 19->17. Every other category
     # unaffected.
+    # SCOPE (2026-07-22): current workforce only (Active + Strategic Pool
+    # = 45 of the snapshot's 50 rows), so the 5 Inactive employees are no
+    # longer counted. All 5 sat in the TBD bucket, which drops 7 -> 2;
+    # every other band is unchanged.
     assert get_workforce_by_seniority_category(real_roster) == {
         "Lead": 18,
         "Senior": 17,
         "Mid": 7,
-        "TBD": 7,
+        "TBD": 2,
         "Other": 1,
     }
+    assert sum(get_workforce_by_seniority_category(real_roster).values()) == 45
 
 
 def test_real_roster_month_wise_closing_headcount(real_roster):

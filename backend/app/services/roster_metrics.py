@@ -28,6 +28,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.services import metric_config
 from app.services.calendar import build_available_months
 from app.services.cache_utils import cache_on_df
 
@@ -39,11 +40,13 @@ DEFAULT_ROSTER_PATH = (
 
 EXPERIENCE_TOLERANCE = 0.01  # years; float rounding tolerance
 
-# The one place the "Strategic Pool" status literal is written. Every
-# surface that reports Strategic Pool resolves through `get_strategic_pool`,
-# so the Home and HR Home donuts can never disagree again (see
-# metric_invariants.py, which asserts it).
-STRATEGIC_POOL_STATUS = "Strategic Pool"
+# Status literals and the seniority keyword map now come from
+# `configs/roster_metrics.yaml`, so changing what counts as present, or
+# adding a seniority keyword, is a config edit rather than a code change.
+# Every surface that reports Strategic Pool resolves through
+# `get_strategic_pool`, so the Home and HR Home donuts can never disagree
+# again (see metric_invariants.py, which asserts it).
+STRATEGIC_POOL_STATUS = metric_config.status_value("strategic_pool")
 
 DATE_FORMAT = "%d-%b-%y"  # source format, e.g. "24-Nov-25"
 
@@ -379,15 +382,28 @@ def get_closing_headcount(
     `period_month` (any date within the desired month) to scope to a
     single month instead — see `_resolve_period` for full details.
 
-    Reads: `DOJ (DEPT)`, `LWD`, `Today`, `NEW_EMP_ID`.
     Edge cases: rows whose `DOJ (DEPT)` fails to parse (e.g. literal
-    "TBD", see `get_data_quality_warnings`) never satisfy the `<=`
-    comparison and are excluded, matching a blank/invalid date failing
-    any DAX date comparison.
+    "TBD", see `get_data_quality_warnings`) are treated as having joined
+    (see the blank-DOJ note below).
+
+    REDEFINED (2026-07-22, business owner): Closing Headcount is now
+    "everyone who had joined by the end of the period AND is still part of
+    the workforce", where "still here" means `Status` is one of
+    `counts_as_present` in configs/roster_metrics.yaml (Active + Strategic
+    Pool). Inactive employees are never counted, regardless of LWD.
+
+    This replaces the old LWD-based exit test, which produced a visible
+    contradiction on the Home page: 9 employees were marked Inactive but
+    had no LWD, so the date logic still counted them as present and the
+    KPI read 47 while the Active+Strategic donut on the same page read 38.
+    Keying off Status instead makes the whole page agree by construction,
+    and makes the trend behave the way the business describes it: purely
+    cumulative by joining date (May 34 + 2 June joiners = June 36).
+
+    Reads: `DOJ (DEPT)`, `Status`, `Today`, `NEW_EMP_ID`.
     """
     _, end, _ = _resolve_period(df, period_month)
     doj = _parse_dept_dates(df)
-    lwd = _parse_lwd_dates(df)
     # DAX BLANK() semantics fix (2026-07-16): a blank/unparseable DOJ (DEPT)
     # (e.g. the literal string "TBD", parsed to NaT) behaves in real DAX
     # like the value 0 (epoch-zero, 1899-12-30) inside a numeric/date
@@ -397,8 +413,13 @@ def get_closing_headcount(
     # explicit: `doj.isna() | (doj <= end)` treats blank as satisfying
     # `<=` intentionally, rather than relying on (wrong) NaT default
     # behavior. See data-model SKILL.md "Known open data gap" (now
-    # resolved) for the full root-cause writeup.
-    mask = (doj.isna() | (doj <= end)) & (lwd.isna() | (lwd > end))
+    # resolved) for the full root-cause writeup. Kept for the same reason
+    # here: an employee with an unrecorded joining date is still part of
+    # the workforce, so a blank DOJ must not drop them from headcount.
+    joined_by_end = doj.isna() | (doj <= end)
+    # "Still here" is Status-driven (config: counts_as_present), NOT
+    # LWD-driven — see the docstring for why.
+    mask = joined_by_end & metric_config.is_present(df)
     return get_total_employees(df[mask])
 
 
@@ -1167,33 +1188,37 @@ def _seniority_category(seniorirty_level: str | float) -> str:
                                            Standard Mid)
       - anything else                  -> "Other"      (Premium Technical
                                            Service Delivery Manager)
+
+    CONFIG-DRIVEN (2026-07-22): the keyword->band rules now live in
+    `configs/roster_metrics.yaml` under `seniority.categories`, so adding
+    or reordering a keyword is a config edit, not a code change. Order
+    still matters and is preserved from the config: "Seniority TBD"
+    contains "senior", so `tbd` is tested first.
     """
-    if pd.isna(seniorirty_level):
-        return "Unknown"
-    value = str(seniorirty_level).lower()
-    if "tbd" in value:
-        return "TBD"
-    if "lead" in value:
-        return "Lead"
-    if "senior" in value or " sr" in value or value.strip().endswith("sr"):
-        return "Senior"
-    if "mid" in value:
-        return "Mid"
-    return "Other"
+    return metric_config.seniority_category(seniorirty_level)
 
 
 @cache_on_df
 def get_workforce_by_seniority_category(df: pd.DataFrame) -> dict[str, int]:
     """
-    PROVISIONAL (see `_seniority_category` docstring) — backs any
-    Senior/Lead/Mid/Other donut or stacked-bar axis referencing
-    "Seniority Category" (e.g. Skill Bifurcation by Seniority). Distinct
-    employee count per provisional category, over the full roster.
-    Reads: `Seniorirty Level`, `NEW_EMP_ID`.
+    Backs the Home "Workforce by Seniority" donut and any other
+    Senior/Lead/Mid/Other axis referencing "Seniority Category". Bands are
+    keyword matches on `Seniorirty Level`, configured in
+    `configs/roster_metrics.yaml` (see `_seniority_category`).
+
+    SCOPE (2026-07-22): counts the CURRENT workforce only — the statuses in
+    `counts_as_present` (Active + Strategic Pool) — not the full roster.
+    A chart titled "Workforce" sitting next to a "Workforce Category" donut
+    on the same page must describe the same set of people; showing all 52
+    rows here while that donut showed 38 was precisely the kind of
+    same-page contradiction this pass exists to remove.
+    Reads: `Seniorirty Level`, `Status`, `NEW_EMP_ID`.
     """
-    categories = df["Seniorirty Level"].apply(_seniority_category)
+    present = df[metric_config.is_present(df)]
+    categories = present[metric_config.seniority_column()].apply(_seniority_category)
     return {
-        str(cat): get_total_employees(group) for cat, group in df.groupby(categories, dropna=True)
+        str(cat): get_total_employees(group)
+        for cat, group in present.groupby(categories, dropna=True)
     }
 
 

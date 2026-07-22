@@ -4,8 +4,14 @@ Tests for backend/app/services/booking_metrics.py.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
+
+from app.services.validation.engine import apply_dataset_defaults
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 from app.services.booking_metrics import (
     DEFAULT_BOOKING_PATH,
@@ -384,9 +390,15 @@ def test_get_project_detail_not_found_returns_none(sample_bookings_full):
 
 @pytest.fixture(scope="module")
 def real_bookings() -> pd.DataFrame:
-    if not DEFAULT_BOOKING_PATH.exists():
+    if not (FIXTURES_DIR / "booking_snapshot.xlsx").exists():
         pytest.skip(f"real booking file not present at {DEFAULT_BOOKING_PATH}")
-    return load_booking_data()
+    # Loaded through the SAME path the dashboard uses — the ingestion
+    # contract's defaults applied (blank experience -> 0, blank employee id
+    # -> "NEW_EMP_ID TBD n"). Reading the file raw here would measure
+    # different data than the app actually shows: a blank NEW_EMP_ID is
+    # dropped by nunique(), so raw reads report 33 active where the
+    # dashboard reports 35.
+    return apply_dataset_defaults(load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx"), "booking")
 
 
 def test_real_bookings_hours(real_bookings):

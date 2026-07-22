@@ -9,8 +9,12 @@ combinations that must never silently break.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 from app.services.booking_metrics import DEFAULT_BOOKING_PATH, load_booking_data
 from app.services.utilization_metrics import (
@@ -101,16 +105,16 @@ def test_get_utilization_overview(sample_ground_truth_long):
 
 @pytest.fixture(scope="module")
 def real_bookings() -> pd.DataFrame:
-    if not DEFAULT_BOOKING_PATH.exists():
+    if not (FIXTURES_DIR / "booking_snapshot.xlsx").exists():
         pytest.skip(f"real booking file not present at {DEFAULT_BOOKING_PATH}")
-    return load_booking_data()
+    return load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
 
 
 @pytest.fixture(scope="module")
 def real_ground_truth_long() -> pd.DataFrame:
-    if not DEFAULT_GROUND_TRUTH_PATH.exists():
+    if not (FIXTURES_DIR / "ground_truth_snapshot.xlsx").exists():
         pytest.skip(f"real ground-truth file not present at {DEFAULT_GROUND_TRUTH_PATH}")
-    return load_ground_truth_long()
+    return load_ground_truth_long(FIXTURES_DIR / "ground_truth_snapshot.xlsx")
 
 
 def test_reconciliation_confirms_formula_a(real_bookings, real_ground_truth_long):

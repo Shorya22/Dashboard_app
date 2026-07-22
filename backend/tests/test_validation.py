@@ -32,16 +32,29 @@ REAL_FILES = {
 }
 MAX_BYTES = 25 * 1024 * 1024
 
+# Frozen, known-clean copies used as the baseline for the mutation tests
+# below (each deliberately breaks ONE thing and asserts only that thing is
+# reported). They must not read the live files: those are business data
+# that legitimately changes, so a new upload with its own blanks would
+# make these tests fail for reasons unrelated to what they check.
+# `test_real_files_pass` deliberately still reads the LIVE files.
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+SNAPSHOTS = {
+    "roster": FIXTURES_DIR / "roster_snapshot.xlsx",
+    "booking": FIXTURES_DIR / "booking_snapshot.xlsx",
+    "ground_truth": FIXTURES_DIR / "ground_truth_snapshot.xlsx",
+}
+
 
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #
 def _read_real(file_type: str) -> pd.DataFrame:
-    """Read a real source file exactly as its config's read block says."""
+    """Read the frozen clean snapshot exactly as its config's read block says."""
     config = load_config(file_type)
     read = config["read"]
     return pd.read_excel(
-        REAL_FILES[file_type], sheet_name=read["sheet"], header=read["header"]
+        SNAPSHOTS[file_type], sheet_name=read["sheet"], header=read["header"]
     )
 
 

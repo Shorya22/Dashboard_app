@@ -1,0 +1,56 @@
+# =============================================================================
+# Roster METRIC semantics — business meaning, not file structure
+# =============================================================================
+# The ingestion contract (services/validation/configs/roster.yaml) says what a
+# valid FILE looks like. This file says what the VALUES MEAN to the dashboard.
+#
+# Everything here is business policy that can change without the file format
+# changing — which status counts as "still here", which words map to a
+# seniority band. Editing this YAML changes the dashboard; no Python change,
+# no redeploy of logic.
+#
+# Confirmed with the business owner 2026-07-22:
+#   * Active and Strategic Pool are read from the `Status` column.
+#   * Closing Headcount is cumulative by joining date and includes ONLY
+#     Active + Strategic Pool — Inactive employees are never counted.
+#   * Seniority bands are keyword matches on the `Seniorirty Level` column.
+
+version: 1
+
+status:
+  column: "Status"
+  active: "Active"
+  inactive: "Inactive"
+  strategic_pool: "Strategic Pool"
+  # The statuses that count as "currently part of the workforce". Every
+  # present-headcount surface (Closing Headcount KPI, the month-wise growth
+  # trend, and the workforce composition charts) is scoped to exactly this
+  # list, so they can never disagree with each other. Add a new status here
+  # to have it counted as present.
+  counts_as_present:
+    - "Active"
+    - "Strategic Pool"
+
+seniority:
+  column: "Seniorirty Level"   # source-file typo kept verbatim
+  # First match wins, case-insensitive substring test. Order matters:
+  # "Seniority TBD" contains "senior", so `tbd` must be tested before
+  # `senior` or every TBD row would be mis-bucketed as Senior.
+  categories:
+    - contains: "tbd"
+      label: "TBD"
+    - contains: "lead"
+      label: "Lead"
+    - contains: "senior"
+      label: "Senior"
+    # Abbreviated form seen in older exports ("Hexa Sr"). Leading space so
+    # it only matches "sr" as its own word, never inside another word.
+    - contains: " sr"
+      label: "Senior"
+    - contains: "mid"
+      label: "Mid"
+  # Anything matching none of the above (e.g. "Premium Technical Service
+  # Delivery Manager").
+  default_label: "Other"
+  # Blank/missing seniority value.
+  missing_label: "Unknown"

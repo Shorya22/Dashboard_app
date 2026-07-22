@@ -12,8 +12,14 @@ Two layers per function-group:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
+
+from app.services.validation.engine import apply_dataset_defaults
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 from app.services.roster_metrics import (
     DEFAULT_ROSTER_PATH,
@@ -464,9 +470,15 @@ def test_get_skills_covered_real_file(real_roster):
 
 @pytest.fixture(scope="module")
 def real_roster() -> pd.DataFrame:
-    if not DEFAULT_ROSTER_PATH.exists():
+    if not (FIXTURES_DIR / "roster_snapshot.xlsx").exists():
         pytest.skip(f"real roster file not present at {DEFAULT_ROSTER_PATH}")
-    return load_roster()
+    # Loaded through the SAME path the dashboard uses — the ingestion
+    # contract's defaults applied (blank experience -> 0, blank employee id
+    # -> "NEW_EMP_ID TBD n"). Reading the file raw here would measure
+    # different data than the app actually shows: a blank NEW_EMP_ID is
+    # dropped by nunique(), so raw reads report 33 active where the
+    # dashboard reports 35.
+    return apply_dataset_defaults(load_roster(FIXTURES_DIR / "roster_snapshot.xlsx"), "roster")
 
 
 def test_real_roster_headcount(real_roster):

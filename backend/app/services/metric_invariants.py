@@ -121,7 +121,41 @@ def _active_plus_inactive_plus_pool_is_total(df: pd.DataFrame) -> tuple[bool, st
     )
 
 
+def _closing_headcount_is_present_workforce(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Closing Headcount must equal Active + Strategic Pool.
+
+    Both answer "how many people are here now", and they sit on the same
+    Home page — the KPI and the Workforce Category donut. They disagreed
+    (47 vs 38) while Closing Headcount was LWD-based and 9 Inactive
+    employees had no LWD. Now that it is Status-scoped this holds by
+    construction, and this check keeps it that way.
+    """
+    closing = roster_metrics.get_closing_headcount(df)
+    present = roster_metrics.get_active_employees(
+        df
+    ) + roster_metrics.get_strategic_pool(df)
+    ok = closing == present
+    return ok, (
+        f"closing_headcount={closing}, active+strategic_pool={present}"
+    )
+
+
+def _seniority_split_covers_present_workforce(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    The Workforce-by-Seniority donut must account for exactly the current
+    workforce — same people as the other workforce cards on the page.
+    """
+    split = roster_metrics.get_workforce_by_seniority_category(df)
+    summed = sum(split.values())
+    present = roster_metrics.get_closing_headcount(df)
+    ok = summed == present
+    return ok, f"seniority split sums to {summed}, present workforce {present}"
+
+
 ROSTER_INVARIANTS: dict[str, InvariantCheck] = {
+    "closing_headcount_is_present_workforce": _closing_headcount_is_present_workforce,
+    "seniority_split_covers_present_workforce": _seniority_split_covers_present_workforce,
     "strategic_pool_same_everywhere": _same_label_same_number,
     "status_split_sums_to_total": _status_split_sums_to_total,
     "category_split_matches_status": _category_split_matches_status,
