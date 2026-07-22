@@ -18,6 +18,7 @@ their own modules and are orchestrated by `pipeline.py`.
 from __future__ import annotations
 
 import functools
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -352,9 +353,53 @@ def apply_defaults(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     return filled
 
 
-def apply_dataset_defaults(df: pd.DataFrame, file_type: str) -> pd.DataFrame:
-    """`apply_defaults` keyed by file type — the entry point data_loader uses."""
-    return apply_defaults(df, load_config(file_type))
+def resolve_column_aliases(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """
+    Rename period-varying columns to their stable canonical name.
+
+    Some source headings carry the reporting period in the text — the
+    roster's client column is literally "Client as on June 2026", and
+    becomes "Client as on July 2026" next month. Pinning the exact name
+    anywhere means every export breaks the upload (missing required
+    column) until someone edits config.
+
+    A column may therefore declare `matches:` (a regex). The first column
+    whose heading matches is renamed to the entry's canonical `name`, so
+    everything downstream — validation, metrics, the dashboard — only ever
+    sees the stable name. An exact-name match always wins over a pattern.
+    """
+    renames: dict[str, str] = {}
+    for col in config["columns"]:
+        pattern = col.get("matches")
+        canonical = col["name"]
+        if not pattern or canonical in df.columns:
+            continue
+        for actual in df.columns:
+            if actual in renames:
+                continue
+            if re.fullmatch(pattern, str(actual).strip(), flags=re.IGNORECASE):
+                renames[actual] = canonical
+                break
+    return df.rename(columns=renames) if renames else df
+
+
+def prepare_dataset(df: pd.DataFrame, file_type: str) -> pd.DataFrame:
+    """
+    Put a freshly-read DataFrame into the shape the rest of the app
+    expects: period-varying column headings normalised to their canonical
+    names, then the contract's declared defaults filled in.
+
+    Every read path (the dashboard's data_loader and the upload pipeline)
+    goes through this, so the validator and the dashboard can never
+    disagree about what the data looks like.
+    """
+    config = load_config(file_type)
+    return apply_defaults(resolve_column_aliases(df, config), config)
+
+
+# Backwards-compatible alias — `prepare_dataset` now also normalises
+# column names, which the old name no longer describes.
+apply_dataset_defaults = prepare_dataset
 
 
 def run_null_warnings_stage(df: pd.DataFrame, config: dict) -> list[ValidationIssue]:

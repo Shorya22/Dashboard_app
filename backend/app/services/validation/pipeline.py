@@ -22,6 +22,7 @@ import pandas as pd
 
 from app.services.validation.engine import (
     apply_defaults,
+    resolve_column_aliases,
     default_fill_warnings,
     load_config,
     run_business_stage,
@@ -139,6 +140,10 @@ def validate_file(
     # Apply the contract's declared defaults before any check runs, so
     # every stage (and the dashboard, via data_loader) sees the same
     # values. Each substituted cell is reported as a warning first.
+    # Normalise period-varying headings (e.g. "Client as on July 2026" ->
+    # "Client") BEFORE anything inspects columns, so a new month's export
+    # is not rejected for a "missing" required column.
+    df = resolve_column_aliases(df, config)
     report.extend(default_fill_warnings(df, config))
     df = apply_defaults(df, config)
 

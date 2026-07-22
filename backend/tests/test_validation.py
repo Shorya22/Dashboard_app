@@ -159,6 +159,30 @@ def test_roster_missing_required_column(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Client",                    # canonical (source now exports this)
+        "Client as on June 2026",    # older export
+        "Client as on July 2026",    # a future month, unseen by anyone
+        "Client as on Q3 2027",
+    ],
+)
+def test_client_column_heading_may_carry_any_period(heading, tmp_path):
+    """
+    The client heading used to carry the reporting period, so it changed
+    every export and would have failed the required-column check each
+    month. Any such heading is now matched by pattern and renamed to the
+    canonical "Client", so a new period's file uploads with no config or
+    code change.
+    """
+    df = _read_real("roster").rename(columns={"Client": heading})
+    report = _validate_df(df, "roster", tmp_path)
+    assert report.passed, [i.to_dict() for i in report.errors]
+    # ...and it must not be reported as an unexpected/extra column either
+    assert not any(i.rule == "unknown_column" for i in report.issues)
+
+
 def test_roster_extra_column_is_warning_not_error(tmp_path):
     # Light mode: an added column is reported so it's visible, but a file
     # that gained a column is not rejected.

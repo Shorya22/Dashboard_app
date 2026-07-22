@@ -15,7 +15,67 @@
 #     Active + Strategic Pool — Inactive employees are never counted.
 #   * Seniority bands are keyword matches on the `Seniorirty Level` column.
 
-version: 1
+version: 2
+
+# ---------------------------------------------------------------------------
+# Column roles — which physical column plays which business role.
+# ---------------------------------------------------------------------------
+# Metrics refer to ROLES, never to raw column names, so a renamed source
+# column is a one-line change here instead of a hunt through Python.
+#
+# The `client` role points at the canonical name "Client". The physical
+# heading carries the reporting period ("Client as on June 2026") and
+# changes every export, so roster.yaml matches it by PATTERN and renames it
+# on read. Nothing here or in Python needs touching when the month rolls
+# over.
+columns:
+  employee_id: "NEW_EMP_ID"          # identity; every headcount counts this distinctly
+  employee_name: "NAME"
+  designation: "Designation"         # what the "Departments" card counts
+  client: "Client"                   # what the "Projects" card counts
+                                     # (canonical; the source heading
+                                     #  "Client as on <month> <year>" is
+                                     #  pattern-matched and renamed on read)
+
+# ---------------------------------------------------------------------------
+# Card definitions — what each KPI on the dashboard counts.
+# ---------------------------------------------------------------------------
+# Documentation of record for the numbers on screen; the matching function
+# in roster_metrics.py reads the same column roles above. Kept declarative
+# so `docs/METRICS.md` and the code can't drift apart.
+cards:
+  total_employees:
+    label: "Total Employees"
+    counts: distinct
+    column_role: employee_id
+    status_filter: none              # deliberately NOT filtered by status
+    note: >-
+      Everyone in the file, whatever their status. A blank employee id is
+      filled at ingestion with a NUMBERED marker ("NEW_EMP_ID TBD n") so
+      each such person still counts once — a shared marker would merge
+      them and a blank would be dropped entirely by the distinct count.
+  active_employees:
+    label: "Active Employees"
+    counts: distinct
+    column_role: employee_id
+    status_filter: active
+    note: Same definition as the Active Employees card on Home.
+  departments:
+    label: "Departments"
+    counts: distinct
+    column_role: designation
+    normalize_case: true             # "SalesForce" and "Salesforce" count once
+    note: >-
+      Counts distinct job titles from the Designation column.
+  projects:
+    label: "Projects"
+    counts: distinct
+    column_role: client
+    note: >-
+      Counts distinct values of the client column. Cells can hold several
+      comma-separated clients and the WHOLE cell is counted as one value,
+      so "Barbour, PK Commerce" is one entry, not two. "Client TBD"
+      (unallocated) is included.
 
 status:
   column: "Status"

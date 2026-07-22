@@ -13,8 +13,38 @@ function, never be recomputed separately. That is what caused the
 | What | Where | Who can change it |
 |---|---|---|
 | What a valid upload looks like (columns, types) | `backend/app/services/validation/configs/*.yaml` | Config edit, no code |
-| What the values *mean* (which status counts as present, seniority keywords) | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
+| Which column plays which role, and what each card counts | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
+| What the values *mean* (status, seniority keywords, hours labels) | `backend/app/services/configs/*_metrics.yaml` | Config edit, no code |
 | Date-window logic (joiners, exits, attrition) | `backend/app/services/roster_metrics.py` | Developer |
+
+### Column roles
+
+Metrics never reference a raw column heading; they reference a **role**,
+resolved through config:
+
+| Role | Column |
+|---|---|
+| `employee_id` | `NEW_EMP_ID` |
+| `employee_name` | `NAME` |
+| `designation` | `Designation` |
+| `client` | `Client` |
+
+**Headings that carry a reporting period.** The client column used to be
+exported as `Client as on June 2026` — a heading that changes every
+month, which would have failed the required-column check on every new
+export. Two things now protect against that:
+
+1. The source has been changed to export a stable `Client` heading.
+2. The contract also matches the old shape by **pattern**
+   (`matches: "Client as on .*"`) and renames it to `Client` on read.
+
+So `Client`, `Client as on June 2026`, `Client as on July 2026` and any
+future period are all accepted, with no config or code change. Older
+files already uploaded keep working. Locked in by
+`test_client_column_heading_may_carry_any_period`.
+
+Use the same `matches:` mechanism for any other heading that starts
+carrying a date.
 
 ---
 
@@ -117,6 +147,66 @@ renaming one is a config edit. If a **third** category ever appears
 (e.g. "Leave Hours"), those hours would count toward the total but land
 in neither slice — the `hours_split_covers_all_hours` invariant catches
 exactly that and names the offending category.
+
+---
+
+## Page 2 — HR Home (HR Portal)
+
+Card definitions are declared in `roster_metrics.yaml` under `cards:`, so
+this table and the code read from the same source.
+
+### Card: Total Employees — `52`
+Distinct **`employee_id`** (`NEW_EMP_ID`). **No status filter** —
+everyone in the file, whether Active, Inactive or Strategic Pool.
+
+**What if an employee has no ID?** A blank `NEW_EMP_ID` is filled at
+ingestion with a **numbered** marker — `NEW_EMP_ID TBD 1`,
+`NEW_EMP_ID TBD 2`, … — so each such person is still counted once. The
+numbering is not cosmetic; with the current roster (2 employees have no
+ID) the alternatives both under-count:
+
+| Design | Total Employees | Result |
+|---|---|---|
+| Leave blank | 50 | distinct-count ignores blanks — both people vanish |
+| One shared `"NEW_EMP_ID TBD"` | 51 | both collapse into a single value |
+| **Numbered markers** (what we do) | **52** ✅ | each counted once |
+
+Every filled cell is reported as a warning on upload, and
+`test_blank_ids_do_not_undercount_headcount` locks the behaviour in.
+Those employees display as `NEW_EMP_ID TBD 1` in the Employee Directory
+until real IDs are assigned — the count is right, the identifier is a
+placeholder.
+
+### Card: Active Employees — `35`
+Distinct `employee_id` where `Status` = "Active". **Identical definition
+to the Active Employees card on Home** — same function, so the two pages
+cannot disagree.
+
+### Card: Departments — `27`
+Distinct values of the **`designation`** role (`Designation` column),
+case-normalised so `"SalesForce Core Developer"` and `"Salesforce Core
+Developer"` count once.
+
+> Note: this counts distinct **job titles**, not organisational
+> departments. Confirmed as intended.
+
+### Card: Projects — `31`
+Distinct values of the **`client`** role (the `Client` column).
+
+Two behaviours worth knowing, both confirmed as intended:
+- Cells can hold several comma-separated clients and the **whole cell**
+  counts as one value — `"Barbour, PK Commerce"` is one entry, and
+  `"ParsonKelloggs"` vs `"ParsonKelloggs, Barbour"` are two different ones.
+- `"Client TBD"` (unallocated) is included.
+
+*(For comparison, the booking sheet's clean one-per-row columns give 49
+clients and 81 projects — a different question, answered on the
+Utilization pages.)*
+
+### Charts on this page
+Status Split, Headcount by Region, Workforce by Working Entity and
+Workforce by Experience Band have **not been reviewed yet** — to be
+covered when we work through the rest of this page.
 
 ---
 

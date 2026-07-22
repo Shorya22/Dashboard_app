@@ -47,7 +47,28 @@ def internal_hours_label() -> str:
     return load_metric_config("booking")["hours"]["internal_label"]
 
 
-# --- roster -------------------------------------------------------------- #
+# --- roster: column roles ------------------------------------------------- #
+def column(role: str) -> str:
+    """
+    The physical column playing a business role (e.g. "employee_id").
+
+    Metrics refer to roles rather than raw headings, so a renamed source
+    column is a one-line config change. Relevant for `client`, whose real
+    heading ("Client as on June 2026") is expected to drift each period.
+    """
+    return load_metric_config()["columns"][role]
+
+
+def employee_id_column() -> str:
+    return column("employee_id")
+
+
+def card(name: str) -> dict:
+    """A card's declarative definition, for docs/introspection."""
+    return load_metric_config()["cards"][name]
+
+
+# --- roster: status ------------------------------------------------------- #
 def status_column() -> str:
     return load_metric_config()["status"]["column"]
 

@@ -90,7 +90,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 2.0,
             "Before Hexaware Experience": 3.0,
             "Total Experience": 5.0,  # consistent
-            "Client as on June 2026": "Acme Corp",
+            "Client": "Acme Corp",
             "Project Manager": "Jane Doe",
             "Reason for Leaving": None,
             "DOJ (DEPT)": "1-Jan-26",
@@ -103,7 +103,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 1.0,
             "Before Hexaware Experience": 1.0,
             "Total Experience": 2.0,  # consistent
-            "Client as on June 2026": "Client TBD",
+            "Client": "Client TBD",
             "Project Manager": "PM TBD",
             "Reason for Leaving": None,
             "DOJ (DEPT)": "15-Jun-26",  # Joiner this period
@@ -116,7 +116,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 4.0,
             "Before Hexaware Experience": 2.0,
             "Total Experience": 6.0,  # consistent
-            "Client as on June 2026": "Beta Inc",
+            "Client": "Beta Inc",
             "Project Manager": "PM TBD",  # PM-only TBD
             "Reason for Leaving": None,
             "DOJ (DEPT)": "1-Jan-26",
@@ -129,7 +129,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 3.0,
             "Before Hexaware Experience": 3.0,
             "Total Experience": 999.0,  # MISMATCH: should be 6.0
-            "Client as on June 2026": "Gamma LLC",
+            "Client": "Gamma LLC",
             "Project Manager": "John Roe",
             "Reason for Leaving": None,
             "DOJ (DEPT)": "1-Jan-26",
@@ -142,7 +142,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 5.0,
             "Before Hexaware Experience": 1.0,
             "Total Experience": 6.0,
-            "Client as on June 2026": "Delta Co",
+            "Client": "Delta Co",
             "Project Manager": "Amy Lee",
             "Reason for Leaving": "Voluntary",
             "DOJ (DEPT)": "1-Jan-25",
@@ -155,7 +155,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 6.0,
             "Before Hexaware Experience": 2.0,
             "Total Experience": 8.0,
-            "Client as on June 2026": "Epsilon",
+            "Client": "Epsilon",
             "Project Manager": "Sam Fox",
             "Reason for Leaving": "Involuntary",
             "DOJ (DEPT)": "1-Jan-25",
@@ -168,7 +168,7 @@ def sample_roster() -> pd.DataFrame:
             "Hexaware Experience (Years)": 2.0,
             "Before Hexaware Experience": 1.0,
             "Total Experience": 3.0,
-            "Client as on June 2026": "Zeta Corp",
+            "Client": "Zeta Corp",
             "Project Manager": "Amy Lee",
             "Reason for Leaving": None,
             "DOJ (DEPT)": "1-Jan-26",

@@ -166,7 +166,7 @@ def get_data_quality_warnings(df: pd.DataFrame) -> list[dict]:
     #    underlying source inconsistency remains visible rather than
     #    silently absorbed by the normalization.
     if "Designation" in df.columns:
-        designation = df["Designation"].dropna().astype(str)
+        designation = df[metric_config.column("designation")].dropna().astype(str)
         normalized_designation = designation.apply(_normalize_designation_label)
         dup_normalized = normalized_designation[
             normalized_designation.duplicated(keep=False)
@@ -177,7 +177,7 @@ def get_data_quality_warnings(df: pd.DataFrame) -> list[dict]:
         for norm_label in dup_normalized:
             raw_variants = designation[normalized_designation == norm_label].unique()
             if len(raw_variants) > 1:
-                mask = df["Designation"].isin(raw_variants)
+                mask = df[metric_config.column("designation")].isin(raw_variants)
                 for _, row in df[mask].iterrows():
                     warnings.append(
                         {
@@ -311,7 +311,9 @@ def get_active_employees(df: pd.DataFrame) -> int:
     Reads: `Status`, `NEW_EMP_ID`.
     Edge cases: blank/NaN Status rows are excluded (not counted as active).
     """
-    return get_total_employees(df[df["Status"] == "Active"])
+    return get_total_employees(
+        df[df[metric_config.status_column()] == metric_config.status_value("active")]
+    )
 
 
 @cache_on_df
@@ -338,7 +340,7 @@ def get_total_employees(df: pd.DataFrame) -> int:
     `CALCULATE([Total Employees], ...)`.
     Reads: `NEW_EMP_ID`.
     """
-    return int(df["NEW_EMP_ID"].nunique(dropna=True))
+    return int(df[metric_config.employee_id_column()].nunique(dropna=True))
 
 
 @cache_on_df
@@ -619,7 +621,7 @@ def get_average_experience_yrs(df: pd.DataFrame) -> float:
     Edge cases: returns 0.0 if there are no active rows; NaN values in
     `Total Experience` are excluded from the mean by pandas default.
     """
-    active = df[df["Status"] == "Active"]
+    active = df[df[metric_config.status_column()] == metric_config.status_value("active")]
     if len(active) == 0:
         return 0.0
     return float(active["Total Experience"].mean())
@@ -633,7 +635,7 @@ def get_average_hexaware_experience(df: pd.DataFrame) -> float:
     Reads: `Status`, `Hexaware Experience (Years)`.
     Edge cases: returns 0.0 if there are no active rows.
     """
-    active = df[df["Status"] == "Active"]
+    active = df[df[metric_config.status_column()] == metric_config.status_value("active")]
     if len(active) == 0:
         return 0.0
     return float(active["Hexaware Experience (Years)"].mean())
@@ -686,7 +688,7 @@ def get_pending_mapping_count(df: pd.DataFrame) -> int:
     non-matching (fillna("") before the substring check).
     """
     fields_markers = [
-        ("Client as on June 2026", "Client TBD"),
+        (metric_config.column("client"), "Client TBD"),
         ("Project Manager", "PM TBD"),
         ("Skill", "Skill TBD"),
         ("DEPUTATION", "Deputation TBD"),
@@ -716,7 +718,7 @@ def get_clients_covered(df: pd.DataFrame) -> int:
     Edge cases: blanks and any value containing "Client TBD" are excluded
     before the distinct count.
     """
-    client = df["Client as on June 2026"]
+    client = df[metric_config.column("client")]
     mask = client.notna() & (~client.astype(str).str.contains("Client TBD", regex=False))
     return int(client[mask].nunique(dropna=True))
 
@@ -738,7 +740,7 @@ def get_projects(df: pd.DataFrame) -> int:
     blanks or "Client TBD" values (the DAX has no such FILTER).
     Reads: `Client as on June 2026`.
     """
-    return int(df["Client as on June 2026"].nunique(dropna=True))
+    return int(df[metric_config.column("client")].nunique(dropna=True))
 
 
 @cache_on_df
@@ -874,7 +876,7 @@ def get_departments(df: pd.DataFrame) -> int:
     Edge cases: NaN/blank Designation values excluded from the count
     (dropna=True, unchanged).
     """
-    normalized = df["Designation"].apply(
+    normalized = df[metric_config.column("designation")].apply(
         lambda v: _normalize_designation_label(v) if pd.notna(v) else v
     )
     return int(normalized.nunique(dropna=True))
@@ -1470,7 +1472,7 @@ EMPLOYEE_DIRECTORY_COLUMNS = {
     "Total Experience": "total_experience",
     "Designation": "designation",
     "Working Entity": "working_entity",
-    "Client as on June 2026": "client",
+    "Client": "client",
     "Seniorirty Level": "seniority_level",
     "Region": "region",
     "Market": "market",

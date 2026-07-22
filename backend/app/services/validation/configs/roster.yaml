@@ -101,8 +101,15 @@ columns:
     dtype: any
     required: true
     nullable: true
-  - name: "Client as on June 2026"
-    dtype: any
+  # Canonical name is plain "Client" (the source has been changed to use
+  # that heading). `matches` keeps older exports working: a heading that
+  # carried the reporting period — "Client as on June 2026", and it would
+  # have changed every month — is matched by pattern and renamed to
+  # "Client" on read, so those files still upload cleanly instead of
+  # being rejected for a missing required column.
+  - name: "Client"
+    matches: "Client as on .*"
+    dtype: any             # multi-value free text, "Client TBD" = bench
     required: true
     nullable: true
   - name: "Project Manager"
