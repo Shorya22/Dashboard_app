@@ -40,6 +40,10 @@ columns:
   experience_total: "Total Experience"
   primary_skill: "Primary Skill"
   employment_type: "Type"                # GCC / Non GCC
+  joining_date: "DOJ (DEPT)"             # drives Joiners + Month Wise Headcount
+  leaving_date: "LWD"                    # drives Leavers / Month-Wise Resignation
+  leaving_reason: "Reason for Leaving"   # drives Voluntary vs Involuntary
+  snapshot_date: "Today"                 # "as of" date of the export
 
 # ---------------------------------------------------------------------------
 # Filters — the dropdowns the HR pages filter by.
@@ -224,6 +228,17 @@ status:
   counts_as_present:
     - "Active"
     - "Strategic Pool"
+
+# ---------------------------------------------------------------------------
+# Attrition — how a departure is classified.
+# ---------------------------------------------------------------------------
+# The Voluntary vs Involuntary donut splits on these values. Declared here
+# so a business that renames them (or adds a third reason) changes config
+# rather than Python.
+attrition:
+  reasons:
+    voluntary: "Voluntary"
+    involuntary: "Involuntary"
 
 seniority:
   # First match wins, case-insensitive substring test. Order matters:

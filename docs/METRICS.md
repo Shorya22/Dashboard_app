@@ -9,7 +9,7 @@ page as we verify them; anything not listed here has not been reviewed yet.
 |---|---|
 | Home | ✅ all 3 cards + 4 charts verified |
 | HR Home (HR Portal) | ✅ all 4 cards + 4 charts verified |
-| HR Analytics | 🟡 5 cards verified; 4 charts not reviewed |
+| HR Analytics | ✅ 5 cards + 4 charts verified |
 | Workforce | ⬜ not reviewed |
 | Skills & Experience | ⬜ not reviewed |
 | Employee Directory | ⬜ not reviewed |
@@ -31,7 +31,8 @@ function, never be recomputed separately. That is what caused the
 | What a valid upload looks like (columns, types) | `backend/app/services/validation/configs/*.yaml` | Config edit, no code |
 | Which column plays which role, and what each card counts | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
 | What the values *mean* (status, seniority keywords, hours labels) | `backend/app/services/configs/*_metrics.yaml` | Config edit, no code |
-| Date-window logic (joiners, exits, attrition) | `backend/app/services/roster_metrics.py` | Developer |
+| Which column holds the joining/leaving date, and the leaving-reason values | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
+| The date-window *algorithm* itself (how a month range is derived) | `backend/app/services/roster_metrics.py` | Developer |
 
 ### Column roles
 
@@ -49,6 +50,12 @@ resolved through config:
 | `working_entity` | `Working Entity` | Workforce by Working Entity |
 | `seniority` | `Seniorirty Level` | Workforce by Seniority |
 | `experience_total` | `Total Experience` | Workforce by Experience Band |
+| `primary_skill` | `Primary Skill` | Skills pages, Skill filter |
+| `employment_type` | `Type` | GCC vs Non GCC, Type filter |
+| `joining_date` | `DOJ (DEPT)` | Joiners, Month Wise Headcount |
+| `leaving_date` | `LWD` | Leavers, Month-Wise Resignation |
+| `leaving_reason` | `Reason for Leaving` | Voluntary vs Involuntary |
+| `snapshot_date` | `Today` | calendar range |
 
 **Headings that carry a reporting period.** The client column used to be
 exported as `Client as on June 2026` — a heading that changes every

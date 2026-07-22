@@ -77,6 +77,11 @@ def chart_names() -> list[str]:
     return list(load_metric_config()["charts"])
 
 
+def leaving_reason(kind: str) -> str:
+    """A configured leaving-reason value, e.g. leaving_reason("voluntary")."""
+    return load_metric_config()["attrition"]["reasons"][kind]
+
+
 def filters() -> dict[str, dict]:
     """The declared page filters, keyed by filter name."""
     return load_metric_config().get("filters", {})

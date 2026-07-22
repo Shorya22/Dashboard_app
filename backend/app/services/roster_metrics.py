@@ -259,8 +259,9 @@ def get_data_quality_warnings(df: pd.DataFrame) -> list[dict]:
     #    AND excluded from date-based comparisons (never silently treated
     #    as "joined" or "not joined" by guessing a date).
     if "DOJ (DEPT)" in df.columns:
-        parsed = pd.to_datetime(df["DOJ (DEPT)"], format=DATE_FORMAT, errors="coerce")
-        unparseable_mask = df["DOJ (DEPT)"].notna() & parsed.isna()
+        joining = df[metric_config.column("joining_date")]
+        parsed = pd.to_datetime(joining, format=DATE_FORMAT, errors="coerce")
+        unparseable_mask = joining.notna() & parsed.isna()
         for _, row in df[unparseable_mask].iterrows():
             warnings.append(
                 {
@@ -365,13 +366,17 @@ def _parse_dept_dates(df: pd.DataFrame) -> pd.Series:
     "DAX-faithful" -- it was not; see data-model SKILL.md "Known open
     data gap" (now resolved) for the full writeup.
     """
-    return pd.to_datetime(df["DOJ (DEPT)"], format=DATE_FORMAT, errors="coerce")
+    return pd.to_datetime(
+        df[metric_config.column("joining_date")], format=DATE_FORMAT, errors="coerce"
+    )
 
 
 def _parse_lwd_dates(df: pd.DataFrame) -> pd.Series:
     """Parse `LWD` as dates; blank cells (the expected case for Active
     employees) become NaT."""
-    return pd.to_datetime(df["LWD"], format=DATE_FORMAT, errors="coerce")
+    return pd.to_datetime(
+        df[metric_config.column("leaving_date")], format=DATE_FORMAT, errors="coerce"
+    )
 
 
 def _resolve_period(
@@ -739,7 +744,8 @@ def get_voluntary_leavers(df: pd.DataFrame) -> int:
     is expected blank for Active rows per data-model and is not counted.
     """
     inactive = df[df["Status"] == "Inactive"]
-    return int((inactive["Reason for Leaving"] == "Voluntary").sum())
+    reason = inactive[metric_config.column("leaving_reason")]
+    return int((reason == metric_config.leaving_reason("voluntary")).sum())
 
 
 @cache_on_df
@@ -750,7 +756,8 @@ def get_involuntary_leavers(df: pd.DataFrame) -> int:
     Reads: `Status`, `Reason for Leaving`.
     """
     inactive = df[df["Status"] == "Inactive"]
-    return int((inactive["Reason for Leaving"] == "Involuntary").sum())
+    reason = inactive[metric_config.column("leaving_reason")]
+    return int((reason == metric_config.leaving_reason("involuntary")).sum())
 
 
 # --------------------------------------------------------------------------
@@ -1447,8 +1454,8 @@ def get_voluntary_involuntary_split(df: pd.DataFrame) -> dict[str, int]:
     Reads: `Status`, `Reason for Leaving`.
     """
     return {
-        "Voluntary": get_voluntary_leavers(df),
-        "Involuntary": get_involuntary_leavers(df),
+        metric_config.leaving_reason("voluntary"): get_voluntary_leavers(df),
+        metric_config.leaving_reason("involuntary"): get_involuntary_leavers(df),
     }
 
 
@@ -1494,7 +1501,7 @@ def get_exits_table(df: pd.DataFrame) -> list[dict]:
     source string (date formatting/parsing is left to the caller/API
     layer, consistent with this module keeping source values as-is).
     """
-    exited = df[df["LWD"].notna()]
+    exited = df[df[metric_config.column("leaving_date")].notna()]
     records = []
     for _, row in exited.iterrows():
         record = {}
