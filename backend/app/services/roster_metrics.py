@@ -49,6 +49,82 @@ EXPERIENCE_TOLERANCE = 0.01  # years; float rounding tolerance
 STRATEGIC_POOL_STATUS = metric_config.status_value("strategic_pool")
 
 
+def _chart_scope(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
+    """
+    Which population a chart describes, per its declared `scope`.
+
+    Declared explicitly because it genuinely differs between pages: HR
+    Home describes the whole roster (its headline is Total Employees, and
+    its Status Split has to show Inactive at all), Home describes the
+    current workforce (its headline is Closing Headcount).
+    """
+    scope = spec.get("scope", "all")
+    if scope == "present":
+        return df[metric_config.is_present(df)]
+    if scope != "all":
+        raise ValueError(f"Chart declares unknown scope={scope!r}")
+    return df
+
+
+def evaluate_chart(df: pd.DataFrame, chart_name: str) -> dict[str, int]:
+    """
+    Compute a breakdown chart from its declaration in
+    `configs/roster_metrics.yaml`, as `{label: distinct employees}`.
+
+    Blank values are counted under the chart's `blank_label` rather than
+    dropped. Dropping them is how a bar chart silently ends up totalling
+    less than the headline card above it, with nothing on screen to
+    explain the gap — the labels ("Region TBD", "Entity TBD") match the
+    convention already used in the data, so a blank folds in with the
+    existing TBD rows instead of creating a second bucket.
+
+    Supported `type`s: `count_by` (group by a column), `numeric_bands`
+    (bucket a number by declared thresholds) and `keyword_bands` (bucket
+    text by the configured keyword rules).
+    """
+    spec = metric_config.chart(chart_name)
+    scope = _chart_scope(df, spec)
+    column = metric_config.column(spec["column_role"])
+    blank_label = spec.get("blank_label")
+    kind = spec["type"]
+
+    if kind == "count_by":
+        keys = scope[column]
+        if blank_label is not None:
+            keys = keys.where(keys.notna() & (keys.astype(str).str.strip() != ""), blank_label)
+    elif kind == "numeric_bands":
+        values = pd.to_numeric(scope[column], errors="coerce")
+        keys = values.apply(lambda v: _numeric_band(v, spec["bands"], blank_label))
+    elif kind == "keyword_bands":
+        keys = scope[column].apply(_seniority_category)
+    else:
+        raise ValueError(f"Chart {chart_name!r} declares unsupported type={kind!r}")
+
+    counts = {
+        str(label): get_total_employees(group)
+        for label, group in scope.groupby(keys, dropna=True)
+    }
+
+    # Declared buckets/bands always appear, even at zero, so a slice never
+    # silently disappears from a donut; declaration order is preserved.
+    declared = [b["label"] for b in spec["bands"]] if kind == "numeric_bands" else spec.get("buckets", [])
+    ordered = {label: counts.pop(label, 0) for label in declared}
+    ordered.update(counts)  # anything unexpected still shows, after the declared ones
+    return ordered
+
+
+def _numeric_band(value: float, bands: list[dict], blank_label: str | None) -> str:
+    """First band whose `below` the value falls under; last band catches the rest."""
+    if pd.isna(value):
+        return blank_label or "Unknown"
+    for band in bands:
+        if "below" not in band:
+            return band["label"]
+        if value < band["below"]:
+            return band["label"]
+    return bands[-1]["label"]
+
+
 def evaluate_card(df: pd.DataFrame, card_name: str) -> int:
     """
     Compute a KPI card straight from its declaration in
@@ -1006,13 +1082,7 @@ def get_status_split(df: pd.DataFrame) -> dict[str, int]:
     dict even if a future roster snapshot has no Strategic Pool rows.
     Reads: `Status`, `NEW_EMP_ID`.
     """
-    return {
-        "Active": get_active_employees(df),
-        "Inactive": get_inactive_employees(df),
-        # Routed through the single definition rather than recomputed —
-        # recomputing it here is exactly how Home and HR Home drifted apart.
-        "Strategic Pool": get_strategic_pool(df),
-    }
+    return evaluate_chart(df, "status_split")
 
 
 @cache_on_df
@@ -1058,10 +1128,7 @@ def get_headcount_by_region(df: pd.DataFrame) -> dict[str, int]:
     Edge cases: blank/NaN `Region` values are dropped by `groupby`
     default (none present in the current file).
     """
-    return {
-        str(region): get_total_employees(group)
-        for region, group in df.groupby("Region", dropna=True)
-    }
+    return evaluate_chart(df, "headcount_by_region")
 
 
 @cache_on_df
@@ -1072,10 +1139,7 @@ def get_workforce_by_working_entity(df: pd.DataFrame) -> dict[str, int]:
     Reads: `Working Entity`, `NEW_EMP_ID`.
     Edge cases: blank/NaN values dropped by `groupby` default.
     """
-    return {
-        str(entity): get_total_employees(group)
-        for entity, group in df.groupby("Working Entity", dropna=True)
-    }
+    return evaluate_chart(df, "workforce_by_working_entity")
 
 
 def _normalize_seniority_label(value: str) -> str:
@@ -1191,14 +1255,7 @@ def get_workforce_by_experience_band(df: pd.DataFrame) -> dict[str, int]:
     Returned in `EXPERIENCE_BAND_ORDER` (plus "Unknown" if present),
     not alphabetical, so a caller can chart it in the right sequence.
     """
-    bands = df["Total Experience"].apply(_experience_band)
-    counts = {
-        str(band): get_total_employees(group) for band, group in df.groupby(bands, dropna=True)
-    }
-    ordered_keys = [b for b in EXPERIENCE_BAND_ORDER if b in counts] + (
-        ["Unknown"] if "Unknown" in counts else []
-    )
-    return {k: counts[k] for k in ordered_keys}
+    return evaluate_chart(df, "workforce_by_experience_band")
 
 
 # --------------------------------------------------------------------------
@@ -1256,12 +1313,7 @@ def get_workforce_by_seniority_category(df: pd.DataFrame) -> dict[str, int]:
     same-page contradiction this pass exists to remove.
     Reads: `Seniorirty Level`, `Status`, `NEW_EMP_ID`.
     """
-    present = df[metric_config.is_present(df)]
-    categories = present[metric_config.seniority_column()].apply(_seniority_category)
-    return {
-        str(cat): get_total_employees(group)
-        for cat, group in present.groupby(categories, dropna=True)
-    }
+    return evaluate_chart(df, "workforce_by_seniority_category")
 
 
 # --------------------------------------------------------------------------

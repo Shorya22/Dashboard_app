@@ -64,13 +64,22 @@ def employee_id_column() -> str:
 
 
 def card(name: str) -> dict:
-    """A card's declarative definition, for docs/introspection."""
+    """A card's declarative definition — drives `evaluate_card`."""
     return load_metric_config()["cards"][name]
+
+
+def chart(name: str) -> dict:
+    """A chart's declarative definition — drives `evaluate_chart`."""
+    return load_metric_config()["charts"][name]
+
+
+def chart_names() -> list[str]:
+    return list(load_metric_config()["charts"])
 
 
 # --- roster: status ------------------------------------------------------- #
 def status_column() -> str:
-    return load_metric_config()["status"]["column"]
+    return column("status")
 
 
 def status_value(key: str) -> str:
@@ -95,7 +104,7 @@ def is_present(df: pd.DataFrame) -> pd.Series:
 
 
 def seniority_column() -> str:
-    return load_metric_config()["seniority"]["column"]
+    return column("seniority")
 
 
 def seniority_category(value: object) -> str:

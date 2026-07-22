@@ -98,13 +98,45 @@ def test_booking_invariant_catches_a_new_hours_category():
     assert "Leave Hours" in bad[0].detail
 
 
-def test_invariant_fails_loudly_on_an_unaccounted_status(real_roster):
+def test_undeclared_status_is_shown_but_still_flagged(real_roster):
     """
-    A Status value no bucket counts must be caught — otherwise those
-    employees silently vanish from the Status Split donut.
+    An unrecognised Status no longer vanishes from the donut — it renders
+    as its own slice, so nobody is lost. It is still a config gap though:
+    nothing has decided whether those people count as present, so they sit
+    outside Closing Headcount while counting in Total Employees. Both
+    facts are asserted here.
     """
+    from app.services import roster_metrics
+
     df = real_roster.copy()
     df.loc[df.index[0], "Status"] = "Sabbatical"
+
+    split = roster_metrics.get_status_split(df)
+    assert split["Sabbatical"] == 1                      # shown, not dropped
+    assert sum(split.values()) == roster_metrics.get_total_employees(df)
+
     bad = {r.name for r in metric_invariants.violations(df, "roster")}
-    assert "status_split_sums_to_total" in bad
+    assert "every_status_is_declared" in bad             # config gap surfaced
     assert "status_measures_partition_roster" in bad
+
+
+def test_blank_group_by_values_are_labelled_not_dropped(real_roster):
+    """
+    A blank Region used to be dropped by the group-by, so the bars totalled
+    less than the headline card with nothing on screen to explain the gap.
+    """
+    from app.services import roster_metrics
+
+    df = real_roster.copy()
+    df.loc[df.index[:4], "Region"] = None
+    df.loc[df.index[5:8], "Working Entity"] = None
+
+    total = roster_metrics.get_total_employees(df)
+    regions = roster_metrics.get_headcount_by_region(df)
+    entities = roster_metrics.get_workforce_by_working_entity(df)
+
+    assert regions["Region TBD"] >= 4
+    assert entities["Entity TBD"] >= 3
+    assert sum(regions.values()) == total
+    assert sum(entities.values()) == total
+    assert metric_invariants.violations(df, "roster") == []

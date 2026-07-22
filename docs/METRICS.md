@@ -237,10 +237,71 @@ Two behaviours worth knowing, both confirmed as intended:
 clients and 81 projects — a different question, answered on the
 Utilization pages.)*
 
-### Charts on this page
-Status Split, Headcount by Region, Workforce by Working Entity and
-Workforce by Experience Band have **not been reviewed yet** — to be
-covered when we work through the rest of this page.
+### Chart: Status Split (donut) — `52`
+Groups by the **`Status`** column. Active `35`, Inactive `14`, Strategic
+Pool `3`. All three slices always render, even at zero, so a roster with
+nobody in a status doesn't quietly lose a slice.
+
+An unrecognised status (say `"Sabbatical"`) is **shown as its own slice**
+rather than dropped, so nobody disappears from the donut — and the
+`every_status_is_declared` invariant flags it so someone decides whether
+those people count as present.
+
+### Chart: Headcount by Region (bar) — `52`
+Groups by the **`Region`** column. EMEA `34`, AMER `15`, APAC `1`,
+Region TBD `2`.
+
+### Chart: Workforce by Working Entity (bar) — `52`
+Groups by the **`Working Entity`** column. AMER `15`, DTNL `14`,
+DTIE `12`, DTDE `4`, DTUK `4`, Entity TBD `2`, DTAU `1`.
+
+### Chart: Workforce by Experience Band (bar) — `52`
+Buckets **`Total Experience`** by the thresholds declared in config.
+First band the value falls under wins; boundaries are half-open:
+
+| Band | Years |
+|---|---|
+| 0-1 Years | `< 1` |
+| 1-3 Years | `< 3` |
+| 3-5 Years | `< 5` |
+| 5-8 Years | `< 8` |
+| 8+ Years | everything else |
+
+Current: `7` / `0` / `2` / `12` / `31`. Every band is returned in this
+order even when empty — `1-3 Years` renders as a zero bar rather than
+vanishing from the axis (the order used to be arbitrary).
+
+> The cut-offs are **PROVISIONAL** — never confirmed against the source
+> model. Change them in `roster_metrics.yaml` under
+> `charts.workforce_by_experience_band.bands`.
+
+### Blanks are counted, never dropped
+A group-by silently discards blank cells, so an empty `Region` used to
+make the bars total less than the headline card above them, with nothing
+on screen to explain the gap. Blanks now count under the chart's
+`blank_label`, matching the "TBD" convention already in the data so they
+fold in with existing TBD rows rather than forming a second bucket:
+
+| Chart | Blank becomes |
+|---|---|
+| Headcount by Region | `Region TBD` |
+| Workforce by Working Entity | `Entity TBD` |
+| Workforce by Experience Band | `Unknown` |
+
+The `charts_account_for_everyone` invariant asserts every chart totals to
+the population it describes, in tests **and** on every upload.
+
+### Scope is declared, not accidental
+Each chart states which population it describes, because it genuinely
+differs between pages and that should be a visible decision:
+
+| Page | Scope | Total |
+|---|---|---|
+| HR Home charts | `all` — the whole roster | 52 |
+| Home's Workforce by Seniority | `present` — Active + Strategic Pool | 38 |
+
+HR Home is headlined by Total Employees (52) and its Status Split must
+show Inactive at all; Home is headlined by Closing Headcount (38).
 
 ---
 
@@ -253,6 +314,9 @@ flagged before it goes live:
 1. Strategic Pool is the same number everywhere it appears.
 2. Closing Headcount = Active + Strategic Pool.
 3. The Workforce-by-Seniority split covers exactly the present workforce.
+4. Every breakdown chart totals to the population it describes (blanks
+   counted, never dropped).
+5. Every `Status` value in the data is one the config declares.
 4. The Status breakdown accounts for every employee (no status silently
    uncounted).
 5. Active + Inactive + Strategic Pool = Total Employees.

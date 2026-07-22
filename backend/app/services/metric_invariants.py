@@ -66,24 +66,32 @@ def _same_label_same_number(df: pd.DataFrame) -> tuple[bool, str]:
     )
 
 
-def _status_split_sums_to_total(df: pd.DataFrame) -> tuple[bool, str]:
+def _every_status_is_declared(df: pd.DataFrame) -> tuple[bool, str]:
     """
-    `Status` holds exactly one value per employee, so its breakdown must
-    account for every employee. A shortfall means a Status value exists
-    that no bucket counts (e.g. a new status nobody added a getter for),
-    which would silently vanish from the donut.
+    Every `Status` value in the data must be one the config knows about.
+
+    The donut no longer drops an unrecognised status — it renders as its
+    own slice, so nobody vanishes. But an undeclared status is still a
+    config gap someone must resolve: nothing has decided whether those
+    people count as present, so they are missing from Closing Headcount
+    and from every "current workforce" chart while still appearing in
+    Total Employees.
     """
+    from app.services import metric_config
+
     split = roster_metrics.get_status_split(df)
     total = roster_metrics.get_total_employees(df)
     summed = sum(split.values())
-    ok = summed == total
-    missing = ""
-    if not ok:
-        known = {"Active", "Inactive", "Strategic Pool"}
-        unknown = sorted(set(df["Status"].dropna().unique()) - known)
-        if unknown:
-            missing = f"; unaccounted Status values: {unknown}"
-    return ok, f"status_split sums to {summed}, total employees {total}{missing}"
+    declared = set(metric_config.chart("status_split").get("buckets", []))
+    undeclared = sorted(set(split) - declared)
+    ok = summed == total and not undeclared
+    detail = f"status_split sums to {summed}, total employees {total}"
+    if undeclared:
+        detail += (
+            f"; Status value(s) not declared in config: {undeclared} — decide "
+            "whether they count as present (status.counts_as_present)"
+        )
+    return ok, detail
 
 
 def _category_split_matches_status(df: pd.DataFrame) -> tuple[bool, str]:
@@ -153,11 +161,38 @@ def _seniority_split_covers_present_workforce(df: pd.DataFrame) -> tuple[bool, s
     return ok, f"seniority split sums to {summed}, present workforce {present}"
 
 
+def _charts_account_for_everyone(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Every breakdown chart must add up to the population it describes.
+
+    A group-by silently drops blanks, so a roster with an empty Region
+    cell used to produce bars totalling less than the headline card above
+    them — with nothing on screen to explain the gap. Charts now count
+    blanks under a "TBD" label; this asserts the totals really do
+    reconcile, for each chart's declared scope.
+    """
+    from app.services import metric_config
+
+    expected = {
+        "all": roster_metrics.get_total_employees(df),
+        "present": roster_metrics.get_closing_headcount(df),
+    }
+    bad: list[str] = []
+    for name in metric_config.chart_names():
+        spec = metric_config.chart(name)
+        counted = sum(roster_metrics.evaluate_chart(df, name).values())
+        target = expected[spec.get("scope", "all")]
+        if counted != target:
+            bad.append(f"{name}={counted} vs {spec.get('scope','all')} total {target}")
+    return not bad, ("all charts reconcile" if not bad else "; ".join(bad))
+
+
 ROSTER_INVARIANTS: dict[str, InvariantCheck] = {
+    "charts_account_for_everyone": _charts_account_for_everyone,
     "closing_headcount_is_present_workforce": _closing_headcount_is_present_workforce,
     "seniority_split_covers_present_workforce": _seniority_split_covers_present_workforce,
     "strategic_pool_same_everywhere": _same_label_same_number,
-    "status_split_sums_to_total": _status_split_sums_to_total,
+    "every_status_is_declared": _every_status_is_declared,
     "category_split_matches_status": _category_split_matches_status,
     "status_measures_partition_roster": _active_plus_inactive_plus_pool_is_total,
 }

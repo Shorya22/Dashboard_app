@@ -219,16 +219,28 @@ def test_get_workforce_by_type(sample_roster):
 
 
 def test_get_headcount_by_region(sample_roster):
-    # EMEA: E1,E3,E5 -> 3; AMER: E2,E4 -> 2; E6's Region is NaN -> dropped
-    assert get_headcount_by_region(sample_roster) == {"EMEA": 3, "AMER": 2}
+    # EMEA: E1,E3,E5 -> 3; AMER: E2,E4 -> 2. E6's Region is blank and is
+    # now counted as "Region TBD" rather than dropped, so the bars still
+    # add up to the headline employee count instead of quietly falling short.
+    assert get_headcount_by_region(sample_roster) == {
+        "EMEA": 3,
+        "AMER": 2,
+        "Region TBD": 1,
+    }
+    assert sum(get_headcount_by_region(sample_roster).values()) == len(sample_roster)
 
 
 def test_get_workforce_by_working_entity(sample_roster):
+    # E6's Working Entity is blank -> "Entity TBD", not dropped.
     assert get_workforce_by_working_entity(sample_roster) == {
         "DTUK": 2,
         "AMER": 2,
         "DTDE": 1,
+        "Entity TBD": 1,
     }
+    assert sum(
+        get_workforce_by_working_entity(sample_roster).values()
+    ) == len(sample_roster)
 
 
 def test_get_headcount_by_seniority(sample_roster):
@@ -623,13 +635,24 @@ def test_real_roster_experience_band(real_roster):
     # UPDATED (2026-07-17): `Milind Vijay Mokashi` / `Sakshi Madan
     # Agarwal` removed from the roster -- one was in the "0-1 Years"
     # band (6->5), the other was the ONLY row in "1-3 Years" (1->0,
-    # bucket no longer appears as a key). Every other band unaffected.
+    # bucket is empty). UPDATED (2026-07-22): every declared band is now
+    # always returned, in declared order, even at zero — an empty band
+    # should render as a zero bar rather than silently disappearing from
+    # the axis (and the axis order was previously arbitrary).
     assert get_workforce_by_experience_band(real_roster) == {
         "0-1 Years": 5,
+        "1-3 Years": 0,
         "3-5 Years": 2,
         "5-8 Years": 12,
         "8+ Years": 31,
     }
+    assert list(get_workforce_by_experience_band(real_roster)) == [
+        "0-1 Years",
+        "1-3 Years",
+        "3-5 Years",
+        "5-8 Years",
+        "8+ Years",
+    ]
 
 
 def test_real_roster_headcount_by_seniority_collapses_casing(real_roster):
