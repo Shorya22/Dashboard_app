@@ -210,7 +210,10 @@ def evaluate_card(df: pd.DataFrame, card_name: str) -> int:
 
     scope = df
     status_filter = spec.get("status_filter", "none")
-    if status_filter and status_filter != "none":
+    if status_filter == "present":
+        # any status in counts_as_present, not one named status
+        scope = scope[metric_config.is_present(scope)]
+    elif status_filter and status_filter != "none":
         scope = scope[
             scope[metric_config.status_column()]
             == metric_config.status_value(status_filter)
@@ -611,6 +614,13 @@ def get_closing_headcount(
     # resolved) for the full root-cause writeup. Kept for the same reason
     # here: an employee with an unrecorded joining date is still part of
     # the workforce, so a blank DOJ must not drop them from headcount.
+    if period_month is None:
+        # At full range the joining-date test excludes nobody (the range is
+        # derived from the data itself), so the headline card is simply the
+        # present workforce — and is declared as such in `cards:`. The date
+        # walk below is what the per-MONTH trend needs.
+        return evaluate_card(df, "closing_headcount")
+
     joined_by_end = doj.isna() | (doj <= end)
     # "Still here" is Status-driven (config: counts_as_present), NOT
     # LWD-driven — see the docstring for why.

@@ -181,7 +181,7 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
     for name, card in cfg.get("cards", {}).items():
         need_role(card.get("column_role"), f"cards.{name}")
         status_filter = card.get("status_filter", "none")
-        if status_filter not in ("none", None) and status_filter not in statuses:
+        if status_filter not in ("none", None, "present") and status_filter not in statuses:
             problems.append(
                 f"cards.{name}: status_filter {status_filter!r} is not a status "
                 f"declared in `status:` (known: "

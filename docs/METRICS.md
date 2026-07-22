@@ -7,7 +7,7 @@ page as we verify them; anything not listed here has not been reviewed yet.
 
 | Page | Status |
 |---|---|
-| Home | ✅ 3 cards + 4 charts (Closing Headcount is a date measure — see below) |
+| Home | ✅ 3 cards + 4 charts |
 | HR Home (HR Portal) | ✅ all 4 cards + 4 charts verified |
 | HR Analytics | ✅ 5 cards + 4 charts (Attrition % is a formula — see below) |
 | Workforce | ⬜ not reviewed |
@@ -40,10 +40,10 @@ function, never be recomputed separately. That is what caused the
 | | Why not config |
 |---|---|
 | **Attrition %** | It is arithmetic — `Exits ÷ (Closing + Exits)`. Expressing formulas in YAML means inventing operators and precedence in a config file: harder to read and debug than the Python it replaced. Its *inputs* are config-driven. |
-| **Closing Headcount** | A date-window measure ("joined by the period end and still here"). Which column is the joining date and which statuses count as here are config; walking the calendar is an algorithm. |
+| **Closing Headcount (per month)** | The headline CARD is declared (`status_filter: present`) — at full range the joining-date test excludes nobody, so it is simply the present workforce. Only the per-month values behind the growth trend walk the calendar, and that walk is an algorithm. |
 
-Everything else on Home, HR Home and HR Analytics — 24 of 26 cards and
-charts — is declared in YAML.
+Everything else on Home, HR Home and HR Analytics — 25 of 26 cards and
+charts — is declared in YAML. Attrition % is the only one that is not.
 
 ### The config validates itself
 

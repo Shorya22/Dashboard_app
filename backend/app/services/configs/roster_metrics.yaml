@@ -120,6 +120,17 @@ cards:
     status_filter: strategic_pool
     note: Same definition as the Strategic Pool card on Home.
 
+  # The headline card is the present workforce: at full range the
+  # joining-date test excludes nobody, since the range is derived from the
+  # data itself. The per-MONTH values behind the growth trend DO need the
+  # date walk, which is why `month_wise_headcount` declares this as a
+  # `measure` rather than reusing this card.
+  closing_headcount:
+    label: "Closing Headcount"
+    counts: distinct
+    column_role: employee_id
+    status_filter: present
+
   # Confirmed 2026-07-22: Exits and Inactive are the same people, so they
   # are the same number — one definition, not two. This replaced an
   # LWD-date-based count that returned 5 while Inactive returned 14.
