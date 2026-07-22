@@ -32,7 +32,8 @@ function, never be recomputed separately. That is what caused the
 | Which column plays which role, and what each card counts | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
 | What the values *mean* (status, seniority keywords, hours labels) | `backend/app/services/configs/*_metrics.yaml` | Config edit, no code |
 | Which column holds the joining/leaving date, and the leaving-reason values | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
-| The date-window *algorithm* itself (how a month range is derived) | `backend/app/services/roster_metrics.py` | Developer |
+| Which charts exist and what each one plots (`charts:`) | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
+| A genuinely new *kind* of chart (a new `type:`) | `backend/app/services/roster_metrics.py` | Developer |
 
 ### Column roles
 
@@ -406,7 +407,28 @@ Unchanged formula: **Exits ÷ (Closing Headcount + Exits)**.
 > that is *not* filtered, because it needs Closing Headcount, which is
 > date-based and not derivable from the employee rows the page filters on.
 
-### Charts: Monthly Joiners vs Leavers, Month-Wise Resignation
+### All four charts are declared in `charts:`
+
+Like the HR Home charts, each is defined in `roster_metrics.yaml` and
+computed by the generic engine — not bespoke Python:
+
+| Chart | Declaration |
+|---|---|
+| Month Wise Headcount | `monthly_series`, one `closing_headcount` measure per month |
+| Monthly Joiners vs Leavers | `monthly_series`, two series: `joining_date` and `leaving_date` |
+| Month-Wise Resignation | `monthly_series`, one `leaving_date` series |
+| Voluntary vs Involuntary | `count_by` on `leaving_reason`, `scope: exited` |
+
+`monthly_series` walks the dataset's month range and evaluates each
+declared series per month. A series is either a **measure** (a named
+metric evaluated for that month) or a **date_role** (count employees
+whose date falls inside the month).
+
+Verified config genuinely drives them: adding a third series to
+Joiners vs Leavers purely in YAML made a `headcount` field appear in the
+output, with no Python change.
+
+### Chart detail: Monthly Joiners vs Leavers, Month-Wise Resignation
 - **Joiners** come from **`DOJ (DEPT)`** — the month someone joined.
 - **Leavers** come from **`LWD`** — the month someone left.
 

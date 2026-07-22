@@ -61,6 +61,10 @@ def _chart_scope(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
     scope = spec.get("scope", "all")
     if scope == "present":
         return df[metric_config.is_present(df)]
+    if scope == "exited":
+        # People who actually left — a recorded leaving date. Used by the
+        # Voluntary vs Involuntary donut so it describes leavers only.
+        return df[df[metric_config.column("leaving_date")].notna()]
     if scope != "all":
         raise ValueError(f"Chart declares unknown scope={scope!r}")
     return df
@@ -83,6 +87,9 @@ def evaluate_chart(df: pd.DataFrame, chart_name: str) -> dict[str, int]:
     text by the configured keyword rules).
     """
     spec = metric_config.chart(chart_name)
+    if spec["type"] == "monthly_series":
+        return _evaluate_monthly_series(df, spec)
+
     scope = _chart_scope(df, spec)
     keys = chart_labels(scope, spec)
 
@@ -101,6 +108,43 @@ def evaluate_chart(df: pd.DataFrame, chart_name: str) -> dict[str, int]:
     ordered = {label: counts.pop(label, 0) for label in declared}
     ordered.update(counts)  # anything unexpected still shows, after the declared ones
     return ordered
+
+
+def _evaluate_monthly_series(df: pd.DataFrame, spec: dict) -> list[dict]:
+    """
+    Walk the dataset's month range and evaluate each declared series per
+    month, returning one row per month.
+
+    A series is either a `measure` (a named metric evaluated for that
+    month, e.g. closing_headcount) or a `date_role` (count the employees
+    whose date in that column falls inside the month). Declaring these in
+    the same `charts:` block as the group-by charts means every chart on
+    the dashboard is defined in one place — a time-series chart used to be
+    bespoke Python that only looked config-driven because it happened to
+    read its column names from config.
+    """
+    available = build_available_months(df)
+    measures = {"closing_headcount": get_closing_headcount}
+
+    rows: list[dict] = []
+    for month_start in available.month_starts:
+        month_end = month_start + pd.offsets.MonthEnd(0)
+        row: dict = {"month": month_start.strftime("%b %Y")}
+        for series in spec["series"]:
+            if "measure" in series:
+                row[series["key"]] = measures[series["measure"]](
+                    df, period_month=month_start
+                )
+                continue
+            dates = pd.to_datetime(
+                df[metric_config.column(series["date_role"])],
+                format=DATE_FORMAT,
+                errors="coerce",
+            )
+            in_month = dates.notna() & (dates >= month_start) & (dates <= month_end)
+            row[series["key"]] = get_total_employees(df[in_month])
+        rows.append(row)
+    return rows
 
 
 def chart_labels(df: pd.DataFrame, spec: dict) -> pd.Series:
@@ -1396,14 +1440,7 @@ def get_month_wise_closing_headcount(df: pd.DataFrame) -> list[dict]:
     Reads: (via calendar.build_available_months / get_closing_headcount)
     `DOJ (DEPT)`, `LWD`, `Today`, `NEW_EMP_ID`.
     """
-    available_months = build_available_months(df)
-    return [
-        {
-            "month": month_start.strftime("%b %Y"),
-            "closing_headcount": get_closing_headcount(df, period_month=month_start),
-        }
-        for month_start in available_months.month_starts
-    ]
+    return evaluate_chart(df, "month_wise_headcount")
 
 
 @cache_on_df
@@ -1418,15 +1455,7 @@ def get_monthly_joiners_vs_leavers(df: pd.DataFrame) -> list[dict]:
     Reads: (via get_joiners) `DOJ (DEPT)`, `NEW_EMP_ID`;
            (via get_exits) `LWD`, `NEW_EMP_ID`.
     """
-    available_months = build_available_months(df)
-    return [
-        {
-            "month": month_start.strftime("%b %Y"),
-            "joiners": get_joiners(df, period_month=month_start),
-            "exits": get_dated_exits(df, period_month=month_start),
-        }
-        for month_start in available_months.month_starts
-    ]
+    return evaluate_chart(df, "monthly_joiners_vs_leavers")
 
 
 @cache_on_df
@@ -1439,10 +1468,7 @@ def get_month_wise_resignation(df: pd.DataFrame) -> list[dict]:
     visually distinct chart in the reference PDF.
     Reads: (via get_exits) `LWD`, `NEW_EMP_ID`.
     """
-    return [
-        {"month": entry["month"], "exits": entry["exits"]}
-        for entry in get_monthly_joiners_vs_leavers(df)
-    ]
+    return evaluate_chart(df, "month_wise_resignation")
 
 
 @cache_on_df
@@ -1453,10 +1479,7 @@ def get_voluntary_involuntary_split(df: pd.DataFrame) -> dict[str, int]:
     `get_involuntary_leavers` scalars into dict shape.
     Reads: `Status`, `Reason for Leaving`.
     """
-    return {
-        metric_config.leaving_reason("voluntary"): get_voluntary_leavers(df),
-        metric_config.leaving_reason("involuntary"): get_involuntary_leavers(df),
-    }
+    return evaluate_chart(df, "voluntary_vs_involuntary")
 
 
 # --------------------------------------------------------------------------

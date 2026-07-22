@@ -216,6 +216,42 @@ charts:
     column_role: seniority
     scope: present
 
+  # --- HR Analytics ------------------------------------------------------
+  # `monthly_series` walks the dataset's month range and evaluates each
+  # declared series per month. A series is either a `measure` (a named
+  # metric evaluated for that month) or a `date_role` (count the rows whose
+  # date falls inside the month). `key` is the field name the chart reads.
+  month_wise_headcount:
+    label: "Month Wise Headcount"
+    type: monthly_series
+    series:
+      - key: closing_headcount
+        measure: closing_headcount
+
+  monthly_joiners_vs_leavers:
+    label: "Monthly Joiners vs Leavers"
+    type: monthly_series
+    series:
+      - key: joiners
+        date_role: joining_date
+      - key: exits
+        date_role: leaving_date
+
+  month_wise_resignation:
+    label: "Month-Wise Resignation"
+    type: monthly_series
+    series:
+      - key: exits
+        date_role: leaving_date
+
+  # A plain group-by on the leaving reason, scoped to people who actually
+  # left (a leaving date recorded). Same shape as the HR Home charts.
+  voluntary_vs_involuntary:
+    label: "Voluntary vs Involuntary"
+    type: count_by
+    column_role: leaving_reason
+    scope: exited
+
 status:
   active: "Active"
   inactive: "Inactive"
