@@ -78,6 +78,47 @@ function ReportSummary({ report }: { report: ValidationReport }) {
   )
 }
 
+/**
+ * Findings that describe the FILE AS A WHOLE rather than one cell — a
+ * missing column, or a dashboard measure that would contradict itself.
+ * They carry no row/column, so inside the row table they render as "—"
+ * and get lost among dozens of per-cell notes. Surfaced separately above
+ * it, because they matter far more: "your dashboard will show two
+ * different numbers for the same thing" is not the same kind of problem
+ * as "this cell was blank".
+ */
+function DatasetLevelFindings({ report }: { report: ValidationReport }) {
+  const findings = report.issues.filter((i) => i.excel_row === null)
+  if (findings.length === 0) return null
+  return (
+    <div className="space-y-1.5">
+      {findings.map((issue, i) => (
+        <div
+          key={i}
+          className={cn(
+            'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
+            issue.severity === 'error'
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-amber-200 bg-amber-50 text-amber-800',
+          )}
+        >
+          {issue.severity === 'error' ? (
+            <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          )}
+          <span>
+            {issue.stage === 'metrics' && (
+              <strong className="mr-1">Dashboard consistency:</strong>
+            )}
+            {issue.reason}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function IssuesTable({ report }: { report: ValidationReport }) {
   if (report.issues.length === 0) {
     return (
@@ -86,7 +127,11 @@ function IssuesTable({ report }: { report: ValidationReport }) {
       </p>
     )
   }
-  const shown = report.issues.slice(0, 100)
+  // Dataset-level findings are shown by DatasetLevelFindings above; this
+  // table lists only the per-row ones so the two aren't conflated.
+  const rowIssues = report.issues.filter((i) => i.excel_row !== null)
+  if (rowIssues.length === 0) return null
+  const shown = rowIssues.slice(0, 100)
   return (
     <div className="max-h-72 overflow-auto rounded-lg border border-border">
       <table className="w-full text-left text-xs">
@@ -133,9 +178,9 @@ function IssuesTable({ report }: { report: ValidationReport }) {
           ))}
         </tbody>
       </table>
-      {report.issues.length > shown.length && (
+      {rowIssues.length > shown.length && (
         <p className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
-          Showing first {shown.length} of {report.issues.length} problems.
+          Showing first {shown.length} of {rowIssues.length} row-level problems.
         </p>
       )}
     </div>
@@ -230,6 +275,7 @@ function UploadPanel({ dataset }: { dataset: DatasetStatus }) {
       {report && !outcome && (
         <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
           <ReportSummary report={report} />
+          <DatasetLevelFindings report={report} />
           <IssuesTable report={report} />
           <div className="flex flex-wrap items-center gap-2">
             <Button
