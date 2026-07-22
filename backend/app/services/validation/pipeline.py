@@ -22,6 +22,7 @@ import pandas as pd
 
 from app.services.validation.engine import (
     apply_defaults,
+    normalize_case_values,
     resolve_column_aliases,
     default_fill_warnings,
     load_config,
@@ -144,6 +145,10 @@ def validate_file(
     # "Client") BEFORE anything inspects columns, so a new month's export
     # is not rejected for a "missing" required column.
     df = resolve_column_aliases(df, config)
+    # Fold case-variants BEFORE any check: a lower-cased Status column
+    # would otherwise zero every headcount card. Not reported — the fold
+    # is unambiguous, so there is nothing for the admin to act on.
+    df = normalize_case_values(df, config)
     report.extend(default_fill_warnings(df, config))
     df = apply_defaults(df, config)
 

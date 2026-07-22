@@ -46,6 +46,40 @@ files already uploaded keep working. Locked in by
 Use the same `matches:` mechanism for any other heading that starts
 carrying a date.
 
+### The app is not case-sensitive
+
+Values that differ only by capitalisation are treated as the same value.
+This matters because casing used to fail **silently**:
+
+| If the source were typed... | Before | Now |
+|---|---|---|
+| `Status` in lower case | every headcount card read **0** | correct |
+| `Booked Hours Type` in lower case | donut **empty** | correct |
+| `Region` mixed case | `EMEA` and `emea` as two bars | one bar |
+
+22 columns are marked `normalize_case: true` (14 roster, 8 booking) —
+every column used for an equality comparison or a group-by.
+
+Variants fold onto a **canonical spelling** rather than being re-cased,
+because blunt title-casing would mangle the acronyms this data is full of
+(`GCC` → "Gcc", `EMEA` → "Emea"):
+
+1. Columns compared by equality declare `canonical_values` — `Status`,
+   `Type`, `Reason for Leaving`, `Booked Hours Type`. So even a file
+   typed entirely in lower case resolves to `"Active"`, because the
+   correct spelling comes from config rather than from the file.
+2. Every other column folds to the **most common spelling already in the
+   file**, which preserves acronyms exactly as the business writes them.
+
+This is applied at ingestion, so it protects cards, charts, filters and
+group-bys alike.
+
+**Not reported to the admin.** `"EMEA"` and `"emea"` unambiguously mean
+the same thing, so nothing is guessed and there is nothing to act on —
+flagging it would be noise about a problem already solved. It is logged
+server-side for traceability. Contrast with a defaulted blank, which
+*does* assert a fact the file didn't contain and is warned about.
+
 ---
 
 ## Data sources

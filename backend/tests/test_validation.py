@@ -183,6 +183,70 @@ def test_client_column_heading_may_carry_any_period(heading, tmp_path):
     assert not any(i.rule == "unknown_column" for i in report.issues)
 
 
+def test_lowercase_status_does_not_zero_the_headcount():
+    """
+    Casing is the most dangerous kind of dirty data here because it fails
+    SILENTLY: `Status` is compared by equality, so a file typed "active"
+    used to make every headcount card read 0 with no error at all.
+    """
+    from app.services import roster_metrics as rm
+    from app.services.validation.engine import prepare_dataset
+
+    df = _read_real("roster")
+    df["Status"] = df["Status"].str.lower()
+    prepared = prepare_dataset(df, "roster")
+    assert rm.get_active_employees(prepared) > 0
+    assert rm.get_strategic_pool(prepared) > 0
+    assert rm.get_closing_headcount(prepared) == (
+        rm.get_active_employees(prepared) + rm.get_strategic_pool(prepared)
+    )
+
+
+def test_lowercase_hours_type_does_not_empty_the_donut():
+    from app.services import booking_metrics as bm
+    from app.services.validation.engine import prepare_dataset
+
+    df = _read_real("booking")
+    df["Booked Hours Type"] = df["Booked Hours Type"].str.lower()
+    prepared = prepare_dataset(df, "booking")
+    assert bm.get_client_hours(prepared) > 0
+    assert bm.get_internal_hours(prepared) > 0
+
+
+def test_case_folding_preserves_acronyms():
+    """
+    Blunt title-casing would mangle the acronyms this data is full of
+    (GCC -> "Gcc", EMEA -> "Emea"). Variants must fold onto the spelling
+    the business actually uses, not a re-cased one.
+    """
+    from app.services.validation.engine import prepare_dataset
+
+    df = _read_real("roster")
+    df.loc[df.index[:6], "Region"] = df.loc[df.index[:6], "Region"].str.lower()
+    df.loc[df.index[:8], "Type"] = df.loc[df.index[:8], "Type"].str.lower()
+    prepared = prepare_dataset(df, "roster")
+    assert "EMEA" in set(prepared["Region"])
+    assert "emea" not in set(prepared["Region"])
+    assert "Emea" not in set(prepared["Region"])
+    assert "GCC" in set(prepared["Type"])
+    assert "Gcc" not in set(prepared["Type"])
+
+
+def test_case_folding_is_handled_silently(tmp_path):
+    """
+    Case folding is NOT reported. "EMEA" and "emea" unambiguously mean the
+    same thing, so nothing is guessed and there is nothing for the admin
+    to act on — unlike a defaulted blank, which asserts a fact the file
+    didn't contain and is deliberately warned about. Reporting it would be
+    noise on a problem the system has already solved.
+    """
+    df = _read_real("roster")
+    df.loc[df.index[:3], "Region"] = df.loc[df.index[:3], "Region"].str.lower()
+    report = _validate_df(df, "roster", tmp_path)
+    assert report.passed
+    assert not any(i.column == "Region" for i in report.issues)
+
+
 def test_roster_extra_column_is_warning_not_error(tmp_path):
     # Light mode: an added column is reported so it's visible, but a file
     # that gained a column is not rejected.

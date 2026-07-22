@@ -692,3 +692,54 @@ def test_real_roster_employee_directory_count(real_roster):
     directory = get_employee_directory(real_roster)
     assert len(directory) == 50
     assert all("  " not in (r["name"] or "") for r in directory)
+
+
+# --------------------------------------------------------------------------
+# Card declarations must actually DRIVE the numbers, not just describe them
+# --------------------------------------------------------------------------
+
+
+def test_cards_are_driven_by_their_yaml_declaration(tmp_path, monkeypatch):
+    """
+    The `cards:` block in roster_metrics.yaml is the definition of record.
+    A declaration that merely *describes* the code is worse than none —
+    it reads as authoritative while changing it does nothing. This asserts
+    editing the declaration really does change the number.
+    """
+    import yaml
+
+    from app.services import metric_config
+    from app.services.roster_metrics import get_projects, get_total_employees
+    from app.services.validation.engine import prepare_dataset
+
+    cfg_path = (
+        Path(metric_config.__file__).resolve().parent
+        / "configs"
+        / "roster_metrics.yaml"
+    )
+    original = cfg_path.read_text()
+
+    def fresh():
+        # a new frame each time, so @cache_on_df can't serve a stale result
+        return prepare_dataset(
+            load_roster(FIXTURES_DIR / "roster_snapshot.xlsx"), "roster"
+        )
+
+    assert get_projects(fresh()) == 31
+    assert get_total_employees(fresh()) == 50
+
+    try:
+        cfg = yaml.safe_load(original)
+        cfg["cards"]["projects"]["column_role"] = "designation"
+        cfg["cards"]["total_employees"]["status_filter"] = "inactive"
+        cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        metric_config.load_metric_config.cache_clear()
+
+        assert get_projects(fresh()) == 27       # now counts job titles
+        assert get_total_employees(fresh()) == 5  # now Inactive only
+    finally:
+        cfg_path.write_text(original)
+        metric_config.load_metric_config.cache_clear()
+
+    assert get_projects(fresh()) == 31
+    assert get_total_employees(fresh()) == 50

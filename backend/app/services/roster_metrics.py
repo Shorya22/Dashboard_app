@@ -48,6 +48,51 @@ EXPERIENCE_TOLERANCE = 0.01  # years; float rounding tolerance
 # again (see metric_invariants.py, which asserts it).
 STRATEGIC_POOL_STATUS = metric_config.status_value("strategic_pool")
 
+
+def evaluate_card(df: pd.DataFrame, card_name: str) -> int:
+    """
+    Compute a KPI card straight from its declaration in
+    `configs/roster_metrics.yaml`.
+
+    The `cards:` block is the definition of record — what the card
+    counts, which column role it counts it over, and whether a status
+    filter applies. Routing the actual computation through it is what
+    makes the YAML authoritative rather than merely descriptive: edit the
+    declaration and the number on screen changes. (Before this, the block
+    was documentation only — pointing `projects` at a different column
+    changed nothing, which is worse than having no declaration at all,
+    because it reads as if it were in charge.)
+
+    Supported today: `counts: distinct` over a column role, an optional
+    `status_filter`, and `normalize_case` for headings whose values vary
+    only by capitalisation.
+    """
+    spec = metric_config.card(card_name)
+
+    scope = df
+    status_filter = spec.get("status_filter", "none")
+    if status_filter and status_filter != "none":
+        scope = scope[
+            scope[metric_config.status_column()]
+            == metric_config.status_value(status_filter)
+        ]
+
+    values = scope[metric_config.column(spec["column_role"])]
+    if spec.get("normalize_case"):
+        # e.g. "SalesForce Core Developer" and "Salesforce Core Developer"
+        # are one job title, not two.
+        values = values.apply(
+            lambda v: _normalize_designation_label(v) if pd.notna(v) else v
+        )
+
+    counts = spec.get("counts", "distinct")
+    if counts != "distinct":
+        raise ValueError(
+            f"Card {card_name!r} declares unsupported counts={counts!r}; "
+            "only 'distinct' is implemented."
+        )
+    return int(values.nunique(dropna=True))
+
 DATE_FORMAT = "%d-%b-%y"  # source format, e.g. "24-Nov-25"
 
 
@@ -311,9 +356,7 @@ def get_active_employees(df: pd.DataFrame) -> int:
     Reads: `Status`, `NEW_EMP_ID`.
     Edge cases: blank/NaN Status rows are excluded (not counted as active).
     """
-    return get_total_employees(
-        df[df[metric_config.status_column()] == metric_config.status_value("active")]
-    )
+    return evaluate_card(df, "active_employees")
 
 
 @cache_on_df
@@ -340,7 +383,7 @@ def get_total_employees(df: pd.DataFrame) -> int:
     `CALCULATE([Total Employees], ...)`.
     Reads: `NEW_EMP_ID`.
     """
-    return int(df[metric_config.employee_id_column()].nunique(dropna=True))
+    return evaluate_card(df, "total_employees")
 
 
 @cache_on_df
@@ -740,7 +783,7 @@ def get_projects(df: pd.DataFrame) -> int:
     blanks or "Client TBD" values (the DAX has no such FILTER).
     Reads: `Client as on June 2026`.
     """
-    return int(df[metric_config.column("client")].nunique(dropna=True))
+    return evaluate_card(df, "projects")
 
 
 @cache_on_df
@@ -876,10 +919,7 @@ def get_departments(df: pd.DataFrame) -> int:
     Edge cases: NaN/blank Designation values excluded from the count
     (dropna=True, unchanged).
     """
-    normalized = df[metric_config.column("designation")].apply(
-        lambda v: _normalize_designation_label(v) if pd.notna(v) else v
-    )
-    return int(normalized.nunique(dropna=True))
+    return evaluate_card(df, "departments")
 
 
 @cache_on_df

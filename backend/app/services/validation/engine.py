@@ -18,6 +18,7 @@ their own modules and are orchestrated by `pipeline.py`.
 from __future__ import annotations
 
 import functools
+import logging
 import re
 from pathlib import Path
 
@@ -27,6 +28,8 @@ import yaml
 
 from app.services.validation.report import Severity, Stage, ValidationIssue
 from app.services.validation.rules import run_business_rules
+
+logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path(__file__).resolve().parent / "configs"
 
@@ -383,6 +386,75 @@ def resolve_column_aliases(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     return df.rename(columns=renames) if renames else df
 
 
+def normalize_case_values(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """
+    Fold values that differ only by capitalisation/whitespace onto one
+    spelling, for columns declaring `normalize_case: true`.
+
+    Casing is the most damaging kind of dirty data here because it fails
+    SILENTLY. `Status` is compared by equality, so a file typed as
+    "active" makes every headcount card read 0 — no error, no warning,
+    just a blank dashboard. Group-by columns are less severe but still
+    wrong: "EMEA" and "emea" become two separate bars.
+
+    The canonical spelling is chosen carefully, because blunt title-casing
+    would mangle the acronyms this data is full of (GCC -> "Gcc",
+    EMEA -> "Emea", DTNL -> "Dtnl"):
+
+      1. If the column declares `canonical_values`, a case-insensitive
+         match wins — so an all-lowercase "active" file still resolves to
+         "Active" even though no row spells it that way.
+      2. Otherwise the most common spelling already in the file wins,
+         which preserves acronyms exactly as the business writes them.
+    """
+    for col in config["columns"]:
+        name = col["name"]
+        if not col.get("normalize_case") or name not in df.columns:
+            continue
+
+        series = df[name]
+        canonical = {
+            str(v).strip().lower(): v for v in col.get("canonical_values", [])
+        }
+
+        # count the spellings actually present, per case-folded key
+        spellings: dict[str, dict[str, int]] = {}
+        for raw in series.dropna():
+            text = str(raw).strip()
+            spellings.setdefault(text.lower(), {}).setdefault(text, 0)
+            spellings[text.lower()][text] += 1
+
+        fold = {
+            key: canonical.get(key) or max(variants.items(), key=lambda kv: kv[1])[0]
+            for key, variants in spellings.items()
+        }
+        if not fold:
+            continue
+
+        # Deliberately NOT reported to the admin. "EMEA" and "emea"
+        # unambiguously mean the same thing, so nothing is being guessed
+        # and there is nothing for them to act on — unlike a defaulted
+        # blank, which asserts a fact the file didn't contain. Logged
+        # instead, so it's still traceable when debugging a number.
+        merged = {k: v for k, v in spellings.items() if len(v) > 1}
+        if merged:
+            logger.info(
+                "normalize_case_values: %s — folded %d value(s) differing only "
+                "by capitalisation: %s",
+                name,
+                len(merged),
+                "; ".join(
+                    f"{sorted(v)} -> {fold[k]!r}" for k, v in list(merged.items())[:5]
+                ),
+            )
+
+        df = df.copy()
+        df[name] = series.map(
+            lambda v: fold.get(str(v).strip().lower(), v) if pd.notna(v) else v
+        )
+    return df
+
+
 def prepare_dataset(df: pd.DataFrame, file_type: str) -> pd.DataFrame:
     """
     Put a freshly-read DataFrame into the shape the rest of the app
@@ -394,7 +466,9 @@ def prepare_dataset(df: pd.DataFrame, file_type: str) -> pd.DataFrame:
     disagree about what the data looks like.
     """
     config = load_config(file_type)
-    return apply_defaults(resolve_column_aliases(df, config), config)
+    df = resolve_column_aliases(df, config)
+    df = normalize_case_values(df, config)
+    return apply_defaults(df, config)
 
 
 # Backwards-compatible alias — `prepare_dataset` now also normalises

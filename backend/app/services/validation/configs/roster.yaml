@@ -57,50 +57,67 @@ columns:
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Working Entity"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Region"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Type"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
+    canonical_values: ["GCC", "Non GCC"]
+  # Compared by EQUALITY, so a casing mismatch silently zeroes every
+  # headcount card. canonical_values means even an all-lower-case file
+  # resolves to the right spelling.
   - name: "Status"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
+    canonical_values: ["Active", "Inactive", "Strategic Pool"]
   - name: "Declaration Signed"
     dtype: any
     required: false
     nullable: true
+    normalize_case: true
   - name: "DEPUTATION"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Market"
     dtype: any
     required: false
     nullable: true
+    normalize_case: true
   - name: "Primary Skill"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Skill"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Designation"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Seniorirty Level"   # source-file typo kept verbatim — do not "fix"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   # Canonical name is plain "Client" (the source has been changed to use
   # that heading). `matches` keeps older exports working: a heading that
   # carried the reporting period — "Client as on June 2026", and it would
@@ -120,6 +137,7 @@ columns:
     dtype: any
     required: false
     nullable: true
+    normalize_case: true
   - name: "SUPERVISOR (Hexaware)"
     dtype: any
     required: false
@@ -152,6 +170,8 @@ columns:
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
+    canonical_values: ["Voluntary", "Involuntary"]
 
   # --- experience: the only typed columns, because the app averages and
   #     buckets these. Blank means "no recorded experience" -> 0.

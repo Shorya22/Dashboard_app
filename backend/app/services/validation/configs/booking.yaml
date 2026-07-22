@@ -29,32 +29,39 @@ columns:
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Market (EC)"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Segment (EC)"
     dtype: any
     required: false
     nullable: true
+    normalize_case: true
   - name: "Global Department"
     dtype: any
     required: false
     nullable: true
+    normalize_case: true
   - name: "Department"
     dtype: any
     required: true
     nullable: true
+    normalize_case: true
   - name: "Team (EC)"
     dtype: any
     required: true
     nullable: true
 
   # --- client / project ---
+    normalize_case: true
   - name: "Holding"
     dtype: any             # the clean, one-value-per-row client field
     required: true
     nullable: true
+    normalize_case: true
   - name: "Project Name"
     dtype: any
     required: true
@@ -91,10 +98,14 @@ columns:
     nullable: true
 
   # --- hours ---
+  # Compared by EQUALITY to split the donut, so a casing mismatch empties
+  # both slices with no error at all.
   - name: "Booked Hours Type"
     dtype: any             # no fixed list; utilization splits on whatever is here
     required: true
     nullable: true
+    normalize_case: true
+    canonical_values: ["Client Hours", "Internal Hours"]
   # Typed: this is summed for every hours/utilization metric.
   - name: "Employee Booked Hours"
     dtype: float
