@@ -27,7 +27,10 @@ def load_metric_config(dataset: str = "roster") -> dict:
     """Load and cache a dataset's metric-semantics config."""
     path = CONFIG_DIR / f"{dataset}_metrics.yaml"
     with path.open("r", encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        cfg = yaml.safe_load(fh)
+    if dataset == "roster":
+        validate_metric_config(cfg, dataset)
+    return cfg
 
 
 # --- booking ------------------------------------------------------------- #
@@ -130,3 +133,128 @@ def seniority_category(value: object) -> str:
         if rule["contains"].lower() in text:
             return rule["label"]
     return cfg["default_label"]
+
+
+# ---------------------------------------------------------------------------
+# Config self-validation
+# ---------------------------------------------------------------------------
+# The metric config is edited by hand, so a typo is likely. Without this a
+# mistake surfaces as a KeyError mid-request — a 500 for whoever happens to
+# open that page, with a stack trace instead of an explanation. These checks
+# run once when the config is loaded and name the exact problem.
+
+SUPPORTED_CHART_TYPES = {"count_by", "numeric_bands", "keyword_bands", "monthly_series"}
+SUPPORTED_SCOPES = {"all", "present", "exited"}
+SUPPORTED_MEASURES = {"closing_headcount"}
+
+
+class MetricConfigError(ValueError):
+    """Raised for a malformed metric config — a developer error, not user data."""
+
+
+def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
+    """Fail loudly, at load time, with a message that says what to fix."""
+    problems: list[str] = []
+    roles = cfg.get("columns", {})
+    charts = cfg.get("charts", {})
+    statuses = cfg.get("status", {})
+
+    def need_role(role: object, where: str) -> None:
+        if role not in roles:
+            problems.append(
+                f"{where}: column_role {role!r} is not defined in `columns:` "
+                f"(known: {sorted(roles)})"
+            )
+
+    for name, card in cfg.get("cards", {}).items():
+        need_role(card.get("column_role"), f"cards.{name}")
+        status_filter = card.get("status_filter", "none")
+        if status_filter not in ("none", None) and status_filter not in statuses:
+            problems.append(
+                f"cards.{name}: status_filter {status_filter!r} is not a status "
+                f"declared in `status:` (known: "
+                f"{sorted(k for k in statuses if k != 'counts_as_present')})"
+            )
+
+    for name, chart in charts.items():
+        kind = chart.get("type")
+        if kind not in SUPPORTED_CHART_TYPES:
+            problems.append(
+                f"charts.{name}: type {kind!r} is not implemented "
+                f"(supported: {sorted(SUPPORTED_CHART_TYPES)})"
+            )
+        scope = chart.get("scope", "all")
+        if scope not in SUPPORTED_SCOPES:
+            problems.append(
+                f"charts.{name}: scope {scope!r} is not supported "
+                f"(supported: {sorted(SUPPORTED_SCOPES)})"
+            )
+        if kind == "monthly_series":
+            for i, series in enumerate(chart.get("series", [])):
+                if "key" not in series:
+                    problems.append(f"charts.{name}.series[{i}]: missing `key`")
+                has = [k for k in ("measure", "date_role") if k in series]
+                if len(has) != 1:
+                    problems.append(
+                        f"charts.{name}.series[{i}]: needs exactly one of "
+                        f"`measure` or `date_role` (found {has or 'neither'})"
+                    )
+                if "date_role" in series:
+                    need_role(series["date_role"], f"charts.{name}.series[{i}]")
+                if series.get("measure") and series["measure"] not in SUPPORTED_MEASURES:
+                    problems.append(
+                        f"charts.{name}.series[{i}]: measure "
+                        f"{series['measure']!r} is not implemented "
+                        f"(supported: {sorted(SUPPORTED_MEASURES)})"
+                    )
+        else:
+            need_role(chart.get("column_role"), f"charts.{name}")
+
+        if kind == "numeric_bands":
+            bands = chart.get("bands", [])
+            if not bands:
+                problems.append(f"charts.{name}: numeric_bands needs `bands`")
+            for i, band in enumerate(bands[:-1]):
+                if "below" not in band:
+                    problems.append(
+                        f"charts.{name}.bands[{i}]: only the LAST band may omit "
+                        "`below` (it is the catch-all); an earlier one without it "
+                        "would swallow every remaining value"
+                    )
+            if bands and "below" in bands[-1]:
+                problems.append(
+                    f"charts.{name}: the last band must omit `below` so values "
+                    "above the final threshold still land somewhere"
+                )
+
+    for name, spec in cfg.get("filters", {}).items():
+        chart_ref = spec.get("derived_from_chart")
+        if chart_ref is not None:
+            if chart_ref not in charts:
+                problems.append(
+                    f"filters.{name}: derived_from_chart {chart_ref!r} is not a "
+                    f"declared chart (known: {sorted(charts)})"
+                )
+        else:
+            need_role(spec.get("column_role"), f"filters.{name}")
+
+    declared_status_values = {
+        v for k, v in statuses.items() if k != "counts_as_present"
+    }
+    for value in statuses.get("counts_as_present", []):
+        if value not in declared_status_values:
+            problems.append(
+                f"status.counts_as_present: {value!r} is not one of the declared "
+                f"status values ({sorted(declared_status_values)}) — headcount "
+                "would silently exclude it"
+            )
+
+    for i, rule in enumerate(cfg.get("seniority", {}).get("categories", [])):
+        missing = [k for k in ("contains", "label") if k not in rule]
+        if missing:
+            problems.append(f"seniority.categories[{i}]: missing {missing}")
+
+    if problems:
+        raise MetricConfigError(
+            f"{dataset}_metrics.yaml is invalid:\n  - " + "\n  - ".join(problems)
+        )

@@ -35,6 +35,26 @@ function, never be recomputed separately. That is what caused the
 | Which charts exist and what each one plots (`charts:`) | `backend/app/services/configs/roster_metrics.yaml` | Config edit, no code |
 | A genuinely new *kind* of chart (a new `type:`) | `backend/app/services/roster_metrics.py` | Developer |
 
+### The config validates itself
+
+`roster_metrics.yaml` is hand-edited, so it is checked when it loads
+rather than when someone opens a page. A typo used to surface as a
+KeyError mid-request — a 500 with a stack trace instead of an
+explanation. Now it fails at startup naming the exact problem:
+
+```
+roster_metrics.yaml is invalid:
+  - cards.projects: column_role 'clientt' is not defined in `columns:`
+    (known: ['client', 'designation', 'employee_id', ...])
+```
+
+Checked: every `column_role` exists; every `status_filter` names a real
+status; every `derived_from_chart` names a real chart; chart `type` and
+`scope` are ones the engine implements; a `numeric_bands` chart ends with
+a catch-all band (otherwise values above the last threshold vanish); each
+`monthly_series` series has exactly one of `measure`/`date_role`; and
+every `counts_as_present` value is a declared status.
+
 ### Column roles
 
 Metrics never reference a raw column heading; they reference a **role**,
