@@ -3,6 +3,22 @@
 How each card and chart gets its number, in plain terms. Written page by
 page as we verify them; anything not listed here has not been reviewed yet.
 
+**Progress**
+
+| Page | Status |
+|---|---|
+| Home | ✅ all 3 cards + 4 charts verified |
+| HR Home (HR Portal) | ✅ all 4 cards + 4 charts verified |
+| HR Analytics | ⬜ not reviewed |
+| Workforce | ⬜ not reviewed |
+| Skills & Experience | ⬜ not reviewed |
+| Employee Directory | ⬜ not reviewed |
+| Utilization pages | ⬜ not reviewed |
+
+Figures below were checked against the live data on 2026-07-22 (roster 52
+rows, booking 2,961 rows) and are shown only to make the rules concrete —
+they move with the data; the rules don't.
+
 **Rule we follow:** one business concept = one definition, in one place.
 If the same label appears on two pages it must resolve to the same
 function, never be recomputed separately. That is what caused the
@@ -243,14 +259,50 @@ clients and 81 projects — a different question, answered on the
 Utilization pages.)*
 
 ### Chart: Status Split (donut) — `52`
-Groups by the **`Status`** column. Active `35`, Inactive `14`, Strategic
-Pool `3`. All three slices always render, even at zero, so a roster with
-nobody in a status doesn't quietly lose a slice.
+Groups by the **`Status`** column: Active `35`, Inactive `14`, Strategic
+Pool `3`.
 
-An unrecognised status (say `"Sabbatical"`) is **shown as its own slice**
-rather than dropped, so nobody disappears from the donut — and the
-`every_status_is_declared` invariant flags it so someone decides whether
-those people count as present.
+**The slices are simply whatever the column contains.** Nothing is
+declared in config first — same as Home reading Active and Strategic Pool
+straight from the column. A status with no rows just doesn't appear.
+
+#### What happens if a new status shows up
+
+Say the business starts using `"Notice Period"`:
+
+| | |
+|---|---|
+| Appears in the donut | **Yes**, immediately, as its own slice — no config, no code, no deploy |
+| Counted in Total Employees | **Yes** |
+| Counted in Closing Headcount / "current workforce" | **No**, until someone says it should be |
+| Flagged on upload | **Yes**, naming the value |
+
+The report says:
+
+> ⚠ new Status value(s) `['Notice Period']` — not currently counted as
+> part of the workforce. If they should be, add them to
+> `status.counts_as_present`
+
+**Why it needs a decision at all:** one question can't be read off the
+data — does someone with that status still count as part of the
+workforce? Nothing in the file answers it, so `counts_as_present` in
+`roster_metrics.yaml` holds that one business meaning:
+
+```yaml
+status:
+  counts_as_present: ["Active", "Strategic Pool"]
+```
+
+To count a new status as still-here, add it to that list. To exclude it,
+do nothing — it stays visible in the donut and in Total Employees, just
+outside headcount.
+
+**Why the default is "not present":** quietly *inflating* headcount is a
+far worse failure than briefly under-counting with a visible warning. You
+would never notice the first; you can't miss the second.
+
+Guarded by the `every_status_has_a_workforce_meaning` invariant, which
+runs in the tests and on every upload.
 
 ### Chart: Headcount by Region (bar) — `52`
 Groups by the **`Region`** column. EMEA `34`, AMER `15`, APAC `1`,
@@ -316,17 +368,21 @@ Checked by `metric_invariants.py` — in the test suite *and* on every
 upload, so a file that would make the dashboard contradict itself is
 flagged before it goes live:
 
-1. Strategic Pool is the same number everywhere it appears.
-2. Closing Headcount = Active + Strategic Pool.
-3. The Workforce-by-Seniority split covers exactly the present workforce.
-4. Every breakdown chart totals to the population it describes (blanks
-   counted, never dropped).
-5. Every `Status` value in the data is one the config declares.
-4. The Status breakdown accounts for every employee (no status silently
-   uncounted).
-5. Active + Inactive + Strategic Pool = Total Employees.
-6. Client Hours + Internal Hours = total booked hours (no hours category
-   silently excluded from the donut).
+| Invariant | Guarantees |
+|---|---|
+| `strategic_pool_same_everywhere` | Strategic Pool is the same number on every page that shows it |
+| `closing_headcount_is_present_workforce` | Closing Headcount = Active + Strategic Pool |
+| `status_measures_partition_roster` | Active + Inactive + Strategic Pool = Total Employees |
+| `category_split_matches_status` | Home's Workforce Category agrees with HR Home's Status Split |
+| `seniority_split_covers_present_workforce` | The seniority donut covers exactly the current workforce |
+| `charts_account_for_everyone` | Every breakdown chart totals to the population it describes — blanks counted, never dropped |
+| `every_status_has_a_workforce_meaning` | No status is left without a decision on whether it counts as present |
+| `hours_split_covers_all_hours` | Client + Internal = total booked hours, so no hours category is silently missing from the donut |
+
+Each one exists because of a real failure, not a hypothetical: the
+Strategic Pool 1-vs-3 split across two pages, the Closing Headcount
+47-vs-38 contradiction on a single page, and bars that totalled less than
+the card above them because blanks were dropped.
 
 ---
 
