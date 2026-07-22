@@ -199,10 +199,13 @@ def test_get_strategic_pool(sample_roster):
 
 
 def test_get_workforce_category_split(sample_roster):
-    # Active: E1,E2,E5,E6 -> 4; Strategic Pool is Status-based and no
-    # fixture row has that status -> 0. Both buckets now come from the same
-    # `Status` column, so they can never double-count the same employee.
-    assert get_workforce_category_split(sample_roster) == {"Active": 4, "Strategic Pool": 0}
+    # UPDATED (2026-07-22): this is now the same Status group-by as
+    # status_split, scoped to the present workforce — so like that donut it
+    # reflects the statuses actually in the data. The fixture has no
+    # Strategic Pool rows, so that slice is absent rather than an explicit 0.
+    # Both buckets come from one `Status` group-by, so they can never
+    # double-count an employee or disagree with HR Home's Status Split.
+    assert get_workforce_category_split(sample_roster) == {"Active": 4}
 
 
 def test_get_status_split(sample_roster):

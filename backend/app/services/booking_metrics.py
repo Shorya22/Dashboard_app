@@ -651,3 +651,22 @@ def get_markets_covered(df: pd.DataFrame) -> int:
     Edge cases: NaN/blank values excluded from the count.
     """
     return int(df["Market (EC)"].nunique(dropna=True))
+
+
+@cache_on_df
+def get_hours_split(df: pd.DataFrame) -> dict[str, float]:
+    """
+    Hours grouped by `Booked Hours Type`, from the chart declared in
+    `configs/booking_metrics.yaml`.
+
+    Declared rather than hardcoded so this donut works the same way as
+    every roster chart. `sum_by` exists because hours are a quantity to be
+    summed, not rows to be counted — and because summing straight from the
+    data means a category the config has never seen still appears, instead
+    of being silently dropped from the donut.
+    """
+    spec = metric_config.booking_chart("internal_vs_client_hours")
+    group = metric_config.booking_column(spec["group_column_role"])
+    value = metric_config.booking_column(spec["value_column_role"])
+    grouped = df.groupby(group, dropna=True)[value].sum()
+    return {str(k): float(v) for k, v in grouped.items()}

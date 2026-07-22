@@ -1166,10 +1166,7 @@ def get_workforce_category_split(df: pd.DataFrame) -> dict[str, int]:
     Reads: (via get_active_employees) `Status`, `NEW_EMP_ID`;
            (via get_strategic_pool) `DOJ (DEPT)`, `NEW_EMP_ID`.
     """
-    return {
-        "Active": get_active_employees(df),
-        "Strategic Pool": get_strategic_pool(df),
-    }
+    return evaluate_chart(df, "workforce_category_split")
 
 
 @cache_on_df

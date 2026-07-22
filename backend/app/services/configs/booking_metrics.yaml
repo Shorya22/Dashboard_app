@@ -22,3 +22,15 @@ hours:
   # the total and flags the difference on upload.
   client_label: "Client Hours"
   internal_label: "Internal Hours"
+
+# ---------------------------------------------------------------------------
+# Chart definitions — same idea as the roster's `charts:` block.
+# ---------------------------------------------------------------------------
+# `sum_by` sums a value column grouped by a category column, rather than
+# counting rows — hours are a quantity, not a headcount.
+charts:
+  internal_vs_client_hours:
+    label: "Internal v Client Utilization"
+    type: sum_by
+    group_column_role: hours_type    # Booked Hours Type
+    value_column_role: hours_value   # Employee Booked Hours

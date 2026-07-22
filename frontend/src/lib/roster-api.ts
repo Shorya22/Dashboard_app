@@ -132,6 +132,9 @@ export interface BookingSummary {
   internal_hours: number
   client_hours_pct: number
   internal_hours_pct: number
+  /** Hours grouped by `Booked Hours Type`, from the chart declared in
+   *  booking_metrics.yaml. Backs the Internal-v-Client donut. */
+  hours_split: Record<string, number>
   total_clients: number
   total_projects: number
   total_regions: number

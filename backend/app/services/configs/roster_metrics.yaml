@@ -216,6 +216,15 @@ charts:
     column_role: seniority
     scope: present
 
+  # Home. The same Status group-by as status_split, scoped to the current
+  # workforce — so it shows Active + Strategic Pool and, by construction,
+  # cannot disagree with the Status Split donut on HR Home.
+  workforce_category_split:
+    label: "Workforce Category"
+    type: count_by
+    column_role: status
+    scope: present
+
   # --- HR Analytics ------------------------------------------------------
   # `monthly_series` walks the dataset's month range and evaluates each
   # declared series per month. A series is either a `measure` (a named

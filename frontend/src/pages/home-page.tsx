@@ -75,14 +75,16 @@ export function HomePage() {
     [seniorityCategoryData],
   )
 
+  // From the chart declared in booking_metrics.yaml, so the slices are
+  // whatever `Booked Hours Type` contains. Hardcoding the two labels here
+  // meant a third category (e.g. "Leave Hours") would count toward the
+  // total but appear in neither slice.
   const utilizationSplitData = useMemo(
     () =>
-      booking.data
-        ? [
-            { name: 'Client Hours', value: booking.data.client_hours },
-            { name: 'Internal Hours', value: booking.data.internal_hours },
-          ]
-        : [],
+      Object.entries(booking.data?.hours_split ?? {}).map(([name, value]) => ({
+        name,
+        value: Number(value),
+      })),
     [booking.data],
   )
   const utilizationSplitColors = useMemo(

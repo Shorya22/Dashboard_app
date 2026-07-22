@@ -34,6 +34,18 @@ def load_metric_config(dataset: str = "roster") -> dict:
 
 
 # --- booking ------------------------------------------------------------- #
+def booking_column(role: str) -> str:
+    """Physical column for a booking role (hours_type / hours_value)."""
+    return {
+        "hours_type": hours_type_column(),
+        "hours_value": hours_value_column(),
+    }[role]
+
+
+def booking_chart(name: str) -> dict:
+    return load_metric_config("booking")["charts"][name]
+
+
 def hours_value_column() -> str:
     return load_metric_config("booking")["hours"]["value_column"]
 

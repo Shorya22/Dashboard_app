@@ -28,6 +28,7 @@ def booking_summary(user: User = Depends(get_current_user)) -> BookingSummary:
         df = get_booking_df()
         return BookingSummary(
             total_hours=booking_metrics.get_total_hours(df),
+            hours_split=booking_metrics.get_hours_split(df),
             client_hours=booking_metrics.get_client_hours(df),
             internal_hours=booking_metrics.get_internal_hours(df),
             client_hours_pct=booking_metrics.get_client_hours_pct(df),
