@@ -22,12 +22,17 @@ function, never be recomputed separately. That is what caused the
 Metrics never reference a raw column heading; they reference a **role**,
 resolved through config:
 
-| Role | Column |
-|---|---|
-| `employee_id` | `NEW_EMP_ID` |
-| `employee_name` | `NAME` |
-| `designation` | `Designation` |
-| `client` | `Client` |
+| Role | Column | Used by |
+|---|---|---|
+| `employee_id` | `NEW_EMP_ID` | every headcount (counted distinctly) |
+| `employee_name` | `NAME` | Employee Directory |
+| `designation` | `Designation` | Departments card |
+| `client` | `Client` | Projects card |
+| `status` | `Status` | Active / Strategic Pool / Closing Headcount, Status Split |
+| `region` | `Region` | Headcount by Region |
+| `working_entity` | `Working Entity` | Workforce by Working Entity |
+| `seniority` | `Seniorirty Level` | Workforce by Seniority |
+| `experience_total` | `Total Experience` | Workforce by Experience Band |
 
 **Headings that carry a reporting period.** The client column used to be
 exported as `Client as on June 2026` — a heading that changes every
