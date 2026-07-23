@@ -13,6 +13,7 @@ import {
 } from '@/lib/utilization-api'
 import { useFilterConfig, filterLabel } from '@/lib/filter-config'
 import { HierarchicalMultiSelect, type HierarchicalItem } from '@/components/dashboard/hierarchical-multi-select'
+import { FilterControl } from '@/components/dashboard/filter-control'
 import { marketDisplayLabel } from '@/lib/chart-colors'
 
 type FilterKey = 'week' | 'region' | 'department' | 'entity' | 'holding' | 'hours_type'
@@ -173,10 +174,16 @@ export function UtilizationSearchPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {FIELD_KEYS.map((key) => (
-              <div key={key} className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">
-                  {filterLabel(filterConfig.data?.filters, key, key)}
-                </label>
+              // `sm:w-auto` restores the grid cell's own width — FilterControl's
+              // default `sm:w-[180px]` fits every other filter row on the app,
+              // but here the Search form is a 2/3-column grid whose cells are
+              // wider than 180px, so we let each cell decide the width and
+              // only reuse the canonical label + wrapper styling.
+              <FilterControl
+                key={key}
+                label={filterLabel(filterConfig.data?.filters, key, key)}
+                className="sm:w-auto"
+              >
                 {filterOptions.isLoading ? (
                   <Skeleton className="h-10 w-full rounded-lg" />
                 ) : (
@@ -187,7 +194,7 @@ export function UtilizationSearchPage() {
                     searchable={key === 'holding'}
                   />
                 )}
-              </div>
+              </FilterControl>
             ))}
           </div>
 

@@ -15,6 +15,7 @@ import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { FilterSelect } from '@/components/dashboard/filter-select'
 import { FiltersPanel } from '@/components/dashboard/filters-panel'
 import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
+import { FilterControl } from '@/components/dashboard/filter-control'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
@@ -495,18 +496,14 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
       <FiltersPanel>
         <FilterSelect label="Hours Type" value={hoursType} options={HOURS_TYPES} onChange={setHoursType} />
         <FilterSelect label="Project" value={project} options={projectOptions} onChange={setProject} />
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            {filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}
-          </label>
+        <FilterControl label={filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}>
           <HierarchicalMultiSelect
             items={weekHierarchy}
             selected={weeks}
             onChange={setWeeks}
             placeholder="All Weeks"
-            className="w-[180px]"
           />
-        </div>
+        </FilterControl>
       </FiltersPanel>
     </div>
   )

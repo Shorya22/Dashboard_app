@@ -15,6 +15,7 @@ import {
 } from '@/lib/utilization-api'
 import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
+import { FilterControl } from '@/components/dashboard/filter-control'
 import { marketDisplayLabel, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 
 // Hoisted to module scope so its array reference is stable across renders,
@@ -150,34 +151,24 @@ export function UtilizationHomePage() {
           options={filterOptions.data?.hours_types ?? []}
           onChange={setHoursType}
         />
-        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
-          <label className="text-xs font-medium text-muted-foreground">
-            {filterLabel(filterConfig.data?.filters, 'region', 'Region')}
-            {'/'}
-            {filterLabel(filterConfig.data?.filters, 'market', 'Market')}
-          </label>
-          <div className="w-full min-w-0 sm:w-[180px]">
-            <HierarchicalMultiSelect
-              items={regionMarketItems}
-              selected={regionMarket}
-              onChange={setRegionMarket}
-              placeholder="All"
-            />
-          </div>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
-          <label className="text-xs font-medium text-muted-foreground">
-            {filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}
-          </label>
-          <div className="w-full min-w-0 sm:w-[180px]">
-            <HierarchicalMultiSelect
-              items={dateItems}
-              selected={weeks}
-              onChange={setWeeks}
-              placeholder="All Weeks"
-            />
-          </div>
-        </div>
+        <FilterControl
+          label={`${filterLabel(filterConfig.data?.filters, 'region', 'Region')}/${filterLabel(filterConfig.data?.filters, 'market', 'Market')}`}
+        >
+          <HierarchicalMultiSelect
+            items={regionMarketItems}
+            selected={regionMarket}
+            onChange={setRegionMarket}
+            placeholder="All"
+          />
+        </FilterControl>
+        <FilterControl label={filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}>
+          <HierarchicalMultiSelect
+            items={dateItems}
+            selected={weeks}
+            onChange={setWeeks}
+            placeholder="All Weeks"
+          />
+        </FilterControl>
         <FilterSelect
           label={filterLabel(filterConfig.data?.filters, 'department', 'Department')}
           value={department}

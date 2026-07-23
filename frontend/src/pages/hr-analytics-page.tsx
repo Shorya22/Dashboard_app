@@ -93,8 +93,9 @@ export function HrAnalyticsPage() {
   // Memoized so an unrelated page re-render (e.g. the exits table below
   // changing its internal TanStack Table sort state) doesn't recreate these
   // arrays with new references and force every chart to redraw. `monthFilter`
-  // is itself `useCallback`'d in the hook (keyed on filters.monthYear), so
-  // depending on it here is both correct and stable.
+  // is itself `useCallback`'d in the hook (keyed on the Month/Year
+  // hierarchical selection), so depending on it here is both correct and
+  // stable.
   const headcountData = useMemo(
     () =>
       (trends.data?.month_wise_closing_headcount ?? [])

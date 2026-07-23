@@ -17,13 +17,15 @@ import {
   type FilterValues,
 } from '@/lib/employee-filters'
 import { filterLabel, useFilterConfig } from '@/lib/filter-config'
+import { monthsToHierarchy } from '@/lib/utilization-api'
 import type { HierarchicalFilterDef } from '@/components/dashboard/filter-bar'
 
 /**
  * Shared data-fetching + filter state for the HR Analytics page
  * (`/hr-analytics`). Every section on the page filters by the same
- * Month Year / Status / Department / Region controls, so the queries and
- * filter state live here to avoid duplicating fetch/filter-option logic.
+ * Month / Year / Status / Department / Region controls, so the queries
+ * and filter state live here to avoid duplicating fetch/filter-option
+ * logic.
  */
 export function useHrAnalyticsFilters() {
   const filterConfig = useFilterConfig('roster')
@@ -37,7 +39,6 @@ export function useHrAnalyticsFilters() {
   const employees = allEmployeesQuery.data?.items ?? []
 
   const [filters, setFilters] = React.useState<FilterValues>({
-    monthYear: ALL,
     status: ALL,
     department: ALL,
   })
@@ -49,6 +50,11 @@ export function useHrAnalyticsFilters() {
     () => buildRegionMarketItems(employees),
     [employees],
   )
+  // Month/Year is now a Year > Month hierarchical multi-select (matching
+  // Utilization Home's Year > Month > Week style). Leaves are "Mon YYYY"
+  // strings so the client-side `monthFilter` below stays a plain equality
+  // check against the pre-aggregated trend arrays' `month` field.
+  const [monthYear, setMonthYear] = React.useState<string[]>([])
 
   // KPIs come from the server WITH the filters applied, so they use the
   // YAML metric definitions rather than being recomputed here against
@@ -66,15 +72,18 @@ export function useHrAnalyticsFilters() {
   // The rows the page actually displays, filtered server-side like the KPIs.
   const employeesQuery = useRosterEmployeesAll(serverFilters)
 
-  const monthOptions = buildOptions(
-    (trends.data?.month_wise_closing_headcount ?? []).map((m) => m.month),
+  // Options are the exact months the trends endpoint emits (walked from
+  // `build_available_months` — see roster_metrics.py); the Year > Month
+  // tree is built from that list so a new month appears in the dropdown
+  // as soon as it appears in the roster, without a config edit.
+  const monthItems = React.useMemo(
+    () =>
+      monthsToHierarchy(
+        (trends.data?.month_wise_closing_headcount ?? []).map((m) => m.month),
+      ),
+    [trends.data],
   )
-  // `monthYear` is a page-local trend/attrition filter (it narrows the
-  // pre-aggregated monthly arrays client-side, not the roster) and is
-  // deliberately NOT declared in the YAML filters block — its label
-  // stays here.
   const filterDefs = [
-    { key: 'monthYear', label: 'Month Year', options: monthOptions },
     { key: 'status', label: labelOf('status', 'Status'), options: buildOptions(distinctValues(employees, 'status')) },
     {
       key: 'department',
@@ -84,6 +93,13 @@ export function useHrAnalyticsFilters() {
   ]
   const hierarchicalFilters: HierarchicalFilterDef[] = [
     {
+      key: 'monthYear',
+      label: labelOf('month_year', 'Month / Year'),
+      items: monthItems,
+      selected: monthYear,
+      onChange: setMonthYear,
+    },
+    {
       key: 'regionMarket',
       label: `${labelOf('region', 'Region')}/${labelOf('market', 'Market')}`,
       items: regionMarketItems,
@@ -92,16 +108,17 @@ export function useHrAnalyticsFilters() {
     },
   ]
 
-  // Month Year filters trend/resignation charts directly by month label
+  // Month/Year filters trend/resignation charts directly by month label
   // (these come from the /roster/trends and /roster/attrition-detail
   // endpoints, which are pre-aggregated by month — filtering the returned
-  // arrays is exact, not an approximation). Memoized on `filters.monthYear`
-  // so callers building their own `useMemo`'d chart data (see
-  // hr-analytics-page.tsx) can depend on `monthFilter` itself instead of a
-  // fresh closure identity every render.
+  // arrays is exact, not an approximation). Memoized on the current
+  // `monthYear` selection so callers building their own `useMemo`'d chart
+  // data (see hr-analytics-page.tsx) can depend on `monthFilter` itself
+  // instead of a fresh closure identity every render. Empty selection means
+  // "all months" — matches how the multi-select emits `[]` for "none picked".
   const monthFilter = React.useCallback(
-    (month: string) => filters.monthYear === ALL || filters.monthYear === month,
-    [filters.monthYear],
+    (month: string) => monthYear.length === 0 || monthYear.includes(month),
+    [monthYear],
   )
 
   return {

@@ -22,6 +22,7 @@ import {
 } from '@/lib/utilization-api'
 import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
+import { FilterControl } from '@/components/dashboard/filter-control'
 
 /** Formats a KPI number, falling back to a dash instead of "NaN"/"undefined"
  * when the backend returns a null/undefined value (e.g. Internal Hours can
@@ -317,19 +318,14 @@ export function UtilizationResultsPage() {
       </div>
 
       <FiltersPanel>
-        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
-          <label className="text-xs font-medium text-muted-foreground">
-            {labelOf('week', 'Month / Week')}
-          </label>
-          <div className="w-full min-w-0 sm:w-[180px]">
-            <HierarchicalMultiSelect
-              items={dateItems}
-              selected={filters.week ?? []}
-              onChange={setWeeks}
-              placeholder="All Weeks"
-            />
-          </div>
-        </div>
+        <FilterControl label={labelOf('week', 'Month / Week')}>
+          <HierarchicalMultiSelect
+            items={dateItems}
+            selected={filters.week ?? []}
+            onChange={setWeeks}
+            placeholder="All Weeks"
+          />
+        </FilterControl>
         <FilterSelect
           label={labelOf('region', 'Region')}
           value={filters.region?.[0]}

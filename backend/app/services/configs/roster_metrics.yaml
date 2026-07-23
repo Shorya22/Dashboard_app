@@ -150,6 +150,23 @@ filters:
   # DERIVED filters — they reuse a chart's own bucketing rules rather than
   # re-deriving the bands, so filtering by "5-8 Years" and the chart that
   # draws that band can never disagree about where the boundary is.
+
+  # HR Analytics narrows the pre-aggregated month arrays (Month-Wise
+  # Headcount, Joiners vs Leavers, Month-Wise Resignation) IN THE BROWSER
+  # by month label — the roster endpoints don't accept a month filter
+  # because there is no month column on the roster to filter against; the
+  # trend/attrition endpoints return one row per available month and the
+  # page keeps only the picked ones (see `monthFilter` in
+  # `use-hr-analytics-filters.ts`). `client_only: true` marks that: the
+  # filter has no `column_role` and doesn't flow through `apply_filters`.
+  # `hierarchical` shape: the frontend nests each "Mon YYYY" leaf under its
+  # Year group (see `monthsToHierarchy` in `frontend/src/lib/utilization-api.ts`).
+  month_year:
+    client_only: true
+    label: "Month / Year"
+    type: hierarchical
+    applies_to_pages: [hr-analytics]
+
   experience:
     derived_from_chart: workforce_by_experience_band
     label: "Experience"

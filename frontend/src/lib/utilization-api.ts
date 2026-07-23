@@ -164,6 +164,38 @@ export function weekHierarchyToItems(
   return items
 }
 
+/** Build the Year > Month tree for HR Analytics' Month/Year filter from
+ * the flat list of month labels the roster trends endpoint emits
+ * (formatted `"%b %Y"` server-side, e.g. `"Apr 2026"`). Year is a
+ * hierarchy-only group (`isGroup: true`); Month is the selectable leaf
+ * whose `value` is the exact backend label — so the filter comparison in
+ * `useHrAnalyticsFilters.monthFilter` stays a plain equality check on
+ * the trend-array `month` field and the backend contract doesn't change.
+ *
+ * Order is preserved from the input (the trends endpoint already walks
+ * months chronologically via `build_available_months`), and each Year
+ * group's Month leaves stay in the order they first appear. */
+export function monthsToHierarchy(monthLabels: string[]): HierarchicalItem[] {
+  const items: HierarchicalItem[] = []
+  const seenYears = new Set<string>()
+  for (const label of monthLabels) {
+    // "%b %Y" -> ["Apr", "2026"]. Any label that doesn't parse into a
+    // real Date is skipped rather than silently mis-grouped.
+    const parts = label.split(' ')
+    if (parts.length !== 2) continue
+    const d = new Date(`${label} 01`)
+    if (Number.isNaN(d.getTime())) continue
+    const year = parts[1]
+    const yearKey = `__year::${year}`
+    if (!seenYears.has(yearKey)) {
+      seenYears.add(yearKey)
+      items.push({ value: yearKey, label: year, isGroup: true })
+    }
+    items.push({ value: label, label, parent: yearKey })
+  }
+  return items
+}
+
 export interface FilterOptions {
   weeks: string[]
   /** Year > Month > Week nesting for the cascading date filter. */

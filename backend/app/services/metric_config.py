@@ -310,7 +310,14 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
     filters_block = cfg.get("filters", {})
     for name, spec in filters_block.items():
         chart_ref = spec.get("derived_from_chart")
-        if chart_ref is not None:
+        # `client_only: true` marks a page-local filter that narrows a
+        # pre-aggregated response client-side (e.g. HR Analytics' Month /
+        # Year filter, which picks months out of the trend arrays the
+        # browser already has) — it has neither a source column nor a
+        # backing chart, and it's never sent through `apply_filters`.
+        if spec.get("client_only"):
+            pass
+        elif chart_ref is not None:
             if chart_ref not in charts:
                 problems.append(
                     f"filters.{name}: derived_from_chart {chart_ref!r} is not a "

@@ -1710,6 +1710,13 @@ def apply_filters(
             continue
         spec = declared[name]
 
+        # Client-only filters (e.g. HR Analytics' Month / Year) narrow a
+        # pre-aggregated response in the browser and never reach the roster
+        # scan — they carry no column_role / derived_from_chart. Silently
+        # skip so a page can safely forward its whole filter state.
+        if spec.get("client_only"):
+            continue
+
         # A filter can be a plain column, or a DERIVED bucket reusing a
         # chart's own definition (e.g. "Experience = 5-8 Years"), so the
         # filter and the chart it filters can never use different rules.

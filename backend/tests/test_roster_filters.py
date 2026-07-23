@@ -47,11 +47,23 @@ def roster() -> pd.DataFrame:
     return get_roster_df()
 
 
+def _server_filters() -> dict[str, dict]:
+    """Every filter that actually runs through `apply_filters` — client-only
+    filters (e.g. Month/Year narrowing the trend arrays in the browser)
+    have no server-side row-filter behavior and are excluded from tests
+    that iterate the roster."""
+    return {
+        name: spec
+        for name, spec in metric_config.filters().items()
+        if not spec.get("client_only")
+    }
+
+
 def _column_filters() -> list[str]:
     """Declared filters backed by a single column (excludes derived ones)."""
     return [
         name
-        for name, spec in metric_config.filters().items()
+        for name, spec in _server_filters().items()
         if "derived_from_chart" not in spec
     ]
 
@@ -59,7 +71,7 @@ def _column_filters() -> list[str]:
 def _derived_filters() -> list[str]:
     return [
         name
-        for name, spec in metric_config.filters().items()
+        for name, spec in _server_filters().items()
         if "derived_from_chart" in spec
     ]
 
@@ -80,7 +92,7 @@ def _option_values(df: pd.DataFrame, name: str, spec: dict) -> list[str]:
 # 1. Every option of every filter narrows to only matching rows
 # --------------------------------------------------------------------------- #
 def test_every_filter_option_returns_only_matching_rows(roster):
-    for name, spec in metric_config.filters().items():
+    for name, spec in _server_filters().items():
         chart = spec.get("derived_from_chart")
         column = None if chart else metric_config.column(spec["column_role"])
         for value in _option_values(roster, name, spec):
@@ -98,7 +110,7 @@ def test_single_value_filters_partition_the_roster(roster):
     count reproduces the total. Catches both over-matching and any option that
     silently matches nothing."""
     total = len(roster)
-    for name, spec in metric_config.filters().items():
+    for name, spec in _server_filters().items():
         if "derived_from_chart" in spec:
             continue  # derived bands are covered by the derived test below
         column = metric_config.column(spec["column_role"])
@@ -251,7 +263,7 @@ def test_api_applies_each_declared_filter(api, roster):
     assert full.status_code == 200, full.text
     total = full.json()["total"]
 
-    for name, spec in metric_config.filters().items():
+    for name, spec in _server_filters().items():
         value = _option_values(roster, name, spec)[0]
         resp = api.get(
             "/api/v1/roster/employees",
