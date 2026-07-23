@@ -431,8 +431,17 @@ export const CustomBarChart = React.memo(function CustomBarChart({
   // holding the plot scrolls — both title strips are its siblings, so
   // neither one scrolls with it.
   const plotBox = rowHeightPx ? (
+    // `min-h-full` on the inner sizer means the plot fills the card whenever
+    // the fixed-row height (`rows × rowHeightPx`) would be SHORTER than the
+    // card — the case after a filter narrows the chart to one or two
+    // categories. Without it a single-row chart collapsed to a ~32px strip:
+    // dead space below, a stranded sliver of a bar, and a hover target too
+    // small to trigger the tooltip. When there are enough rows to exceed the
+    // card, the explicit height wins and the box scrolls as before.
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div style={{ height: `${data.length * rowHeightPx}px` }}>{plot}</div>
+      <div className="min-h-full" style={{ height: `${data.length * rowHeightPx}px` }}>
+        {plot}
+      </div>
     </div>
   ) : (
     <div className="min-h-0 flex-1">{plot}</div>
