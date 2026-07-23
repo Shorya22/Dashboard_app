@@ -11,7 +11,7 @@ page as we verify them; anything not listed here has not been reviewed yet.
 | HR Home (HR Portal) | ✅ all 4 cards + 4 charts verified |
 | HR Analytics | ✅ 5 cards + 4 charts (Attrition % is a formula — see below) |
 | Workforce | ✅ 6 cards + 3 charts verified |
-| Skills & Experience | ⬜ not reviewed |
+| Skills & Experience | ✅ 3 cards + 4 charts verified |
 | Employee Directory | ⬜ not reviewed |
 | Utilization pages | ⬜ not reviewed |
 
@@ -530,6 +530,37 @@ EMEA 34, APAC 1, Region TBD 2.
 > as `AMER / APAC / EMEA / Hexaware`, which showed an always-empty
 > **Hexaware** bar and **hid the Region TBD** employees entirely. It now
 > renders whatever regions the data contains.
+
+---
+
+## Page 5 — Skills & Experience
+
+### Cards
+Total Employees (52) and Departments (27) reuse existing definitions.
+
+**Skills Covered — `14`**: distinct values of the `skill` role (the broad
+`Skill` column, not Primary Skill), excluding blanks and any value
+containing "TBD". Declared with `exclude_containing: "TBD"`.
+
+### Charts: the three "Skill Bifurcation" stacked bars
+Each is a `crosstab` — Primary Skill (rows) x a dimension. The dimension
+**reuses another chart's own bucketing** via `dimension_from_chart`:
+
+| Chart | Dimension reused from |
+|---|---|
+| by Experience | `workforce_by_experience_band` (the experience bands) |
+| by Seniority | `workforce_by_seniority_category` (the keyword bands) |
+| by Region | `headcount_by_region` |
+
+So "Skill Bifurcation by Experience" and the standalone experience chart
+use the **same** bands by construction — change them in one place and both
+move. This removed a separate Python `_experience_band` copy that agreed
+today but had no guarantee of staying in step (locked by
+`test_crosstab_dimension_cannot_drift_from_the_standalone_chart`).
+
+### Chart: Total Employees by Experience Band — `7 / 0 / 2 / 12 / 31`
+The standalone `workforce_by_experience_band` chart (numeric_bands),
+identical to the one on HR Home.
 
 ---
 

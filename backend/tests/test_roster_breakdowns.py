@@ -23,7 +23,6 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 from app.services.roster_metrics import (
     DEFAULT_ROSTER_PATH,
-    _experience_band,
     _seniority_category,
     get_data_quality_warnings,
     get_departments,
@@ -363,13 +362,25 @@ def test_get_data_quality_warnings_flags_designation_casing_mismatch():
 
 
 def test_experience_band_boundaries():
-    assert _experience_band(0.5) == "0-1 Years"
-    assert _experience_band(1.0) == "1-3 Years"  # half-open [1,3)
-    assert _experience_band(2.99) == "1-3 Years"
-    assert _experience_band(3.0) == "3-5 Years"
-    assert _experience_band(5.0) == "5-8 Years"
-    assert _experience_band(8.0) == "8+ Years"
-    assert _experience_band(float("nan")) == "Unknown"
+    # Bands are now defined once in roster_metrics.yaml and applied by the
+    # engine's _numeric_band. Same half-open [lower, upper) boundaries as
+    # before; asserted here against the config so a threshold change is a
+    # deliberate, tested edit.
+    from app.services import metric_config
+    from app.services.roster_metrics import _numeric_band
+
+    bands = metric_config.chart("workforce_by_experience_band")["bands"]
+
+    def band(v):
+        return _numeric_band(v, bands, "Unknown")
+
+    assert band(0.5) == "0-1 Years"
+    assert band(1.0) == "1-3 Years"  # half-open [1,3)
+    assert band(2.99) == "1-3 Years"
+    assert band(3.0) == "3-5 Years"
+    assert band(5.0) == "5-8 Years"
+    assert band(8.0) == "8+ Years"
+    assert band(float("nan")) == "Unknown"
 
 
 def test_get_workforce_by_experience_band(sample_roster):

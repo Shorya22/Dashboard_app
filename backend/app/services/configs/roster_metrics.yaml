@@ -38,7 +38,8 @@ columns:
   working_entity: "Working Entity"
   seniority: "Seniorirty Level"      # source-file typo kept verbatim
   experience_total: "Total Experience"
-  primary_skill: "Primary Skill"
+  primary_skill: "Primary Skill"    # stacked-bar rows on Skills & Experience
+  skill: "Skill"                    # broader category — the Skills Covered card
   employment_type: "Type"                # GCC / Non GCC
   joining_date: "DOJ (DEPT)"             # drives Joiners + Month Wise Headcount
   leaving_date: "LWD"                    # drives Leavers / Month-Wise Resignation
@@ -156,6 +157,15 @@ cards:
     column_role: employee_id
     status_filter: inactive
 
+  skills_covered:
+    label: "Skills Covered"
+    counts: distinct
+    column_role: skill
+    exclude_containing: "TBD"        # e.g. "Skill TBD"; blanks excluded anyway
+    note: >-
+      Distinct `Skill` values (the broad category, not Primary Skill),
+      excluding blanks and any value containing "TBD".
+
   projects:
     label: "Projects"
     counts: distinct
@@ -264,6 +274,38 @@ charts:
     column_role: employment_type    # GCC / Non GCC
     scope: all
     blank_label: "Type TBD"
+
+  # --- Skills & Experience ----------------------------------------------
+  # Stacked bars: Primary Skill x a dimension. Each dimension REUSES an
+  # existing chart's bucketing (dimension_from_chart), so e.g. the
+  # experience bands here are the very same ones the standalone experience
+  # chart uses and cannot drift.
+  skill_bifurcation_by_experience:
+    label: "Skill Bifurcation by Experience"
+    type: crosstab
+    scope: all
+    row_column_role: primary_skill
+    row_key: primary_skill
+    dimension_from_chart: workforce_by_experience_band
+    dimension_key: experience_band
+
+  skill_bifurcation_by_seniority:
+    label: "Skill Bifurcation by Seniority"
+    type: crosstab
+    scope: all
+    row_column_role: primary_skill
+    row_key: primary_skill
+    dimension_from_chart: workforce_by_seniority_category
+    dimension_key: seniority_category
+
+  skill_bifurcation_by_region:
+    label: "Skill Bifurcation by Region"
+    type: crosstab
+    scope: all
+    row_column_role: primary_skill
+    row_key: primary_skill
+    dimension_from_chart: headcount_by_region
+    dimension_key: region
 
   # --- HR Analytics ------------------------------------------------------
   # `monthly_series` walks the dataset's month range and evaluates each

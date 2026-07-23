@@ -111,3 +111,57 @@ def test_unimplemented_measure_is_caught(cfg):
     cfg["charts"]["month_wise_headcount"]["series"][0]["measure"] = "made_up"
     with pytest.raises(metric_config.MetricConfigError, match="made_up"):
         metric_config.validate_metric_config(cfg)
+
+
+def test_crosstab_dimension_cannot_drift_from_the_standalone_chart():
+    """
+    'Skill Bifurcation by Experience' buckets experience by reusing the
+    standalone experience chart's bands (dimension_from_chart), so the two
+    are the same definition. Changing the bands in one place must move
+    both — the whole reason the separate Python `_experience_band` copy was
+    removed.
+    """
+    import copy
+
+    import yaml
+
+    from app.services import roster_metrics
+    from app.services.roster_metrics import load_roster
+    from app.services.validation.engine import prepare_dataset
+
+    df = prepare_dataset(
+        load_roster(
+            __import__("pathlib").Path(__file__).resolve().parent
+            / "fixtures"
+            / "roster_snapshot.xlsx"
+        ),
+        "roster",
+    )
+
+    original = copy.deepcopy(metric_config.load_metric_config())
+    cfg_path = (
+        __import__("pathlib").Path(metric_config.__file__).resolve().parent
+        / "configs"
+        / "roster_metrics.yaml"
+    )
+    backup = cfg_path.read_text()
+    try:
+        cfg = yaml.safe_load(backup)
+        cfg["charts"]["workforce_by_experience_band"]["bands"] = [
+            {"below": 5, "label": "Junior"},
+            {"label": "Senior"},
+        ]
+        cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        metric_config.load_metric_config.cache_clear()
+
+        standalone = set(roster_metrics.get_workforce_by_experience_band(df))
+        crosstab = {
+            r["experience_band"]
+            for r in roster_metrics.get_skill_bifurcation_by_experience_band(df)
+        }
+        assert standalone == {"Junior", "Senior"}
+        assert crosstab <= {"Junior", "Senior"}  # same bands, no old labels
+    finally:
+        cfg_path.write_text(backup)
+        metric_config.load_metric_config.cache_clear()
+        assert metric_config.load_metric_config() == original

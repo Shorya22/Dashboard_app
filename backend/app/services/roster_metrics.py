@@ -89,6 +89,8 @@ def evaluate_chart(df: pd.DataFrame, chart_name: str) -> dict[str, int]:
     spec = metric_config.chart(chart_name)
     if spec["type"] == "monthly_series":
         return _evaluate_monthly_series(df, spec)
+    if spec["type"] == "crosstab":
+        return _evaluate_crosstab(df, spec)
 
     scope = _chart_scope(df, spec)
     keys = chart_labels(scope, spec)
@@ -145,6 +147,39 @@ def _evaluate_monthly_series(df: pd.DataFrame, spec: dict) -> list[dict]:
             row[series["key"]] = get_total_employees(df[in_month])
         rows.append(row)
     return rows
+
+
+def _evaluate_crosstab(df: pd.DataFrame, spec: dict) -> list[dict]:
+    """
+    Distinct-employee cross-tab of a row column against a dimension,
+    returned long-format (one row per row-value/dimension-value pair) for
+    a stacked bar.
+
+    The dimension REUSES another chart's own labelling via
+    `dimension_from_chart` — so "Skill Bifurcation by Experience" buckets
+    experience with the exact same bands as the standalone experience
+    chart, and cannot drift from it. This replaced a second, separate
+    Python `_experience_band` copy that happened to agree today but had no
+    guarantee of staying in step.
+    """
+    scope = _chart_scope(df, spec)
+    row_col = metric_config.column(spec["row_column_role"])
+    dim_spec = metric_config.chart(spec["dimension_from_chart"])
+    dim_labels = chart_labels(scope, dim_spec)
+
+    id_col = metric_config.employee_id_column()
+    grouped = (
+        scope.assign(_row=scope[row_col], _dim=dim_labels)
+        .groupby(["_row", "_dim"], dropna=True)[id_col]
+        .nunique()
+    )
+    row_key = spec["row_key"]
+    dim_key = spec["dimension_key"]
+    return [
+        {row_key: str(r), dim_key: str(d), "count": int(n)}
+        for (r, d), n in grouped.items()
+        if n > 0
+    ]
 
 
 def chart_labels(df: pd.DataFrame, spec: dict) -> pd.Series:
@@ -226,6 +261,14 @@ def evaluate_card(df: pd.DataFrame, card_name: str) -> int:
         values = values.apply(
             lambda v: _normalize_designation_label(v) if pd.notna(v) else v
         )
+
+    exclude = spec.get("exclude_containing")
+    if exclude:
+        # Drop values containing this substring (e.g. "Skill TBD") before
+        # counting — the DAX for Skills Covered excludes TBD placeholders.
+        values = values[
+            values.notna() & ~values.astype(str).str.contains(exclude, na=False)
+        ]
 
     counts = spec.get("counts", "distinct")
     if counts != "distinct":
@@ -1137,9 +1180,7 @@ def get_skills_covered(df: pd.DataFrame) -> int:
     Reads: `Skill`.
     Real file: returns 16, matching the Power BI reference exactly.
     """
-    skill = df["Skill"]
-    mask = skill.notna() & ~skill.astype(str).str.contains("TBD", na=False)
-    return int(skill[mask].nunique())
+    return evaluate_card(df, "skills_covered")
 
 
 @cache_on_df
@@ -1287,31 +1328,6 @@ def get_headcount_by_seniority(df: pd.DataFrame) -> dict[str, int]:
 # --------------------------------------------------------------------------
 
 EXPERIENCE_BAND_ORDER = ["0-1 Years", "1-3 Years", "3-5 Years", "5-8 Years", "8+ Years"]
-
-
-def _experience_band(total_experience: float) -> str:
-    """
-    PROVISIONAL bucketing of `Total Experience` into the bands shown in
-    the reference PDF ("0-1 Years", "1-3 Years", "3-5 Years", "5-8
-    Years", "8+ Years"). The real `Experience Band` / `Experience Band
-    Sort` calculated columns are confirmed to EXIST on HR MASTER (per
-    data-model SKILL.md) but their formula bodies (exact bucket
-    boundaries, inclusive/exclusive edges) were NOT provided — this is a
-    best-effort guess at the boundaries only, using half-open intervals
-    `[lower, upper)` except the last band, and MUST be reconciled against
-    the real DAX before being treated as validated.
-    """
-    if pd.isna(total_experience):
-        return "Unknown"
-    if total_experience < 1:
-        return "0-1 Years"
-    if total_experience < 3:
-        return "1-3 Years"
-    if total_experience < 5:
-        return "3-5 Years"
-    if total_experience < 8:
-        return "5-8 Years"
-    return "8+ Years"
 
 
 @cache_on_df
@@ -1510,26 +1526,6 @@ def get_exits_table(df: pd.DataFrame) -> list[dict]:
 # --------------------------------------------------------------------------
 
 
-def _skill_crosstab(df: pd.DataFrame, dimension: pd.Series, dimension_name: str) -> list[dict]:
-    """
-    Shared helper: distinct-employee cross-tab of `Primary Skill` x an
-    arbitrary categorical `dimension` Series (same index as `df`).
-    Returns a flat list of {"primary_skill": ..., dimension_name: ...,
-    "count": int} rows (long format), which is what Tremor/Recharts
-    stacked-bar components consume directly (one row per
-    skill/dimension-value combination).
-    """
-    skill = df["Primary Skill"]
-    grouped = df.assign(_dimension=dimension).groupby(
-        [skill, "_dimension"], dropna=True
-    )["NEW_EMP_ID"].nunique()
-    return [
-        {"primary_skill": str(skill_val), dimension_name: str(dim_val), "count": int(count)}
-        for (skill_val, dim_val), count in grouped.items()
-        if count > 0
-    ]
-
-
 @cache_on_df
 def get_skill_bifurcation_by_experience_band(df: pd.DataFrame) -> list[dict]:
     """
@@ -1538,8 +1534,7 @@ def get_skill_bifurcation_by_experience_band(df: pd.DataFrame) -> list[dict]:
     Experience" stacked bar (Primary Skill x Experience Band).
     Reads: `Primary Skill`, `Total Experience`, `NEW_EMP_ID`.
     """
-    bands = df["Total Experience"].apply(_experience_band)
-    return _skill_crosstab(df, bands, "experience_band")
+    return evaluate_chart(df, "skill_bifurcation_by_experience")
 
 
 @cache_on_df
@@ -1550,8 +1545,7 @@ def get_skill_bifurcation_by_seniority_category(df: pd.DataFrame) -> list[dict]:
     stacked bar (Primary Skill x Seniority Category).
     Reads: `Primary Skill`, `Seniorirty Level`, `NEW_EMP_ID`.
     """
-    categories = df["Seniorirty Level"].apply(_seniority_category)
-    return _skill_crosstab(df, categories, "seniority_category")
+    return evaluate_chart(df, "skill_bifurcation_by_seniority")
 
 
 @cache_on_df
@@ -1563,7 +1557,7 @@ def get_skill_bifurcation_by_region(df: pd.DataFrame) -> list[dict]:
     Category groupings.
     Reads: `Primary Skill`, `Region`, `NEW_EMP_ID`.
     """
-    return _skill_crosstab(df, df["Region"], "region")
+    return evaluate_chart(df, "skill_bifurcation_by_region")
 
 
 # --------------------------------------------------------------------------

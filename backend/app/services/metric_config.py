@@ -155,7 +155,7 @@ def seniority_category(value: object) -> str:
 # open that page, with a stack trace instead of an explanation. These checks
 # run once when the config is loaded and name the exact problem.
 
-SUPPORTED_CHART_TYPES = {"count_by", "numeric_bands", "keyword_bands", "monthly_series"}
+SUPPORTED_CHART_TYPES = {"count_by", "numeric_bands", "keyword_bands", "monthly_series", "crosstab"}
 SUPPORTED_SCOPES = {"all", "present", "exited"}
 SUPPORTED_MEASURES = {"closing_headcount"}
 
@@ -219,6 +219,17 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                         f"{series['measure']!r} is not implemented "
                         f"(supported: {sorted(SUPPORTED_MEASURES)})"
                     )
+        elif kind == "crosstab":
+            need_role(chart.get("row_column_role"), f"charts.{name}")
+            dim = chart.get("dimension_from_chart")
+            if dim not in charts:
+                problems.append(
+                    f"charts.{name}: dimension_from_chart {dim!r} is not a "
+                    f"declared chart (known: {sorted(charts)})"
+                )
+            for key in ("row_key", "dimension_key"):
+                if key not in chart:
+                    problems.append(f"charts.{name}: crosstab needs `{key}`")
         else:
             need_role(chart.get("column_role"), f"charts.{name}")
 
