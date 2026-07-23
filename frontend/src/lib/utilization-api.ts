@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from './api-client'
+import { marketDisplayLabel } from './chart-colors'
 import type { HierarchicalItem } from '@/components/dashboard/hierarchical-multi-select'
 
 // Types mirror /api/v1/utilization/* responses (see /openapi.json). Keep
@@ -43,6 +44,48 @@ export interface WeekHierarchyEntry {
   year: string
   month: string
   week: string
+}
+
+/** Build the Region > Market tree for the hierarchical Region/Market
+ * multi-select, matching the Search page: Region parents from the flat
+ * `regions` list, Market children from the (region, market) pairs of
+ * `/utilization/by-region-market` (the only endpoint that associates the
+ * two). Market values keep the raw string the API filters on, but display
+ * the confirmed alias (BN -> BENO, Technology -> AMER). */
+export function buildRegionMarketItems(
+  regions: string[] | undefined,
+  pairs: { region: string; market: string }[] | undefined,
+): HierarchicalItem[] {
+  const items: HierarchicalItem[] = (regions ?? []).map((r) => ({ value: r, label: r }))
+  const seen = new Set<string>()
+  for (const { region, market } of pairs ?? []) {
+    const key = `${region}::${market}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    items.push({ value: key, label: marketDisplayLabel(market), parent: region })
+  }
+  return items
+}
+
+/** Split a hierarchical Region/Market selection into `region[]` / `market[]`
+ * record-filter params: a plain value is a Region, a `"<region>::<market>"`
+ * value is a Market (the market alone narrows the rows; the backend ANDs the
+ * two). Undefined when nothing of that kind is selected. */
+export function splitRegionMarketSelection(selected: string[]): {
+  region?: string[]
+  market?: string[]
+} {
+  const regions: string[] = []
+  const markets: string[] = []
+  for (const v of selected) {
+    const idx = v.indexOf('::')
+    if (idx === -1) regions.push(v)
+    else markets.push(v.slice(idx + 2))
+  }
+  return {
+    region: regions.length ? regions : undefined,
+    market: markets.length ? markets : undefined,
+  }
 }
 
 /** Build the Month > Week tree for the hierarchical date multi-select, from
@@ -274,8 +317,14 @@ export function useUtilizationRecordsAll(filters: Omit<RecordsFilters, 'limit' |
   return useQuery({
     queryKey: ['utilization', 'records-all', filters],
     queryFn: async () => {
+      // `indexes: null` serializes array params (region/market/week) as
+      // repeated keys (`?region=EMEA&region=AMER`) — the form FastAPI's
+      // `Query(None)` list parsing reads. Without it axios sends `region[]=`,
+      // which the backend ignores, silently dropping every multi-value
+      // filter (the single-page `useUtilizationRecords` already sets this).
       const first = await apiClient.get<RecordsResponse>('/v1/utilization/records', {
         params: { ...filters, limit: PAGE_LIMIT, offset: 0 },
+        paramsSerializer: { indexes: null },
       })
       const items = [...first.data.items]
       const total = first.data.total
@@ -283,6 +332,7 @@ export function useUtilizationRecordsAll(filters: Omit<RecordsFilters, 'limit' |
       while (offset < total) {
         const page = await apiClient.get<RecordsResponse>('/v1/utilization/records', {
           params: { ...filters, limit: PAGE_LIMIT, offset },
+          paramsSerializer: { indexes: null },
         })
         items.push(...page.data.items)
         offset += PAGE_LIMIT

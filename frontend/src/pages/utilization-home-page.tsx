@@ -5,6 +5,8 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterSelect } from '@/components/dashboard/filter-select'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import {
+  buildRegionMarketItems,
+  splitRegionMarketSelection,
   weekHierarchyToItems,
   useUtilizationByRegionMarket,
   useUtilizationFilterOptions,
@@ -28,21 +30,33 @@ export function UtilizationHomePage() {
   const utilizationSummary = useUtilizationSummary()
 
   const [hoursType, setHoursType] = React.useState<string | undefined>()
-  const [region, setRegion] = React.useState<string | undefined>()
+  // Region/Market is one hierarchical, multi-select tree (like the Search
+  // page): Region parents, Market children, ticking either level. Selection
+  // is split into region[]/market[] record-filter params.
+  const [regionMarket, setRegionMarket] = React.useState<string[]>([])
   // Date is one hierarchical Month > Week multi-select (like the Search page):
   // the selection is a list of exact week-start dates, so ticking a month
   // ticks all its weeks.
   const [weeks, setWeeks] = React.useState<string[]>([])
   const [department, setDepartment] = React.useState<string | undefined>()
 
+  const regionMarketItems = React.useMemo(
+    () => buildRegionMarketItems(filterOptions.data?.regions, byRegionMarket.data?.items),
+    [filterOptions.data, byRegionMarket.data],
+  )
   const dateItems = React.useMemo(
     () => weekHierarchyToItems(filterOptions.data?.week_hierarchy),
     [filterOptions.data],
   )
 
   const filters = React.useMemo(
-    () => ({ hours_type: hoursType, region, week: weeks, department }),
-    [hoursType, region, weeks, department],
+    () => ({
+      hours_type: hoursType,
+      ...splitRegionMarketSelection(regionMarket),
+      week: weeks,
+      department,
+    }),
+    [hoursType, regionMarket, weeks, department],
   )
 
   const recordsAll = useUtilizationRecordsAll(filters)
@@ -75,10 +89,11 @@ export function UtilizationHomePage() {
       .map(([week_start, v]) => ({ week: week_start, ...v }))
   }, [recordsAll.data])
 
-  // NOTE: `region`/`market` are not present on individual booking records
-  // returned by /api/v1/utilization/records, and /utilization/by-region-market
-  // doesn't accept filter query params — so this chart can't yet be
-  // filtered client-side. Flagged to the team; see final report.
+  // NOTE: this "Total Hours by Market/Region" chart reads from
+  // /utilization/by-region-market, which takes no filter params, so it stays
+  // global — the Region/Market filter above narrows the records-based KPIs and
+  // Weekly Hours Trend (which DO filter server-side by region/market), not
+  // this one aggregate chart.
   //
   // Combined "Region/Market" label built from the two fields returned by
   // /utilization/by-region-market. The raw `Market (EC)` value is remapped
@@ -107,12 +122,17 @@ export function UtilizationHomePage() {
           options={filterOptions.data?.hours_types ?? []}
           onChange={setHoursType}
         />
-        <FilterSelect
-          label="Region"
-          value={region}
-          options={filterOptions.data?.regions ?? []}
-          onChange={setRegion}
-        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
+          <label className="text-xs font-medium text-muted-foreground">Region/Market</label>
+          <div className="w-full min-w-0 sm:w-[180px]">
+            <HierarchicalMultiSelect
+              items={regionMarketItems}
+              selected={regionMarket}
+              onChange={setRegionMarket}
+              placeholder="All"
+            />
+          </div>
+        </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
           <label className="text-xs font-medium text-muted-foreground">Month / Week</label>
           <div className="w-full min-w-0 sm:w-[180px]">
