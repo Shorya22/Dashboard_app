@@ -11,6 +11,72 @@
 
 version: 1
 
+# ---------------------------------------------------------------------------
+# Column roles — the booking-side equivalent of the roster's `columns:` block.
+# ---------------------------------------------------------------------------
+# The filters block below references these ROLES so a renamed source column
+# is a one-line change here rather than a hunt through Python. Hours-side
+# columns still live under `hours:` for backward-compat with existing
+# metric_config.booking_column() call sites (hours_type / hours_value).
+columns:
+  region: "Region (EC)"
+  market: "Market (EC)"
+  department: "Department"
+  entity: "Team (EC)"
+  holding: "Holding"
+  hours_type: "Booked Hours Type"
+  week_start: "Monday of Week"
+  month: "Month"
+
+# ---------------------------------------------------------------------------
+# Filters — the dropdowns the Utilization pages filter by.
+# ---------------------------------------------------------------------------
+# Same shape as the roster's `filters:` block. Values remain data-derived
+# at request time by `booking_metrics.get_filter_options`; only the
+# DEFINITIONS (label, hierarchy, page mapping) live here.
+filters:
+  region:
+    column_role: region
+    label: "Region"
+    type: multi
+    nests: market
+    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+  market:
+    column_role: market
+    label: "Market"
+    type: multi
+    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+  department:
+    column_role: department
+    label: "Department"
+    type: multi
+    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+  entity:
+    column_role: entity
+    label: "Entity"
+    type: multi
+    applies_to_pages: [utilization-search, utilization-results]
+  holding:
+    column_role: holding
+    label: "Holding"
+    type: multi
+    applies_to_pages: [utilization-search, utilization-results]
+  hours_type:
+    column_role: hours_type
+    label: "Hours Type"
+    type: single
+    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+  # Year > Month > Week is declared hierarchical; the Year/Month grouping
+  # is derived on the frontend from the leaf `week_start` (Monday of Week)
+  # via `weekHierarchyToItems`, so Year and Month are NOT separate filter
+  # entries — the tree comes out of `/utilization/filter-options`'s
+  # `week_hierarchy` shape. See `docs/FILTERS.md`.
+  week:
+    column_role: week_start
+    label: "Month / Week"
+    type: hierarchical
+    applies_to_pages: [utilization-home, utilization-search, utilization-results, employee-utilization]
+
 hours:
   # Column holding the number of hours to sum.
   value_column: "Employee Booked Hours"

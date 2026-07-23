@@ -17,11 +17,14 @@ import {
   regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 
 
 
 export function WorkforcePage() {
-  
+  const filterConfig = useFilterConfig('roster')
+  const labelOf = (key: string, fallback: string) =>
+    filterLabel(filterConfig.data?.filters, key, fallback)
 
   const employeesQuery = useRosterEmployeesAll()
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
@@ -40,19 +43,21 @@ export function WorkforcePage() {
   )
 
   const filterDefs = [
-    { key: 'grade', label: 'Grade', options: buildOptions(distinctValues(employees, 'grade')) },
+    { key: 'grade', label: labelOf('grade', 'Grade'), options: buildOptions(distinctValues(employees, 'grade')) },
     {
       key: 'department',
-      label: 'Department',
+      label: labelOf('department', 'Department'),
       options: buildOptions(distinctValues(employees, 'designation')),
     },
     {
       // Reference PDF labels this single dropdown "Type/Primary Skill" —
       // filtering by Primary Skill since "Type" (GCC/Non-GCC) is already
       // covered by other pages and Primary Skill is the more distinctive
-      // axis for this page's charts.
+      // axis for this page's charts. Only the "Primary Skill" half is
+      // config-driven; the "Type" prefix is a page-local display choice
+      // (the actual server-side filter key is `skill`).
       key: 'skill',
-      label: 'Type/Primary Skill',
+      label: `Type/${labelOf('skill', 'Primary Skill')}`,
       options: buildOptions(distinctValues(employees, 'primary_skill')),
     },
   ]
@@ -124,7 +129,7 @@ export function WorkforcePage() {
         hierarchical={[
           {
             key: 'regionMarket',
-            label: 'Region/Market',
+            label: `${labelOf('region', 'Region')}/${labelOf('market', 'Market')}`,
             items: regionMarketItems,
             selected: regionMarket,
             onChange: setRegionMarket,

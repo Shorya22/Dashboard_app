@@ -1,8 +1,11 @@
+import { ChevronDown } from 'lucide-react'
 import { ALL, type FilterDef, type FilterValues } from '@/lib/employee-filters'
 import {
   HierarchicalMultiSelect,
   type HierarchicalItem,
 } from '@/components/dashboard/hierarchical-multi-select'
+import { FilterControl, filterTriggerClasses } from '@/components/dashboard/filter-control'
+import { cn } from '@/lib/utils'
 
 /** A hierarchical, multi-select filter (e.g. Region > Market) rendered in the
  * same row as the plain dropdowns. Uses the same tree component as the Search
@@ -31,42 +34,36 @@ interface FilterBarProps {
  * per-chart state — per the dashboard-design skill's filter-propagation rule. */
 export function FilterBar({ filters, values, onChange, hierarchical }: FilterBarProps) {
   return (
-    <div className="flex flex-col flex-wrap items-stretch gap-3 rounded-2xl border border-border bg-card p-3 shadow-card sm:flex-row sm:items-center">
+    <div className="flex flex-col flex-wrap items-stretch gap-3 rounded-2xl border border-border bg-card p-3 shadow-card sm:flex-row sm:items-end">
       {hierarchical?.map((h) => (
-        <div
-          key={h.key}
-          className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none sm:flex-row sm:items-center sm:gap-2"
-        >
-          <label className="text-xs font-medium text-muted-foreground">{h.label}</label>
-          <div className="w-full min-w-0 sm:w-[200px]">
-            <HierarchicalMultiSelect
-              items={h.items}
-              selected={h.selected}
-              onChange={h.onChange}
-              searchable={h.searchable}
-              placeholder="All"
-            />
-          </div>
-        </div>
+        <FilterControl key={h.key} label={h.label}>
+          <HierarchicalMultiSelect
+            items={h.items}
+            selected={h.selected}
+            onChange={h.onChange}
+            searchable={h.searchable}
+            placeholder="All"
+          />
+        </FilterControl>
       ))}
       {filters.map((f) => (
-        <div key={f.key} className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none sm:flex-row sm:items-center sm:gap-2">
-          <label htmlFor={`filter-${f.key}`} className="text-xs font-medium text-muted-foreground">
-            {f.label}
-          </label>
-          <select
-            id={`filter-${f.key}`}
-            value={values[f.key] ?? ALL}
-            onChange={(e) => onChange(f.key, e.target.value)}
-            className="w-full min-w-0 max-w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm sm:w-auto sm:max-w-[220px]"
-          >
-            {f.options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FilterControl key={f.key} label={f.label} htmlFor={`filter-${f.key}`}>
+          <div className="relative w-full">
+            <select
+              id={`filter-${f.key}`}
+              value={values[f.key] ?? ALL}
+              onChange={(e) => onChange(f.key, e.target.value)}
+              className={cn(filterTriggerClasses, 'appearance-none pr-8')}
+            >
+              {f.options.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+          </div>
+        </FilterControl>
       ))}
     </div>
   )

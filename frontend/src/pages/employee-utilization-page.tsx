@@ -14,13 +14,18 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import { FilterSelect } from '@/components/dashboard/filter-select'
 import { FiltersPanel } from '@/components/dashboard/filters-panel'
-import { HierarchicalMultiSelect, type HierarchicalItem } from '@/components/dashboard/hierarchical-multi-select'
+import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import { colorsForLabels, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
-import { useEmployeeUtilization, useUtilizationRecordsAll } from '@/lib/utilization-api'
+import {
+  useEmployeeUtilization,
+  useUtilizationRecordsAll,
+  weekHierarchyToItems,
+} from '@/lib/utilization-api'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 
 const fmtHours = (v: number) =>
   v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -284,18 +289,6 @@ function EmployeePickerPage() {
 
 const HOURS_TYPES = ['Client Hours', 'Internal Hours']
 
-const MONTH_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' })
-const DAY_FMT = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-
-/** Groups ISO week-start dates ("2026-05-04") into month parents ("May
- * 2026") with each date as a labelled child ("04 May 2026"). */
-function weeksToHierarchy(weeks: string[]): HierarchicalItem[] {
-  return weeks.map((week) => {
-    const d = new Date(`${week}T00:00:00`)
-    return { value: week, label: DAY_FMT.format(d), parent: MONTH_FMT.format(d) }
-  })
-}
-
 // The /employees/{name} endpoint only returns two pre-aggregated arrays
 // (by project, by week) with no cross-dimension fields — a project row has
 // no hours-type/week breakdown and a week row has no project breakdown. To
@@ -318,6 +311,7 @@ export function EmployeeUtilizationPage() {
 function EmployeeUtilizationDetail({ employee }: { employee: string }) {
   const query = useEmployeeUtilization(employee)
   const recordsQuery = useUtilizationRecordsAll({})
+  const filterConfig = useFilterConfig('booking')
 
   const [hoursType, setHoursType] = React.useState<string | undefined>()
   const [project, setProject] = React.useState<string | undefined>()
@@ -336,7 +330,15 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
     () => Array.from(new Set(employeeRecords.map((r) => r.week_start))).sort(),
     [employeeRecords],
   )
-  const weekHierarchy = React.useMemo(() => weeksToHierarchy(weekOptions), [weekOptions])
+  // Adapt this employee's flat list of week starts into the shape the shared
+  // `weekHierarchyToItems` expects — the helper reads only `.week` and
+  // derives Year/Month/Day labels from the ISO date, so year/month strings
+  // can be blank. Consolidates onto the same tree builder Utilization
+  // Home / Search / Results use.
+  const weekHierarchy = React.useMemo(
+    () => weekHierarchyToItems(weekOptions.map((w) => ({ year: '', month: '', week: w }))),
+    [weekOptions],
+  )
 
   const filteredRecords = React.useMemo(
     () =>
@@ -494,12 +496,14 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
         <FilterSelect label="Hours Type" value={hoursType} options={HOURS_TYPES} onChange={setHoursType} />
         <FilterSelect label="Project" value={project} options={projectOptions} onChange={setProject} />
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Month Year, Week Start</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            {filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}
+          </label>
           <HierarchicalMultiSelect
             items={weekHierarchy}
             selected={weeks}
             onChange={setWeeks}
-            placeholder="All Month Year, Week Start"
+            placeholder="All Weeks"
             className="w-[180px]"
           />
         </div>

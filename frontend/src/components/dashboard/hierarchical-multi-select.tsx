@@ -4,19 +4,30 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { filterTriggerClasses } from '@/components/dashboard/filter-control'
 
 /**
- * Flat item shape. Items with no `parent` render as top-level rows. Items
- * whose `parent` matches another item's `value` are nested under that
- * parent and only shown once the parent is expanded. Items with a
- * `parent` that has no matching top-level item are grouped under a
- * synthetic parent labelled by their `parent` string (used for e.g.
- * "May 2026" month groups that aren't themselves selectable values).
+ * Flat item shape describing a node in an arbitrarily-nested tree.
+ *
+ * - `value` is the unique key of the node AND — when the node is a leaf
+ *   (`isGroup !== true`) — the filter value emitted upstream when the
+ *   node is selected.
+ * - `parent` references the `value` of another item to nest under. Chains
+ *   are allowed (Year -> Month -> Week -> ...): `buildTree` recurses.
+ * - `isGroup: true` marks a node as a hierarchy-only category (Year,
+ *   Month, ...). Its `value` is NOT included in the selection set that
+ *   `onChange` emits — only its descendant leaves are. Selecting a group
+ *   toggles all descendant leaves via tri-state.
+ * - Items whose `parent` doesn't reference any item's `value` are kept
+ *   as synthetic parents labelled by their `parent` string, matching the
+ *   pre-recursion behavior. Prefer explicit `isGroup: true` items in new
+ *   code — the synthetic-parent path stays only for backward compat.
  */
 export interface HierarchicalItem {
   value: string
   label: string
   parent?: string
+  isGroup?: boolean
 }
 
 interface HierarchicalMultiSelectProps {
@@ -34,12 +45,25 @@ interface HierarchicalMultiSelectProps {
 interface TreeNode {
   key: string
   label: string
+  /** True for hierarchy-only nodes (Year/Month/...): their `value` is
+   * excluded from the filter selection set; only descendant leaves are
+   * emitted. Non-group nodes with children are still selectable leaves
+   * in their own right AND act as group toggles for their children,
+   * matching the pre-recursion 2-level Region/Market behavior. */
   isGroup: boolean
+  /** Only set on selectable (non-group) nodes. */
   value?: string
-  children: HierarchicalItem[]
+  children: TreeNode[]
 }
 
-function buildTree(items: HierarchicalItem[]): { roots: TreeNode[]; leafValues: string[] } {
+interface BuiltTree {
+  roots: TreeNode[]
+  /** Every leaf value in the tree (excludes synthetic-group values), used
+   * for "Select all" and for computing tri-state on group toggles. */
+  leafValues: string[]
+}
+
+function buildTree(items: HierarchicalItem[]): BuiltTree {
   const byValue = new Map(items.map((i) => [i.value, i]))
   const childrenByParent = new Map<string, HierarchicalItem[]>()
   const topLevel: HierarchicalItem[] = []
@@ -54,44 +78,163 @@ function buildTree(items: HierarchicalItem[]): { roots: TreeNode[]; leafValues: 
     }
   })
 
-  const roots: TreeNode[] = []
-  const seenGroups = new Set<string>()
   const leafValues: string[] = []
 
-  topLevel.forEach((item) => {
-    const children = childrenByParent.get(item.value)
-    roots.push({
+  function buildNode(item: HierarchicalItem): TreeNode {
+    const rawChildren = childrenByParent.get(item.value) ?? []
+    const children = rawChildren.map(buildNode)
+    const isGroup = item.isGroup === true
+    if (!isGroup) leafValues.push(item.value)
+    return {
       key: item.value,
       label: item.label,
-      isGroup: !!children?.length,
-      value: item.value,
-      children: children ?? [],
-    })
-    leafValues.push(item.value)
-    children?.forEach((c) => leafValues.push(c.value))
-  })
+      isGroup,
+      value: isGroup ? undefined : item.value,
+      children,
+    }
+  }
 
-  // Parents referenced by children but with no matching top-level item
-  // (synthetic group, e.g. month names that aren't real filter values).
-  childrenByParent.forEach((children, parentKey) => {
-    if (byValue.has(parentKey) || seenGroups.has(parentKey)) return
-    seenGroups.add(parentKey)
-    roots.push({ key: parentKey, label: parentKey, isGroup: true, children })
-    children.forEach((c) => leafValues.push(c.value))
+  const roots: TreeNode[] = topLevel.map(buildNode)
+
+  // Synthetic parents: `parent` strings that don't match any item's
+  // `value`. Kept for backward compat with the pre-recursion 2-level shape
+  // (e.g. month-name strings referenced as `parent` without a matching
+  // Month item existed in earlier callers).
+  const seenSynthetic = new Set<string>()
+  childrenByParent.forEach((rawChildren, parentKey) => {
+    if (byValue.has(parentKey) || seenSynthetic.has(parentKey)) return
+    seenSynthetic.add(parentKey)
+    const children = rawChildren.map(buildNode)
+    roots.push({
+      key: parentKey,
+      label: parentKey,
+      isGroup: true,
+      children,
+    })
   })
 
   return { roots, leafValues }
 }
 
-/** Checkbox tri-state for a group/leaf node: true if fully selected,
- * 'indeterminate' if partially selected, false otherwise. */
+/** All descendant leaf values under a node (excludes group nodes). Used by
+ * group toggles and tri-state. */
+function descendantLeafValues(node: TreeNode): string[] {
+  const out: string[] = []
+  const stack: TreeNode[] = [node]
+  while (stack.length) {
+    const n = stack.pop()!
+    if (!n.isGroup && n.value) out.push(n.value)
+    for (const c of n.children) stack.push(c)
+  }
+  return out
+}
+
+/** Checkbox tri-state for any node — leaf or group — computed from
+ * whichever of its own value (if selectable) plus every descendant leaf
+ * is currently in `selectedSet`. */
 function nodeCheckedState(node: TreeNode, selectedSet: Set<string>): boolean | 'indeterminate' {
-  const groupValues = [...(node.value ? [node.value] : []), ...node.children.map((c) => c.value)]
-  if (groupValues.length === 0) return false
-  const selectedCount = groupValues.filter((v) => selectedSet.has(v)).length
+  const values = descendantLeafValues(node)
+  if (values.length === 0) return false
+  const selectedCount = values.filter((v) => selectedSet.has(v)).length
   if (selectedCount === 0) return false
-  if (selectedCount === groupValues.length) return true
+  if (selectedCount === values.length) return true
   return 'indeterminate'
+}
+
+interface NodeRowProps {
+  node: TreeNode
+  depth: number
+  expanded: Set<string>
+  toggleExpand: (key: string) => void
+  selectedSet: Set<string>
+  toggleValue: (value: string) => void
+  toggleGroup: (node: TreeNode) => void
+}
+
+function NodeRow({
+  node,
+  depth,
+  expanded,
+  toggleExpand,
+  selectedSet,
+  toggleValue,
+  toggleGroup,
+}: NodeRowProps) {
+  const hasChildren = node.children.length > 0
+  const isLeaf = !hasChildren && !node.isGroup
+  const onToggle = () => {
+    if (isLeaf && node.value) toggleValue(node.value)
+    else toggleGroup(node)
+  }
+  return (
+    <div>
+      <div
+        className="flex items-center gap-1 py-1.5 pr-2 hover:bg-muted/50"
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
+      >
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => toggleExpand(node.key)}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+            aria-label={expanded.has(node.key) ? 'Collapse' : 'Expand'}
+          >
+            {expanded.has(node.key) ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </button>
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+        <Checkbox
+          id={`node-${node.key}`}
+          checked={nodeCheckedState(node, selectedSet)}
+          onCheckedChange={onToggle}
+        />
+        <label
+          htmlFor={`node-${node.key}`}
+          className="flex-1 cursor-pointer truncate text-sm"
+          onClick={(e) => {
+            e.preventDefault()
+            onToggle()
+          }}
+        >
+          {node.label}
+        </label>
+      </div>
+      {expanded.has(node.key) &&
+        node.children.map((child) => (
+          <NodeRow
+            key={child.key}
+            node={child}
+            depth={depth + 1}
+            expanded={expanded}
+            toggleExpand={toggleExpand}
+            selectedSet={selectedSet}
+            toggleValue={toggleValue}
+            toggleGroup={toggleGroup}
+          />
+        ))}
+    </div>
+  )
+}
+
+/** Filter the tree by label match at any depth. A branch is kept if its
+ * own label matches, OR any descendant's label matches (with non-matching
+ * descendants pruned). */
+function filterTree(nodes: TreeNode[], q: string): TreeNode[] {
+  if (!q.trim()) return nodes
+  const lower = q.toLowerCase()
+  function walk(node: TreeNode): TreeNode | null {
+    const selfMatches = node.label.toLowerCase().includes(lower)
+    const filteredChildren = node.children.map(walk).filter((c): c is TreeNode => c !== null)
+    if (selfMatches) return { ...node, children: filteredChildren.length ? filteredChildren : node.children }
+    if (filteredChildren.length) return { ...node, children: filteredChildren }
+    return null
+  }
+  return nodes.map(walk).filter((n): n is TreeNode => n !== null)
 }
 
 export function HierarchicalMultiSelect({
@@ -109,19 +252,7 @@ export function HierarchicalMultiSelect({
 
   const { roots, leafValues } = React.useMemo(() => buildTree(items), [items])
 
-  const filteredRoots = React.useMemo(() => {
-    if (!query.trim()) return roots
-    const q = query.toLowerCase()
-    return roots
-      .map((root) => {
-        const rootMatches = root.label.toLowerCase().includes(q)
-        const matchingChildren = root.children.filter((c) => c.label.toLowerCase().includes(q))
-        if (rootMatches) return root
-        if (matchingChildren.length) return { ...root, children: matchingChildren }
-        return null
-      })
-      .filter((r): r is TreeNode => r !== null)
-  }, [roots, query])
+  const filteredRoots = React.useMemo(() => filterTree(roots, query), [roots, query])
 
   const selectedSet = React.useMemo(() => new Set(selected), [selected])
   const allSelected = leafValues.length > 0 && leafValues.every((v) => selectedSet.has(v))
@@ -136,7 +267,15 @@ export function HierarchicalMultiSelect({
   }
 
   const toggleGroup = (node: TreeNode) => {
-    const groupValues = [...(node.value ? [node.value] : []), ...node.children.map((c) => c.value)]
+    const groupValues = descendantLeafValues(node)
+    // Include the group's own value only if it's a real (non-group) leaf-
+    // with-children — matches the pre-recursion Region/Market behavior
+    // where ticking a Region also enables filtering on that Region as a
+    // value in its own right.
+    if (!node.isGroup && node.value && !groupValues.includes(node.value)) {
+      groupValues.push(node.value)
+    }
+    if (groupValues.length === 0) return
     const allOn = groupValues.every((v) => selectedSet.has(v))
     if (allOn) {
       onChange(selected.filter((v) => !groupValues.includes(v)))
@@ -176,12 +315,9 @@ export function HierarchicalMultiSelect({
         <button
           type="button"
           disabled={disabled}
-          className={cn(
-            'flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50',
-            className,
-          )}
+          className={cn(filterTriggerClasses, className)}
         >
-          <span className={cn('truncate text-left', selected.length === 0 && 'text-muted-foreground')}>
+          <span className={cn('min-w-0 flex-1 truncate text-left', selected.length === 0 && 'text-muted-foreground')}>
             {summary}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -206,63 +342,16 @@ export function HierarchicalMultiSelect({
             <p className="px-3 py-4 text-center text-sm text-muted-foreground">No options found</p>
           )}
           {filteredRoots.map((node) => (
-            <div key={node.key}>
-              <div className="flex items-center gap-1 px-2 py-1.5 hover:bg-muted/50">
-                {node.children.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(node.key)}
-                    className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-                    aria-label={expanded.has(node.key) ? 'Collapse' : 'Expand'}
-                  >
-                    {expanded.has(node.key) ? (
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                ) : (
-                  <span className="w-4 shrink-0" />
-                )}
-                <Checkbox
-                  id={`node-${node.key}`}
-                  checked={nodeCheckedState(node, selectedSet)}
-                  onCheckedChange={() =>
-                    node.value && node.children.length === 0 ? toggleValue(node.value) : toggleGroup(node)
-                  }
-                />
-                <label
-                  htmlFor={`node-${node.key}`}
-                  className="flex-1 cursor-pointer truncate text-sm"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    if (node.value && node.children.length === 0) toggleValue(node.value)
-                    else toggleGroup(node)
-                  }}
-                >
-                  {node.label}
-                </label>
-              </div>
-              {expanded.has(node.key) &&
-                node.children.map((child) => (
-                  <div
-                    key={child.value}
-                    className="flex items-center gap-2 py-1.5 pl-9 pr-2 hover:bg-muted/50"
-                  >
-                    <Checkbox
-                      id={`child-${child.value}`}
-                      checked={selectedSet.has(child.value)}
-                      onCheckedChange={() => toggleValue(child.value)}
-                    />
-                    <label
-                      htmlFor={`child-${child.value}`}
-                      className="flex-1 cursor-pointer truncate text-sm"
-                    >
-                      {child.label}
-                    </label>
-                  </div>
-                ))}
-            </div>
+            <NodeRow
+              key={node.key}
+              node={node}
+              depth={0}
+              expanded={expanded}
+              toggleExpand={toggleExpand}
+              selectedSet={selectedSet}
+              toggleValue={toggleValue}
+              toggleGroup={toggleGroup}
+            />
           ))}
         </div>
         {searchable && (

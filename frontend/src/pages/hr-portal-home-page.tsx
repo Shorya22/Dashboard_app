@@ -17,6 +17,7 @@ import {
   regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 
 // This page's KPIs and all 4 charts are recomputed client-side from the
 // full employee list (see lib/employee-filters.ts) so the Region/Status/
@@ -28,6 +29,9 @@ import {
 // DOJ/LWD — this page doesn't show any of those, so it isn't an issue yet.
 
 export function HrPortalHomePage() {
+  const filterConfig = useFilterConfig('roster')
+  const labelOf = (key: string, fallback: string) =>
+    filterLabel(filterConfig.data?.filters, key, fallback)
   const employeesQuery = useRosterEmployeesAll()
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
@@ -47,12 +51,12 @@ export function HrPortalHomePage() {
   const filterDefs = [
     {
       key: 'status',
-      label: 'Status',
+      label: labelOf('status', 'Status'),
       options: buildOptions(distinctValues(employees, 'status')),
     },
     {
       key: 'department',
-      label: 'Department',
+      label: labelOf('department', 'Department'),
       options: buildOptions(distinctValues(employees, 'designation')),
     },
   ]
@@ -134,7 +138,7 @@ export function HrPortalHomePage() {
         hierarchical={[
           {
             key: 'regionMarket',
-            label: 'Region/Market',
+            label: `${labelOf('region', 'Region')}/${labelOf('market', 'Market')}`,
             items: regionMarketItems,
             selected: regionMarket,
             onChange: setRegionMarket,

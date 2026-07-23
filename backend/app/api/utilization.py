@@ -35,6 +35,7 @@ from app.services import booking_metrics, utilization_metrics
 from app.services.data_loader import (
     get_booking_df,
     get_booking_df_prepared,
+    get_roster_df,
     get_utilization_ground_truth_df,
 )
 
@@ -43,10 +44,50 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/utilization", tags=["utilization"])
 
 
+# Shared filter-param dependency for every utilization endpoint whose
+# chart / KPI is drawn alongside the Utilization Home / Search filter
+# row. Previously only `/records` accepted filters, so the KPI cards
+# (`/summary`), Weekly Hours Trend (`/weekly-trend`) and both region
+# breakdowns (`/by-region`, `/by-region-market`) rendered off unfiltered
+# data — the Total Hours by Market/Region chart in particular stayed
+# identical no matter which region the user picked, a real user-visible
+# bug. Same repeated-query-param shape as `/records`, applied via
+# `booking_metrics.get_filtered_records` so filter semantics (OR within
+# a field, AND across fields, blank -> no-op) can never diverge between
+# routes.
+def _booking_filter_params(
+    week: list[str] | None = Query(None),
+    region: list[str] | None = Query(None),
+    market: list[str] | None = Query(None),
+    department: list[str] | None = Query(None),
+    entity: list[str] | None = Query(None),
+    holding: list[str] | None = Query(None),
+    hours_type: list[str] | None = Query(None),
+) -> dict[str, list[str] | None]:
+    return {
+        "week": week,
+        "region": region,
+        "market": market,
+        "department": department,
+        "entity": entity,
+        "holding": holding,
+        "hours_type": hours_type,
+    }
+
+
+def _apply_booking_filters(filters: dict[str, list[str] | None]) -> "pd.DataFrame":  # type: ignore[name-defined]
+    """Load the prepared booking df and narrow it by the shared filter params."""
+    df = get_booking_df_prepared()
+    return booking_metrics.get_filtered_records(df, **filters)
+
+
 @router.get("/summary", response_model=UtilizationSummary)
-def utilization_summary(user: User = Depends(get_current_user)) -> UtilizationSummary:
+def utilization_summary(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_booking_filter_params),
+) -> UtilizationSummary:
     try:
-        df = get_booking_df()
+        df = _apply_booking_filters(filters)
         return UtilizationSummary(
             total_employees=booking_metrics.get_total_employees(df),
             total_hours=booking_metrics.get_total_hours(df),
@@ -60,9 +101,12 @@ def utilization_summary(user: User = Depends(get_current_user)) -> UtilizationSu
 
 
 @router.get("/weekly-trend", response_model=WeeklyHoursTrend)
-def utilization_weekly_trend(user: User = Depends(get_current_user)) -> WeeklyHoursTrend:
+def utilization_weekly_trend(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_booking_filter_params),
+) -> WeeklyHoursTrend:
     try:
-        df = get_booking_df()
+        df = _apply_booking_filters(filters)
         items = [WeeklyHoursPoint(**row) for row in booking_metrics.get_weekly_hours_trend(df)]
         return WeeklyHoursTrend(items=items)
     except Exception:
@@ -71,9 +115,12 @@ def utilization_weekly_trend(user: User = Depends(get_current_user)) -> WeeklyHo
 
 
 @router.get("/by-region", response_model=HoursByRegion)
-def utilization_by_region(user: User = Depends(get_current_user)) -> HoursByRegion:
+def utilization_by_region(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_booking_filter_params),
+) -> HoursByRegion:
     try:
-        df = get_booking_df()
+        df = _apply_booking_filters(filters)
         items = [RegionHours(**row) for row in booking_metrics.get_hours_by_region(df)]
         return HoursByRegion(items=items)
     except Exception:
@@ -82,16 +129,21 @@ def utilization_by_region(user: User = Depends(get_current_user)) -> HoursByRegi
 
 
 @router.get("/by-region-market", response_model=HoursByRegionMarket)
-def utilization_by_region_market(user: User = Depends(get_current_user)) -> HoursByRegionMarket:
-    """Region + Market (EC) hours breakdown.
+def utilization_by_region_market(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_booking_filter_params),
+) -> HoursByRegionMarket:
+    """Region + Market (EC) hours breakdown, filter-aware.
 
     Not a confirmed named DAX measure — see data-model SKILL.md and
     `services/booking_metrics.get_hours_by_region_market` docstring for
     the Market (EC) label caveat (real values are Technology/BN/DACH/UKI,
-    not AMER/BENO/DACH/UKI).
+    not AMER/BENO/DACH/UKI). Applies the same filter param set as every
+    other utilization endpoint so this chart reacts to the filter row
+    just like the KPIs and Weekly Hours Trend beside it.
     """
     try:
-        df = get_booking_df()
+        df = _apply_booking_filters(filters)
         items = [RegionMarketHours(**row) for row in booking_metrics.get_hours_by_region_market(df)]
         return HoursByRegionMarket(items=items)
     except Exception:
@@ -103,7 +155,12 @@ def utilization_by_region_market(user: User = Depends(get_current_user)) -> Hour
 def utilization_filter_options(user: User = Depends(get_current_user)) -> FilterOptions:
     try:
         df = get_booking_df()
-        return FilterOptions(**booking_metrics.get_filter_options(df))
+        # Roster is passed so the Utilization Home Region/Market filter can
+        # union booking's `Region (EC)`/`Market (EC)` with the roster's
+        # master `Region`/`Market` taxonomy — see
+        # booking_metrics.get_filter_options for rationale.
+        roster_df = get_roster_df()
+        return FilterOptions(**booking_metrics.get_filter_options(df, roster_df))
     except Exception:
         logger.exception("utilization_filter_options: failed to compute filter options")
         raise HTTPException(status_code=500, detail="Failed to compute filter options")

@@ -28,14 +28,31 @@ def load_metric_config(dataset: str = "roster") -> dict:
     path = CONFIG_DIR / f"{dataset}_metrics.yaml"
     with path.open("r", encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
-    if dataset == "roster":
-        validate_metric_config(cfg, dataset)
+    validate_metric_config(cfg, dataset)
     return cfg
 
 
 # --- booking ------------------------------------------------------------- #
+def booking_columns() -> dict[str, str]:
+    """The booking `columns:` block — column role -> physical column name.
+
+    Mirrors the roster's implicit `load_metric_config()["columns"]` access.
+    """
+    return load_metric_config("booking").get("columns", {})
+
+
 def booking_column(role: str) -> str:
-    """Physical column for a booking role (hours_type / hours_value)."""
+    """Physical column for a booking role.
+
+    Resolves in this order:
+      1. The `columns:` block (region, market, department, entity, holding,
+         hours_type, week_start, month) — added in Phase 3.
+      2. The legacy `hours:` block for `hours_type` / `hours_value` — kept
+         so existing callers keep working without changes.
+    """
+    cols = booking_columns()
+    if role in cols:
+        return cols[role]
     return {
         "hours_type": hours_type_column(),
         "hours_value": hours_value_column(),
@@ -111,9 +128,14 @@ def directory_trim_keys() -> list[str]:
     return load_metric_config()["directory"].get("trim_whitespace", [])
 
 
-def filters() -> dict[str, dict]:
-    """The declared page filters, keyed by filter name."""
-    return load_metric_config().get("filters", {})
+def filters(dataset: str = "roster") -> dict[str, dict]:
+    """The declared page filters, keyed by filter name.
+
+    `dataset` defaults to "roster" so existing callers (e.g. the roster
+    `_filter_params` dependency) keep working. Pass "booking" for the
+    Utilization-side filter definitions.
+    """
+    return load_metric_config(dataset).get("filters", {})
 
 
 # --- roster: status ------------------------------------------------------- #
@@ -169,9 +191,17 @@ def seniority_category(value: object) -> str:
 # open that page, with a stack trace instead of an explanation. These checks
 # run once when the config is loaded and name the exact problem.
 
-SUPPORTED_CHART_TYPES = {"count_by", "numeric_bands", "keyword_bands", "monthly_series", "crosstab"}
+SUPPORTED_CHART_TYPES = {
+    "count_by",
+    "numeric_bands",
+    "keyword_bands",
+    "monthly_series",
+    "crosstab",
+    "sum_by",
+}
 SUPPORTED_SCOPES = {"all", "present", "exited"}
 SUPPORTED_MEASURES = {"closing_headcount"}
+SUPPORTED_FILTER_TYPES = {"single", "multi", "hierarchical"}
 
 
 class MetricConfigError(ValueError):
@@ -181,7 +211,17 @@ class MetricConfigError(ValueError):
 def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
     """Fail loudly, at load time, with a message that says what to fix."""
     problems: list[str] = []
-    roles = cfg.get("columns", {})
+    roles = dict(cfg.get("columns", {}))
+    # Booking's `hours:` block predates the `columns:` block; the two
+    # `sum_by` chart roles (`hours_type`, `hours_value`) resolve there
+    # rather than in `columns:`. Include them so role validation passes
+    # without forcing a duplicate declaration.
+    if dataset == "booking":
+        hours_block = cfg.get("hours", {})
+        if "type_column" in hours_block:
+            roles.setdefault("hours_type", hours_block["type_column"])
+        if "value_column" in hours_block:
+            roles.setdefault("hours_value", hours_block["value_column"])
     charts = cfg.get("charts", {})
     statuses = cfg.get("status", {})
 
@@ -233,6 +273,9 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                         f"{series['measure']!r} is not implemented "
                         f"(supported: {sorted(SUPPORTED_MEASURES)})"
                     )
+        elif kind == "sum_by":
+            need_role(chart.get("group_column_role"), f"charts.{name}")
+            need_role(chart.get("value_column_role"), f"charts.{name}")
         elif kind == "crosstab":
             need_role(chart.get("row_column_role"), f"charts.{name}")
             dim = chart.get("dimension_from_chart")
@@ -264,7 +307,8 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                     "above the final threshold still land somewhere"
                 )
 
-    for name, spec in cfg.get("filters", {}).items():
+    filters_block = cfg.get("filters", {})
+    for name, spec in filters_block.items():
         chart_ref = spec.get("derived_from_chart")
         if chart_ref is not None:
             if chart_ref not in charts:
@@ -274,6 +318,24 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                 )
         else:
             need_role(spec.get("column_role"), f"filters.{name}")
+        ftype = spec.get("type")
+        if ftype is not None and ftype not in SUPPORTED_FILTER_TYPES:
+            problems.append(
+                f"filters.{name}: type {ftype!r} is not supported "
+                f"(supported: {sorted(SUPPORTED_FILTER_TYPES)})"
+            )
+        nests = spec.get("nests")
+        if nests is not None and nests not in filters_block:
+            problems.append(
+                f"filters.{name}: nests {nests!r} is not a declared filter key "
+                f"(known: {sorted(filters_block)})"
+            )
+        pages = spec.get("applies_to_pages")
+        if pages is not None:
+            if not isinstance(pages, list) or not all(isinstance(p, str) for p in pages):
+                problems.append(
+                    f"filters.{name}: applies_to_pages must be a list of strings"
+                )
 
     declared_status_values = {
         v for k, v in statuses.items() if k != "counts_as_present"

@@ -21,6 +21,7 @@ import {
   regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 
 /** Pivots a filtered employee list into one row per Primary Skill with one
  * numeric column per distinct value of `groupFn`, the shape Tremor's
@@ -50,6 +51,9 @@ function pivotLongRows<T extends { primary_skill: string; count: number }>(
 }
 
 export function SkillsExperiencePage() {
+  const filterConfig = useFilterConfig('roster')
+  const labelOf = (key: string, fallback: string) =>
+    filterLabel(filterConfig.data?.filters, key, fallback)
   // Unfiltered list, used ONLY to populate the filter dropdowns — if it
   // followed the filters, picking one would erase the other options.
   const allEmployeesQuery = useRosterEmployeesAll()
@@ -100,24 +104,24 @@ export function SkillsExperiencePage() {
   const filterDefs = [
     {
       key: 'department',
-      label: 'Department',
+      label: labelOf('department', 'Department'),
       options: buildOptions(distinctValues(employees, 'designation')),
     },
     {
       key: 'skill',
-      label: 'Primary Skill',
+      label: labelOf('skill', 'Primary Skill'),
       // Raw distinct values so the picked option matches the raw Primary
       // Skill the server filters on (casing already canonicalised at
       // ingestion). Normalizing here would send an unmatchable value.
       options: buildOptions(distinctValues(employees, 'primary_skill')),
     },
-    { key: 'experience', label: 'Experience', options: buildOptions(experienceOptions) },
+    { key: 'experience', label: labelOf('experience', 'Experience'), options: buildOptions(experienceOptions) },
     {
       key: 'seniorityCategory',
-      label: 'Seniority Category',
+      label: labelOf('seniorityCategory', 'Seniority Category'),
       options: buildOptions(seniorityCategoryOptions),
     },
-    { key: 'type', label: 'Type', options: buildOptions(distinctValues(employees, 'type')) },
+    { key: 'type', label: labelOf('type', 'Type'), options: buildOptions(distinctValues(employees, 'type')) },
   ]
 
   // Memoized: this page's 4 charts are React.memo'd (custom-bar-chart.tsx),
@@ -199,7 +203,7 @@ export function SkillsExperiencePage() {
         hierarchical={[
           {
             key: 'regionMarket',
-            label: 'Region/Market',
+            label: `${labelOf('region', 'Region')}/${labelOf('market', 'Market')}`,
             items: regionMarketItems,
             selected: regionMarket,
             onChange: setRegionMarket,

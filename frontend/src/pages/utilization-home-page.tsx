@@ -5,7 +5,7 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterSelect } from '@/components/dashboard/filter-select'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import {
-  buildRegionMarketItems,
+  regionMarketHierarchyToItems,
   splitRegionMarketSelection,
   weekHierarchyToItems,
   useUtilizationByRegionMarket,
@@ -13,6 +13,7 @@ import {
   useUtilizationRecordsAll,
   useUtilizationSummary,
 } from '@/lib/utilization-api'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
 import { marketDisplayLabel, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 
@@ -26,8 +27,7 @@ const WEEKLY_HOURS_SERIES = [
 
 export function UtilizationHomePage() {
   const filterOptions = useUtilizationFilterOptions()
-  const byRegionMarket = useUtilizationByRegionMarket()
-  const utilizationSummary = useUtilizationSummary()
+  const filterConfig = useFilterConfig('booking')
 
   const [hoursType, setHoursType] = React.useState<string | undefined>()
   // Region/Market is one hierarchical, multi-select tree (like the Search
@@ -40,9 +40,15 @@ export function UtilizationHomePage() {
   const [weeks, setWeeks] = React.useState<string[]>([])
   const [department, setDepartment] = React.useState<string | undefined>()
 
+  // Region/Market items come from the unified `region_market_hierarchy`
+  // (union of roster `Region`/`Market` and booking `Region (EC)`/`Market (EC)`,
+  // per backend `booking_metrics.get_filter_options`), NOT from
+  // `useUtilizationByRegionMarket()` which only sees the booking taxonomy's
+  // 2 regions (AMER/EMEA). The by-region-market query is still called below
+  // — it drives the "Total Hours by Market/Region" chart.
   const regionMarketItems = React.useMemo(
-    () => buildRegionMarketItems(filterOptions.data?.regions, byRegionMarket.data?.items),
-    [filterOptions.data, byRegionMarket.data],
+    () => regionMarketHierarchyToItems(filterOptions.data?.region_market_hierarchy),
+    [filterOptions.data],
   )
   const dateItems = React.useMemo(
     () => weekHierarchyToItems(filterOptions.data?.week_hierarchy),
@@ -60,6 +66,14 @@ export function UtilizationHomePage() {
   )
 
   const recordsAll = useUtilizationRecordsAll(filters)
+  // Every chart / KPI on this page reads booking data narrowed by the same
+  // filter row. `useUtilizationSummary` and `useUtilizationByRegionMarket`
+  // now accept the same filter set (see `utilization-api.ts::BookingChartFilters`
+  // and the shared `_booking_filter_params` FastAPI dep) — previously they
+  // returned unfiltered totals and the Total Hours by Region/Market chart
+  // stayed identical no matter which region the user picked.
+  const utilizationSummary = useUtilizationSummary(filters)
+  const byRegionMarket = useUtilizationByRegionMarket(filters)
 
   // Total Employees is the booking-sheet distinct employee count (the
   // real DAX measure is "Total Employeess" — typo preserved server-side —
@@ -89,11 +103,11 @@ export function UtilizationHomePage() {
       .map(([week_start, v]) => ({ week: week_start, ...v }))
   }, [recordsAll.data])
 
-  // NOTE: this "Total Hours by Market/Region" chart reads from
-  // /utilization/by-region-market, which takes no filter params, so it stays
-  // global — the Region/Market filter above narrows the records-based KPIs and
-  // Weekly Hours Trend (which DO filter server-side by region/market), not
-  // this one aggregate chart.
+  // The "Total Hours by Market/Region" chart reads from
+  // /utilization/by-region-market with the SAME filter set as the rest of
+  // the page (see `_booking_filter_params` in the backend). Picking a
+  // region/market/department narrows the bars here just like it narrows
+  // the KPIs and the Weekly Hours Trend beside it.
   //
   // Combined "Region/Market" label built from the two fields returned by
   // /utilization/by-region-market. The raw `Market (EC)` value is remapped
@@ -113,17 +127,35 @@ export function UtilizationHomePage() {
   const isLoading = recordsAll.isLoading || utilizationSummary.isLoading
   const summary = recordsAll.data?.summary
 
+  // A chart being empty could mean the underlying dataset is empty, OR the
+  // current filter combo excludes every row. The user needs different next
+  // steps in each case ("upload data" vs "clear a filter"), so distinguish
+  // them in the empty-state copy — a filter-aware message on the Weekly
+  // Hours Trend chart so a picked Department that has zero booked hours
+  // (e.g. a roster-only job title from the unioned Department dropdown —
+  // see `docs/FILTERS.md`) shows an actionable message instead of the
+  // generic "No data for this view".
+  const hasActiveFilters =
+    !!hoursType || regionMarket.length > 0 || weeks.length > 0 || !!department
+  const weeklyEmptyMessage = hasActiveFilters
+    ? 'No booking hours match the selected filters. Try clearing a filter.'
+    : undefined
+
   return (
     <div className="space-y-5">
       <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
         <FilterSelect
-          label="Hours Type"
+          label={filterLabel(filterConfig.data?.filters, 'hours_type', 'Hours Type')}
           value={hoursType}
           options={filterOptions.data?.hours_types ?? []}
           onChange={setHoursType}
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
-          <label className="text-xs font-medium text-muted-foreground">Region/Market</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            {filterLabel(filterConfig.data?.filters, 'region', 'Region')}
+            {'/'}
+            {filterLabel(filterConfig.data?.filters, 'market', 'Market')}
+          </label>
           <div className="w-full min-w-0 sm:w-[180px]">
             <HierarchicalMultiSelect
               items={regionMarketItems}
@@ -134,7 +166,9 @@ export function UtilizationHomePage() {
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
-          <label className="text-xs font-medium text-muted-foreground">Month / Week</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            {filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}
+          </label>
           <div className="w-full min-w-0 sm:w-[180px]">
             <HierarchicalMultiSelect
               items={dateItems}
@@ -145,7 +179,7 @@ export function UtilizationHomePage() {
           </div>
         </div>
         <FilterSelect
-          label="Department"
+          label={filterLabel(filterConfig.data?.filters, 'department', 'Department')}
           value={department}
           options={filterOptions.data?.departments ?? []}
           onChange={setDepartment}
@@ -197,6 +231,7 @@ export function UtilizationHomePage() {
           isLoading={recordsAll.isLoading}
           isError={recordsAll.isError}
           isEmpty={weeklyData.length === 0}
+          emptyMessage={weeklyEmptyMessage}
         >
           <CustomBarChart
             data={weeklyData}
@@ -215,6 +250,11 @@ export function UtilizationHomePage() {
           isLoading={byRegionMarket.isLoading}
           isError={byRegionMarket.isError}
           isEmpty={regionMarketData.length === 0}
+          emptyMessage={
+            hasActiveFilters
+              ? 'No booking hours match the selected filters. Try clearing a filter.'
+              : undefined
+          }
         >
           <CustomBarChart
             data={regionMarketData}

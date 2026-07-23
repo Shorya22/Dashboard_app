@@ -250,6 +250,166 @@ def test_get_filter_options(sample_bookings_full):
         {"year": "2026", "month": "May 26", "week": "2026-05-04"},
         {"year": "2026", "month": "May 26", "week": "2026-05-11"},
     ]
+    # With no roster passed in, the region_market_hierarchy is booking-only.
+    assert opts["region_market_hierarchy"] == [
+        {"region": "AMER", "markets": ["AMER"]},
+        {"region": "EMEA", "markets": ["DACH", "UKI"]},
+    ]
+
+
+def test_get_filter_options_region_market_hierarchy_unions_roster_and_booking():
+    """Phase 1: Region/Market hierarchy is UNIONED across roster + booking.
+    A region that only appears in the roster (e.g. APAC, Region TBD) still
+    shows up in the filter — matches user intent that ALL options are shown
+    even if filtering to zero booking rows. Ditto for markets under a
+    region. Blank / NaN / whitespace values are dropped.
+    """
+    booking = pd.DataFrame(
+        [
+            {"Region (EC)": "AMER", "Market (EC)": "AMER"},
+            {"Region (EC)": "EMEA", "Market (EC)": "UKI"},
+            {"Region (EC)": "EMEA", "Market (EC)": "DACH"},
+            {"Region (EC)": None, "Market (EC)": "GHOST"},   # blank region dropped
+            {"Region (EC)": "EMEA", "Market (EC)": None},     # blank market dropped
+            {"Region (EC)": "EMEA", "Market (EC)": "  "},     # whitespace dropped
+            # Columns required by get_filter_options; irrelevant values.
+            *[{} for _ in range(0)],
+        ]
+    )
+    for col in ["Monday of Week", "Month", "Department", "Team (EC)", "Holding", "Booked Hours Type"]:
+        booking[col] = None
+
+    roster = pd.DataFrame(
+        [
+            {"Region": "AMER", "Market": "AMER"},            # already in booking
+            {"Region": "APAC", "Market": "ANZ"},             # roster-only region+market
+            {"Region": "EMEA", "Market": "BENO"},            # roster-only market under booking region
+            {"Region": "Region TBD", "Market": None},        # roster-only region, no market
+            {"Region": None, "Market": "Ghost"},             # blank region dropped
+            {"Region": "  ", "Market": "Ghost"},             # whitespace region dropped
+        ]
+    )
+
+    opts = get_filter_options(booking, roster)
+    assert opts["region_market_hierarchy"] == [
+        {"region": "AMER", "markets": ["AMER"]},
+        {"region": "APAC", "markets": ["ANZ"]},
+        {"region": "EMEA", "markets": ["BENO", "DACH", "UKI"]},
+        {"region": "Region TBD", "markets": []},
+    ]
+    # `regions` and `markets` are now UNIONED with the roster too (Phase 1
+    # second batch). The flat markets list carries every non-blank market
+    # from either source EVEN when its own region is blank (the market
+    # value is still a valid filter value on its own) — the `region_market_hierarchy`
+    # above is stricter (a market needs a real region parent to nest).
+    assert opts["regions"] == ["AMER", "APAC", "EMEA", "Region TBD"]
+    assert opts["markets"] == ["AMER", "ANZ", "BENO", "DACH", "GHOST", "Ghost", "UKI"]
+
+
+def test_get_filter_options_departments_unions_roster_designation_and_booking_department():
+    """Phase 1 (second batch): the `departments` filter option list is a
+    UNION of roster.Designation (the roster's canonical department column —
+    the "Departments" DAX measure counts distinct Designations per
+    docs/METRICS.md) and booking.Department. A designation with zero
+    booked hours still appears; a booking department the roster doesn't
+    cover also appears (defensive union).
+    """
+    booking = pd.DataFrame(
+        [
+            {"Department": "Engineering"},
+            {"Department": "QA"},
+            {"Department": None},          # blank dropped
+            {"Department": "  "},          # whitespace dropped
+            {"Department": "Third Party Service Providers"},
+        ]
+    )
+    for col in [
+        "Monday of Week", "Month", "Region (EC)", "Market (EC)",
+        "Team (EC)", "Holding", "Booked Hours Type",
+    ]:
+        booking[col] = None
+
+    roster = pd.DataFrame(
+        [
+            {"Designation": "Software Engineer"},   # roster-only job title
+            {"Designation": "QA Engineer"},         # roster-only
+            {"Designation": "Engineering"},         # overlaps booking Department
+            {"Designation": None},                  # blank dropped
+            {"Designation": "  "},                  # whitespace dropped
+        ]
+    )
+
+    opts = get_filter_options(booking, roster)
+    assert opts["departments"] == [
+        "Engineering",
+        "QA",
+        "QA Engineer",
+        "Software Engineer",
+        "Third Party Service Providers",
+    ]
+
+
+def test_get_filter_options_entities_holdings_hours_types_are_booking_only():
+    """Phase 1 (second batch): entities / holdings / hours_types stay
+    booking-only — these are booking-specific concepts with no roster
+    counterpart. Passing a roster in must NOT change these lists.
+    """
+    booking = pd.DataFrame(
+        [
+            {"Team (EC)": "T1", "Holding": "Acme", "Booked Hours Type": "Client Hours"},
+            {"Team (EC)": "T2", "Holding": "Beta", "Booked Hours Type": "Internal Hours"},
+        ]
+    )
+    for col in ["Monday of Week", "Month", "Region (EC)", "Market (EC)", "Department"]:
+        booking[col] = None
+
+    # Roster carries columns that COULD collide with booking labels if
+    # unioning were done indiscriminately — proves we don't.
+    roster = pd.DataFrame(
+        [
+            {"Region": "AMER", "Market": "AMER", "Designation": "T99",
+             "Team (EC)": "SHOULD_NOT_APPEAR", "Holding": "SHOULD_NOT_APPEAR",
+             "Booked Hours Type": "SHOULD_NOT_APPEAR"},
+        ]
+    )
+
+    without_roster = get_filter_options(booking)
+    with_roster = get_filter_options(booking, roster)
+
+    assert without_roster["entities"] == with_roster["entities"] == ["T1", "T2"]
+    assert without_roster["holdings"] == with_roster["holdings"] == ["Acme", "Beta"]
+    assert without_roster["hours_types"] == with_roster["hours_types"] == ["Client Hours", "Internal Hours"]
+
+
+def test_get_filter_options_union_invariants(sample_bookings_full):
+    """Locking the union invariant precisely (in the peer-message form):
+    the option lists returned for regions/markets/departments are the
+    unions of the two source columns' cleaned distinct values.
+    """
+    roster = pd.DataFrame(
+        [
+            {"Region": "APAC", "Market": "ANZ", "Designation": "SDE"},
+            {"Region": "AMER", "Market": "AMER", "Designation": "QA"},
+        ]
+    )
+    opts = get_filter_options(sample_bookings_full, roster)
+
+    def _clean_unique(series: pd.Series) -> set[str]:
+        return {
+            str(v).strip()
+            for v in series.dropna().unique().tolist()
+            if str(v).strip()
+        }
+
+    assert set(opts["regions"]) == (
+        _clean_unique(sample_bookings_full["Region (EC)"]) | _clean_unique(roster["Region"])
+    )
+    assert set(opts["markets"]) == (
+        _clean_unique(sample_bookings_full["Market (EC)"]) | _clean_unique(roster["Market"])
+    )
+    assert set(opts["departments"]) == (
+        _clean_unique(sample_bookings_full["Department"]) | _clean_unique(roster["Designation"])
+    )
 
 
 def test_get_filtered_records_market_filter(sample_bookings_full):
@@ -491,6 +651,44 @@ def test_real_bookings_filter_options(real_bookings):
     assert len(opts["entities"]) == 5
     assert len(opts["holdings"]) == 43
     assert opts["hours_types"] == ["Client Hours", "Internal Hours"]
+    # Without roster, region_market_hierarchy contains only booking regions
+    # (AMER, EMEA). See test_real_bookings_filter_options_with_roster for the
+    # union-with-roster case.
+    hier_regions = [entry["region"] for entry in opts["region_market_hierarchy"]]
+    assert hier_regions == ["AMER", "EMEA"]
+
+
+def test_real_bookings_filter_options_with_roster(real_bookings):
+    """When the roster is passed in, `region_market_hierarchy` must include
+    every region that appears in EITHER the roster or the booking sheet,
+    with markets under each region unioned across both. This is what the
+    Utilization Home Region/Market filter actually sees at runtime."""
+    roster_fixture = FIXTURES_DIR / "roster_snapshot.xlsx"
+    if not roster_fixture.exists():
+        pytest.skip(f"real roster file not present at {roster_fixture}")
+    roster = pd.read_excel(roster_fixture)
+    opts = get_filter_options(real_bookings, roster)
+
+    hier = opts["region_market_hierarchy"]
+    hier_regions = {entry["region"] for entry in hier}
+    booking_regions = set(real_bookings["Region (EC)"].dropna().unique().tolist())
+    roster_regions = {
+        str(r).strip()
+        for r in roster["Region"].dropna().unique().tolist()
+        if str(r).strip()
+    }
+    # Every region from either source is present.
+    assert booking_regions <= hier_regions
+    assert roster_regions <= hier_regions
+
+    # Regions sorted alphabetically.
+    assert [e["region"] for e in hier] == sorted(hier_regions)
+
+    # Every entry's markets: sorted, unique, non-blank.
+    for entry in hier:
+        assert entry["markets"] == sorted(set(entry["markets"]))
+        for m in entry["markets"]:
+            assert m == m.strip() and m != ""
 
 
 def test_real_bookings_filtered_records_and(real_bookings):

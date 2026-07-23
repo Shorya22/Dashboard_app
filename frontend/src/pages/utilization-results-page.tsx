@@ -20,6 +20,7 @@ import {
   useUtilizationFilterOptions,
   type UtilizationRecord,
 } from '@/lib/utilization-api'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
 
 /** Formats a KPI number, falling back to a dash instead of "NaN"/"undefined"
@@ -123,6 +124,9 @@ export function UtilizationResultsPage() {
 
   const records = useUtilizationRecords(filters)
   const filterOptions = useUtilizationFilterOptions()
+  const filterConfig = useFilterConfig('booking')
+  const labelOf = (key: string, fallback: string) =>
+    filterLabel(filterConfig.data?.filters, key, fallback)
 
   // The sidebar's per-field dropdowns are single-select (unlike the
   // Search page's multi-select). Picking a value here replaces ALL
@@ -314,7 +318,9 @@ export function UtilizationResultsPage() {
 
       <FiltersPanel>
         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
-          <label className="text-xs font-medium text-muted-foreground">Month / Week</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            {labelOf('week', 'Month / Week')}
+          </label>
           <div className="w-full min-w-0 sm:w-[180px]">
             <HierarchicalMultiSelect
               items={dateItems}
@@ -325,38 +331,38 @@ export function UtilizationResultsPage() {
           </div>
         </div>
         <FilterSelect
-          label="Region"
+          label={labelOf('region', 'Region')}
           value={filters.region?.[0]}
           options={filterOptions.data?.regions ?? []}
           onChange={(v) => setFilter('region', v)}
         />
         <FilterSelect
-          label="Market"
+          label={labelOf('market', 'Market')}
           value={filters.market?.[0]}
           options={filterOptions.data?.markets ?? []}
           getOptionLabel={marketDisplayLabel}
           onChange={(v) => setFilter('market', v)}
         />
         <FilterSelect
-          label="Department"
+          label={labelOf('department', 'Department')}
           value={filters.department?.[0]}
           options={filterOptions.data?.departments ?? []}
           onChange={(v) => setFilter('department', v)}
         />
         <FilterSelect
-          label="Entity"
+          label={labelOf('entity', 'Entity')}
           value={filters.entity?.[0]}
           options={filterOptions.data?.entities ?? []}
           onChange={(v) => setFilter('entity', v)}
         />
         <FilterSelect
-          label="Holding"
+          label={labelOf('holding', 'Holding')}
           value={filters.holding?.[0]}
           options={filterOptions.data?.holdings ?? []}
           onChange={(v) => setFilter('holding', v)}
         />
         <FilterSelect
-          label="Hours Type"
+          label={labelOf('hours_type', 'Hours Type')}
           value={filters.hours_type?.[0]}
           options={filterOptions.data?.hours_types ?? []}
           onChange={(v) => setFilter('hours_type', v)}

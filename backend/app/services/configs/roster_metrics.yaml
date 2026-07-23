@@ -104,31 +104,48 @@ filters:
   status:
     column_role: status
     label: "Status"
+    type: multi
+    applies_to_pages: [hr-portal-home, hr-analytics]
   department:
     column_role: designation
     label: "Department"
+    type: multi
+    applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
+  # Region nests Market (each Market belongs to exactly one Region): the UI
+  # narrows the Market dropdown to the selected Region, but the backend just
+  # filters on whatever region/market values arrive — both are ANDed, which
+  # is consistent because the hierarchy is strict.
   region:
     column_role: region
     label: "Region"
-  # Market nests under Region (each Market belongs to exactly one Region):
-  # the UI narrows the Market dropdown to the selected Region, but the
-  # backend just filters on whatever region/market values arrive — both are
-  # ANDed, which is consistent because the hierarchy is strict.
+    type: multi
+    nests: market
+    applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
   market:
     column_role: market
     label: "Market"
+    type: multi
+    applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
   skill:
     column_role: primary_skill
     label: "Skill"
+    type: multi
+    applies_to_pages: [workforce, skills-experience]
   type:
     column_role: employment_type
     label: "Type"
+    type: multi
+    applies_to_pages: [skills-experience]
   allocation:
     column_role: client
     label: "Allocation"
+    type: multi
+    applies_to_pages: [employee-directory]
   grade:
     column_role: grade
     label: "Grade"
+    type: multi
+    applies_to_pages: [workforce]
 
   # DERIVED filters — they reuse a chart's own bucketing rules rather than
   # re-deriving the bands, so filtering by "5-8 Years" and the chart that
@@ -136,9 +153,13 @@ filters:
   experience:
     derived_from_chart: workforce_by_experience_band
     label: "Experience"
+    type: multi
+    applies_to_pages: [skills-experience]
   seniorityCategory:
     derived_from_chart: workforce_by_seniority_category
     label: "Seniority Category"
+    type: multi
+    applies_to_pages: [skills-experience, employee-directory]
 
 # ---------------------------------------------------------------------------
 # Card definitions — what each KPI on the dashboard counts.

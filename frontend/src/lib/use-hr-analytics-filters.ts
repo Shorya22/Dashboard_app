@@ -16,6 +16,7 @@ import {
   regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 import type { HierarchicalFilterDef } from '@/components/dashboard/filter-bar'
 
 /**
@@ -25,6 +26,9 @@ import type { HierarchicalFilterDef } from '@/components/dashboard/filter-bar'
  * filter state live here to avoid duplicating fetch/filter-option logic.
  */
 export function useHrAnalyticsFilters() {
+  const filterConfig = useFilterConfig('roster')
+  const labelOf = (key: string, fallback: string) =>
+    filterLabel(filterConfig.data?.filters, key, fallback)
 
 
   // Unfiltered list, used ONLY to populate the filter dropdowns — if this
@@ -65,19 +69,23 @@ export function useHrAnalyticsFilters() {
   const monthOptions = buildOptions(
     (trends.data?.month_wise_closing_headcount ?? []).map((m) => m.month),
   )
+  // `monthYear` is a page-local trend/attrition filter (it narrows the
+  // pre-aggregated monthly arrays client-side, not the roster) and is
+  // deliberately NOT declared in the YAML filters block — its label
+  // stays here.
   const filterDefs = [
     { key: 'monthYear', label: 'Month Year', options: monthOptions },
-    { key: 'status', label: 'Status', options: buildOptions(distinctValues(employees, 'status')) },
+    { key: 'status', label: labelOf('status', 'Status'), options: buildOptions(distinctValues(employees, 'status')) },
     {
       key: 'department',
-      label: 'Department',
+      label: labelOf('department', 'Department'),
       options: buildOptions(distinctValues(employees, 'designation')),
     },
   ]
   const hierarchicalFilters: HierarchicalFilterDef[] = [
     {
       key: 'regionMarket',
-      label: 'Region/Market',
+      label: `${labelOf('region', 'Region')}/${labelOf('market', 'Market')}`,
       items: regionMarketItems,
       selected: regionMarket,
       onChange: setRegionMarket,

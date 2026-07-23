@@ -27,6 +27,7 @@ import {
   regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
+import { filterLabel, useFilterConfig } from '@/lib/filter-config'
 
 type DirectoryColumn = { key: string; label: string; display?: string | null }
 
@@ -79,6 +80,9 @@ function buildColumns(cols: DirectoryColumn[]): ColumnDef<EmployeeRecord>[] {
 const PAGE_SIZES = [10, 25, 50]
 
 export function EmployeeDirectoryPage() {
+  const filterConfig = useFilterConfig('roster')
+  const labelOf = (key: string, fallback: string) =>
+    filterLabel(filterConfig.data?.filters, key, fallback)
   const [pageSize, setPageSize] = React.useState(25)
   const [pageIndex, setPageIndex] = React.useState(0)
   const [nameSearch, setNameSearch] = React.useState('')
@@ -116,7 +120,7 @@ export function EmployeeDirectoryPage() {
   const filterDefs = [
     {
       key: 'department',
-      label: 'Department',
+      label: labelOf('department', 'Department'),
       // Designation has a casing-duplicate data-quality issue ("SalesForce
       // Core Developer" vs "Salesforce Core Developer") — normalize before
       // building dropdown options so it doesn't show two entries for the
@@ -130,12 +134,12 @@ export function EmployeeDirectoryPage() {
     },
     {
       key: 'allocation',
-      label: 'Allocation',
+      label: labelOf('allocation', 'Allocation'),
       options: buildOptions(distinctValues(allEmployees, 'client')),
     },
     {
       key: 'seniorityCategory',
-      label: 'Seniority Category',
+      label: labelOf('seniorityCategory', 'Seniority Category'),
       options: buildOptions(
         Object.keys(breakdowns.data?.workforce_by_seniority_category ?? {}),
       ),
@@ -209,7 +213,7 @@ export function EmployeeDirectoryPage() {
           hierarchical={[
             {
               key: 'regionMarket',
-              label: 'Region/Market',
+              label: `${labelOf('region', 'Region')}/${labelOf('market', 'Market')}`,
               items: regionMarketItems,
               selected: regionMarket,
               onChange: setRegionMarket,

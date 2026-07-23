@@ -64,6 +64,17 @@ class WeekHierarchyEntry(BaseModel):
     week: str
 
 
+class RegionMarketOption(BaseModel):
+    """One region with its nested markets, for the Utilization Home
+    Region/Market hierarchical filter. Sourced from the union of the
+    roster's `Region`/`Market` taxonomy and the booking sheet's
+    `Region (EC)`/`Market (EC)` — see
+    `booking_metrics.get_filter_options` for the union rule."""
+
+    region: str
+    markets: list[str]
+
+
 class FilterOptions(BaseModel):
     weeks: list[str]
     # Year > Month > Week nesting for the cascading date filter. `weeks`
@@ -71,6 +82,10 @@ class FilterOptions(BaseModel):
     week_hierarchy: list[WeekHierarchyEntry]
     regions: list[str]
     markets: list[str]
+    # Region > Market hierarchy for the Utilization Home Region/Market
+    # filter, unioned across roster + booking taxonomies. Backward
+    # compatible: defaults to [] for callers that don't populate it.
+    region_market_hierarchy: list[RegionMarketOption] = Field(default_factory=list)
     departments: list[str]
     entities: list[str]
     holdings: list[str]

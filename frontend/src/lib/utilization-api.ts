@@ -46,25 +46,9 @@ export interface WeekHierarchyEntry {
   week: string
 }
 
-/** Build the Region > Market tree for the hierarchical Region/Market
- * multi-select, matching the Search page: Region parents from the flat
- * `regions` list, Market children from the (region, market) pairs of
- * `/utilization/by-region-market` (the only endpoint that associates the
- * two). Market values keep the raw string the API filters on, but display
- * the confirmed alias (BN -> BENO, Technology -> AMER). */
-export function buildRegionMarketItems(
-  regions: string[] | undefined,
-  pairs: { region: string; market: string }[] | undefined,
-): HierarchicalItem[] {
-  const items: HierarchicalItem[] = (regions ?? []).map((r) => ({ value: r, label: r }))
-  const seen = new Set<string>()
-  for (const { region, market } of pairs ?? []) {
-    const key = `${region}::${market}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    items.push({ value: key, label: marketDisplayLabel(market), parent: region })
-  }
-  return items
+export interface RegionMarketOption {
+  region: string
+  markets: string[]
 }
 
 /** Split a hierarchical Region/Market selection into `region[]` / `market[]`
@@ -88,23 +72,96 @@ export function splitRegionMarketSelection(selected: string[]): {
   }
 }
 
-/** Build the Month > Week tree for the hierarchical date multi-select, from
- * the backend's Year>Month>Week hierarchy. Each Month (the booking sheet's
- * own label, e.g. "May 26") is a synthetic parent group; each Week is a
- * selectable leaf whose value is the ISO week-start date — so ticking a month
- * selects all its weeks, and the filter always sends exact `week` values.
- * Entries arrive week-sorted, so months render chronologically. */
+/** Canonical utilization-side Region > Market tree builder — the HR side
+ * has its own (`buildRegionMarketItems` in `employee-filters.ts`) that
+ * feeds off the roster employee list. One canonical helper per side.
+ *
+ * Build the Region > Market tree for the Utilization Home page's unified
+ * Region/Market filter, from the backend's `region_market_hierarchy`
+ * (unioned across roster + booking taxonomies — see
+ * `booking_metrics.get_filter_options`). Region is a hierarchy-only group
+ * (`isGroup: true`), so ticking a region toggles all its markets without
+ * emitting the region as a filter value; Market leaves are encoded as
+ * `"<region>::<market>"` so they round-trip through
+ * `splitRegionMarketSelection`. Regions without any markets still appear
+ * as an empty group so the user can see they exist (roster-only regions
+ * — the whole point of the union). */
+export function regionMarketHierarchyToItems(
+  hier: RegionMarketOption[] | undefined,
+): HierarchicalItem[] {
+  const items: HierarchicalItem[] = []
+  for (const { region, markets } of hier ?? []) {
+    items.push({ value: region, label: region, isGroup: true })
+    for (const market of markets) {
+      items.push({
+        value: `${region}::${market}`,
+        label: marketDisplayLabel(market),
+        parent: region,
+      })
+    }
+  }
+  return items
+}
+
+// Canonical formatters for Year>Month>Week labels — shared with the
+// weeksToHierarchy() helpers in utilization-search-page.tsx and
+// employee-utilization-page.tsx. Kept in sync deliberately: Month =
+// "Apr 2026", Week = "13 Apr 2026". Year is just the 4-digit year.
+const WEEK_MONTH_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' })
+const WEEK_DAY_FMT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/** Build the Year > Month > Week tree for the hierarchical date multi-select
+ * from the backend's `week_hierarchy`. Year and Month are hierarchy-only
+ * groups (`isGroup: true`); Week is a selectable leaf whose `value` is the
+ * ISO week-start Monday date (`YYYY-MM-DD`) — the filter value the API
+ * expects. So ticking a Year or Month toggles all descendant weeks.
+ *
+ * IMPORTANT — labels are derived from the `week` field, NOT from the
+ * backend's `year`/`month` strings.
+ *
+ * Why: the backend's `month` field comes from the booking sheet's `Month`
+ * column, which is a real `datetime64` in the source file (see data-model
+ * SKILL.md 2026-07-21 note); `str(month)` on the backend produces
+ * `"2026-04-26 00:00:00"`, which would leak into the label as a raw
+ * datetime. Deriving labels from the ISO week Monday (which IS reliable)
+ * sidesteps that entirely and keeps this frontend helper the single
+ * source of truth for date display, matching `weeksToHierarchy` in
+ * utilization-search-page.tsx and employee-utilization-page.tsx
+ * (Month "Apr 2026", Week "13 Apr 2026").
+ *
+ * Grouping keys stay synthetic (`__year::<yyyy>`, `__month::<yyyy>-<mm>`)
+ * so months in different years with the same short-month label still
+ * nest correctly. */
 export function weekHierarchyToItems(
   hierarchy: WeekHierarchyEntry[] | undefined,
 ): HierarchicalItem[] {
-  return (hierarchy ?? []).map((e) => {
+  const items: HierarchicalItem[] = []
+  const seenYears = new Set<string>()
+  const seenMonths = new Set<string>()
+  for (const e of hierarchy ?? []) {
     const d = new Date(`${e.week}T00:00:00`)
-    const dayLabel = d.toLocaleDateString(undefined, {
-      day: '2-digit',
-      month: 'short',
-    })
-    return { value: e.week, label: dayLabel, parent: e.month }
-  })
+    if (Number.isNaN(d.getTime())) continue
+    const year = String(d.getFullYear())
+    // MM (1-12) padded — grouping key only, not shown to the user.
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0')
+    const yearKey = `__year::${year}`
+    const monthKey = `__month::${year}-${monthNum}`
+    if (!seenYears.has(yearKey)) {
+      seenYears.add(yearKey)
+      items.push({ value: yearKey, label: year, isGroup: true })
+    }
+    if (!seenMonths.has(monthKey)) {
+      seenMonths.add(monthKey)
+      items.push({
+        value: monthKey,
+        label: WEEK_MONTH_FMT.format(d),
+        isGroup: true,
+        parent: yearKey,
+      })
+    }
+    items.push({ value: e.week, label: WEEK_DAY_FMT.format(d), parent: monthKey })
+  }
+  return items
 }
 
 export interface FilterOptions {
@@ -113,6 +170,9 @@ export interface FilterOptions {
   week_hierarchy: WeekHierarchyEntry[]
   regions: string[]
   markets: string[]
+  /** Region > Market hierarchy for the Utilization Home unified
+   * Region/Market filter (union of roster and booking taxonomies). */
+  region_market_hierarchy: RegionMarketOption[]
   departments: string[]
   entities: string[]
   holdings: string[]
@@ -238,33 +298,68 @@ export interface UtilizationOverview {
   employee_ranking: EmployeeRankingRow[]
 }
 
-export function useUtilizationSummary() {
-  return useQuery({
-    queryKey: ['utilization', 'summary'],
-    queryFn: async () => (await apiClient.get<UtilizationSummary>('/v1/utilization/summary')).data,
-  })
-}
+// Filters accepted by the four booking-aggregation endpoints below —
+// same shape as `RecordsFilters` minus `limit`/`offset`. All four
+// endpoints share one FastAPI dependency (`_booking_filter_params` in
+// `backend/app/api/utilization.py`) so they cannot diverge; the array
+// query params are serialized as repeated keys (`?region=EMEA&region=AMER`)
+// via `paramsSerializer: { indexes: null }`, matching FastAPI's list
+// parsing.
+export type BookingChartFilters = Omit<RecordsFilters, 'limit' | 'offset'>
 
-export function useUtilizationWeeklyTrend() {
+export function useUtilizationSummary(filters: BookingChartFilters = {}) {
   return useQuery({
-    queryKey: ['utilization', 'weekly-trend'],
+    queryKey: ['utilization', 'summary', filters],
     queryFn: async () =>
-      (await apiClient.get<WeeklyTrendResponse>('/v1/utilization/weekly-trend')).data,
+      (
+        await apiClient.get<UtilizationSummary>('/v1/utilization/summary', {
+          params: filters,
+          paramsSerializer: { indexes: null },
+        })
+      ).data,
+    placeholderData: (prev) => prev,
   })
 }
 
-export function useUtilizationByRegion() {
+export function useUtilizationWeeklyTrend(filters: BookingChartFilters = {}) {
   return useQuery({
-    queryKey: ['utilization', 'by-region'],
-    queryFn: async () => (await apiClient.get<ByRegionResponse>('/v1/utilization/by-region')).data,
-  })
-}
-
-export function useUtilizationByRegionMarket() {
-  return useQuery({
-    queryKey: ['utilization', 'by-region-market'],
+    queryKey: ['utilization', 'weekly-trend', filters],
     queryFn: async () =>
-      (await apiClient.get<ByRegionMarketResponse>('/v1/utilization/by-region-market')).data,
+      (
+        await apiClient.get<WeeklyTrendResponse>('/v1/utilization/weekly-trend', {
+          params: filters,
+          paramsSerializer: { indexes: null },
+        })
+      ).data,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function useUtilizationByRegion(filters: BookingChartFilters = {}) {
+  return useQuery({
+    queryKey: ['utilization', 'by-region', filters],
+    queryFn: async () =>
+      (
+        await apiClient.get<ByRegionResponse>('/v1/utilization/by-region', {
+          params: filters,
+          paramsSerializer: { indexes: null },
+        })
+      ).data,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function useUtilizationByRegionMarket(filters: BookingChartFilters = {}) {
+  return useQuery({
+    queryKey: ['utilization', 'by-region-market', filters],
+    queryFn: async () =>
+      (
+        await apiClient.get<ByRegionMarketResponse>('/v1/utilization/by-region-market', {
+          params: filters,
+          paramsSerializer: { indexes: null },
+        })
+      ).data,
+    placeholderData: (prev) => prev,
   })
 }
 

@@ -14,6 +14,10 @@ interface ChartCardProps {
   provisional?: boolean
   provisionalNote?: string
   height?: string
+  /** Override the empty-state copy. Use to distinguish "the dataset is
+   * empty" (the default) from "the current filter combo excludes every
+   * row" — the latter gives the user a next step (clear a filter). */
+  emptyMessage?: string
   children: React.ReactNode
 }
 
@@ -40,6 +44,7 @@ export function ChartCard({
   isError,
   isEmpty,
   height = 'h-72',
+  emptyMessage,
   children,
 }: ChartCardProps) {
   return (
@@ -72,7 +77,7 @@ export function ChartCard({
         ) : isEmpty ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <Inbox className="h-6 w-6" />
-            <p className="text-sm">No data for this view.</p>
+            <p className="text-sm">{emptyMessage ?? 'No data for this view.'}</p>
           </div>
         ) : (
           children

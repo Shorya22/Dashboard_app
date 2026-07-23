@@ -309,18 +309,51 @@ def get_hours_by_region_market(df: pd.DataFrame) -> list[dict]:
     ]
 
 
-@cache_on_df
-def get_filter_options(df: pd.DataFrame) -> dict:
+def _clean_str(value) -> str | None:
+    """Normalize a cell to a stripped non-empty string, or None if blank/NaN."""
+    if value is None:
+        return None
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    s = str(value).strip()
+    return s if s else None
+
+
+def get_filter_options(df: pd.DataFrame, roster_df: pd.DataFrame | None = None) -> dict:
     """
     Distinct values for each Search-page filter field, sorted for stable
-    dropdown ordering. Powers the Search page's filter form.
-    Reads: `Monday of Week`, `Region (EC)`, `Department`, `Team (EC)`,
-    `Holding`, `Booked Hours Type`, `Market (EC)`.
+    dropdown ordering. Powers the Search / Results / Utilization Home
+    filter forms.
 
-    `markets` (`Market (EC)` distinct values, e.g. `Technology`, `BN`,
-    `DACH`, `UKI` — see `get_hours_by_region_market`'s docstring for the
-    label caveat) was ADDED so the Region/Market filter can be genuinely
-    hierarchical, not just cosmetic.
+    Reads (booking): `Monday of Week`, `Month`, `Region (EC)`, `Department`,
+    `Team (EC)`, `Holding`, `Booked Hours Type`, `Market (EC)`.
+    Reads (roster, optional): `Region`, `Market`.
+
+    Canonical source per field (Phase 1 filter-overhaul decision,
+    2026-07-23):
+
+    - `regions`, `markets`, `region_market_hierarchy`, `departments` —
+      UNION of roster + booking. The roster is the master workforce
+      taxonomy per the data-model skill; a value that exists in the
+      roster but not in the booking sheet still appears in the filter
+      so the user can see every real value (it will filter to zero
+      booking rows if picked — that's acceptable and matches user
+      intent). Blank/NaN/whitespace-only values are dropped.
+      - Region source columns: roster `Region`, booking `Region (EC)`.
+      - Market source columns: roster `Market`, booking `Market (EC)`.
+      - Department source columns: roster `Designation` (the roster's
+        canonical department column — the "Departments" DAX measure is
+        `DISTINCTCOUNT(HR MASTER[Designation])`, confirmed in the
+        data-model skill and cross-referenced in `docs/METRICS.md`
+        under "Card: Departments"), booking `Department`.
+
+    - `entities`, `holdings`, `hours_types` — BOOKING-ONLY. These are
+      booking-specific concepts (Team (EC) codes, client holdings,
+      Client vs Internal hours) with no roster counterpart, so unioning
+      would introduce nothing.
+
+    See `docs/FILTERS.md` for the full canonical-source table and
+    rationale.
     """
     weeks = pd.to_datetime(df["Monday of Week"].dropna().unique())
     # Year > Month > Week hierarchy for the cascading date filter. Month is
@@ -339,15 +372,86 @@ def get_filter_options(df: pd.DataFrame) -> dict:
                 "week": week_str,
             }
     week_hierarchy = sorted(seen.values(), key=lambda e: e["week"])
+
+    # Union region -> {markets} across booking (`Region (EC)`/`Market (EC)`)
+    # and, if provided, roster (`Region`/`Market`). A region seen in EITHER
+    # source appears in the hierarchy; markets under it are the union of
+    # both sources. See docstring above for rationale.
+    region_markets: dict[str, set[str]] = {}
+
+    def _absorb(pairs_df: pd.DataFrame, region_col: str, market_col: str) -> None:
+        if region_col not in pairs_df.columns:
+            return
+        for r_raw, m_raw in zip(pairs_df[region_col], pairs_df.get(market_col, [])):
+            region = _clean_str(r_raw)
+            if region is None:
+                continue
+            region_markets.setdefault(region, set())
+            market = _clean_str(m_raw)
+            if market is not None:
+                region_markets[region].add(market)
+
+    _absorb(df, "Region (EC)", "Market (EC)")
+    if roster_df is not None:
+        _absorb(roster_df, "Region", "Market")
+
+    region_market_hierarchy = [
+        {"region": r, "markets": sorted(region_markets[r])}
+        for r in sorted(region_markets)
+    ]
+
+    def _union_clean(*columns: pd.Series) -> list[str]:
+        """Union non-blank string values across the given Series, sorted."""
+        merged: set[str] = set()
+        for series in columns:
+            for v in series:
+                cleaned = _clean_str(v)
+                if cleaned is not None:
+                    merged.add(cleaned)
+        return sorted(merged)
+
+    # regions: UNION of roster.Region + booking.Region (EC). Flat list kept
+    # alongside `region_market_hierarchy` for callers (Search/Results pages)
+    # that need a plain region list — those pages now also see roster-only
+    # regions, matching the Utilization Home behavior. See module docstring.
+    if roster_df is not None and "Region" in roster_df.columns:
+        regions = _union_clean(df["Region (EC)"], roster_df["Region"])
+    else:
+        regions = _union_clean(df["Region (EC)"])
+
+    # markets: UNION of roster.Market + booking.Market (EC). Same rationale.
+    if roster_df is not None and "Market" in roster_df.columns:
+        markets = _union_clean(df["Market (EC)"], roster_df["Market"])
+    else:
+        markets = _union_clean(df["Market (EC)"])
+
+    # departments: UNION of roster.Designation (the roster's canonical
+    # department column per METRICS.md's "Departments" card — DAX is
+    # DISTINCTCOUNT(HR MASTER[Designation])) + booking.Department.
+    # Booking's `Department` is a coarser sub-function label (QA,
+    # Engineering, ...); the roster's `Designation` is a finer job-title
+    # ("SalesForce Core Developer"). Unioning them means the filter shows
+    # every real value the user might filter on — a booking department
+    # the roster doesn't cover would still appear (defensive), and a
+    # roster job title with zero booked hours also appears (filters to
+    # zero booking rows — matches "show all options" intent).
+    if roster_df is not None and "Designation" in roster_df.columns:
+        departments = _union_clean(df["Department"], roster_df["Designation"])
+    else:
+        departments = _union_clean(df["Department"])
+
     return {
         "weeks": sorted(w.strftime("%Y-%m-%d") for w in weeks),
         "week_hierarchy": week_hierarchy,
-        "regions": sorted(df["Region (EC)"].dropna().unique().tolist()),
-        "markets": sorted(df["Market (EC)"].dropna().unique().tolist()),
-        "departments": sorted(df["Department"].dropna().unique().tolist()),
-        "entities": sorted(df["Team (EC)"].dropna().unique().tolist()),
-        "holdings": sorted(df["Holding"].dropna().unique().tolist()),
-        "hours_types": sorted(df["Booked Hours Type"].dropna().unique().tolist()),
+        "regions": regions,
+        "markets": markets,
+        "region_market_hierarchy": region_market_hierarchy,
+        "departments": departments,
+        # `entities`, `holdings`, `hours_types` are booking-only — no
+        # roster counterpart, no union.
+        "entities": _union_clean(df["Team (EC)"]),
+        "holdings": _union_clean(df["Holding"]),
+        "hours_types": _union_clean(df["Booked Hours Type"]),
     }
 
 

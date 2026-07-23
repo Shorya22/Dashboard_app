@@ -61,9 +61,11 @@ export function buildServerFilters(
 // two apart: a plain "EMEA" is a Region, an "EMEA::UKI" is a Market.
 // --------------------------------------------------------------------------
 
-/** Build the Region > Market tree from the employee list: one top-level item
- * per Region, one child per Market (value `"<region>::<market>"`, so the same
- * market string under two regions can't collide). */
+/** Canonical HR-side Region > Market tree builder. Feeds off the unfiltered
+ * roster employee list (see `useRosterEmployeesAll`) — the utilization
+ * pages use `regionMarketHierarchyToItems` in `utilization-api.ts` instead
+ * (booking-side, union of roster + booking taxonomies). One canonical
+ * helper per side, not a duplicate. */
 export function buildRegionMarketItems(
   employees: EmployeeRecord[],
 ): HierarchicalItem[] {
