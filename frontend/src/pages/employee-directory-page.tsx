@@ -19,10 +19,13 @@ import {
 } from '@/lib/roster-api'
 import {
   ALL,
+  applyCascade,
   buildOptions,
   buildServerFilters,
   compareGrade,
   distinctValues,
+  REGION_MARKET_CASCADE,
+  regionMarketDefs,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -103,9 +106,10 @@ export function EmployeeDirectoryPage() {
     allocation: ALL,
     seniorityCategory: ALL,
     region: ALL,
+    market: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
 
   const filterDefs = [
     {
@@ -134,11 +138,7 @@ export function EmployeeDirectoryPage() {
         Object.keys(breakdowns.data?.workforce_by_seniority_category ?? {}),
       ),
     },
-    {
-      key: 'region',
-      label: 'Region/Market',
-      options: buildOptions(distinctValues(allEmployees, 'region')),
-    },
+    ...regionMarketDefs(allEmployees, filters.region),
   ]
 
   // Dropdown filters are applied SERVER-side against the YAML column roles,

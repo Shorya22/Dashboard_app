@@ -52,6 +52,110 @@ export function buildServerFilters(
   return out
 }
 
+// --------------------------------------------------------------------------
+// Hierarchical (cascading) filters — e.g. Region > Market, Month > Week.
+// A parent dropdown narrows a child dropdown to only the child values that
+// occur under the selected parent, and changing the parent resets the child.
+// --------------------------------------------------------------------------
+
+/** One parent→child dependency in a cascade (e.g. `{ parent: 'region',
+ * child: 'market' }`). A chain like Year>Month>Week is expressed as two
+ * rules: year→month and month→week. */
+export interface CascadeRule {
+  parent: string
+  child: string
+}
+
+/** Build a `parent value → sorted distinct child values` map from records,
+ * so a child dropdown can be narrowed to the parent that's selected. Blank
+ * parent/child values are skipped. */
+export function buildHierarchyMap<T extends object>(
+  rows: T[],
+  parentField: keyof T,
+  childField: keyof T,
+): Record<string, string[]> {
+  const sets: Record<string, Set<string>> = {}
+  for (const row of rows) {
+    const p = row[parentField]
+    const c = row[childField]
+    if (p == null || String(p).trim() === '') continue
+    if (c == null || String(c).trim() === '') continue
+    ;(sets[String(p)] ??= new Set()).add(String(c))
+  }
+  const out: Record<string, string[]> = {}
+  for (const [p, s] of Object.entries(sets)) out[p] = Array.from(s).sort()
+  return out
+}
+
+/** Child option values valid for the currently-selected parent. `ALL`
+ * (or unset) parent returns the union of every child value, so the child
+ * dropdown still lists everything until a parent is chosen. */
+export function childOptionsFor(
+  map: Record<string, string[]>,
+  parentValue: string | undefined,
+): string[] {
+  if (!parentValue || parentValue === ALL) {
+    return Array.from(new Set(Object.values(map).flat())).sort()
+  }
+  return map[parentValue] ?? []
+}
+
+/** Apply a filter change with cascade resets: whenever a parent filter
+ * changes, every dependent child (transitively, so Year resets Month AND
+ * Week) is reset to `ALL` — otherwise a stale child value would keep
+ * filtering to rows that no longer match the new parent. Returns the next
+ * filter state; pure, so it drops straight into a `setFilters(prev => …)`. */
+export function applyCascade(
+  prev: FilterValues,
+  key: string,
+  value: string,
+  rules: CascadeRule[],
+): FilterValues {
+  const next = { ...prev, [key]: value }
+  // Iterate to a fixed point so a chain (year→month→week) fully clears.
+  let changed = new Set([key])
+  let progressing = true
+  while (progressing) {
+    progressing = false
+    for (const rule of rules) {
+      if (changed.has(rule.parent) && next[rule.child] !== ALL) {
+        next[rule.child] = ALL
+        changed.add(rule.child)
+        progressing = true
+      }
+    }
+  }
+  return next
+}
+
+/** The roster's one cascade: Market nests under Region. Pass to
+ * `applyCascade` from a page's `setFilter` so picking a Region resets Market. */
+export const REGION_MARKET_CASCADE: CascadeRule[] = [
+  { parent: 'region', child: 'market' },
+]
+
+/** The paired Region + Market dropdown defs for a roster page. Market's
+ * options are narrowed to the selected Region (all markets when Region is
+ * `ALL`). Spread these where the old single "Region/Market" def used to be. */
+export function regionMarketDefs(
+  employees: EmployeeRecord[],
+  selectedRegion: string | undefined,
+): FilterDef[] {
+  const map = buildHierarchyMap(employees, 'region', 'market')
+  return [
+    {
+      key: 'region',
+      label: 'Region',
+      options: buildOptions(distinctValues(employees, 'region')),
+    },
+    {
+      key: 'market',
+      label: 'Market',
+      options: buildOptions(childOptionsFor(map, selectedRegion)),
+    },
+  ]
+}
+
 /** Distinct, sorted, non-empty values for a field across a list of employees. */
 export function distinctValues(
   employees: EmployeeRecord[],

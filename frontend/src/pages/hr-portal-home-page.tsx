@@ -10,9 +10,12 @@ import { STATUS_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
+  applyCascade,
   buildOptions,
   buildServerFilters,
   distinctValues,
+  REGION_MARKET_CASCADE,
+  regionMarketDefs,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -31,18 +34,15 @@ export function HrPortalHomePage() {
 
   const [filters, setFilters] = React.useState<FilterValues>({
     region: ALL,
+    market: ALL,
     status: ALL,
     department: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
 
   const filterDefs = [
-    {
-      key: 'region',
-      label: 'Region/Market',
-      options: buildOptions(distinctValues(employees, 'region')),
-    },
+    ...regionMarketDefs(employees, filters.region),
     {
       key: 'status',
       label: 'Status',

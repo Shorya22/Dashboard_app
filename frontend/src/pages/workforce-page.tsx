@@ -10,9 +10,12 @@ import { withTruncatedLabels } from '@/lib/chart-labels'
 import { TYPE_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import {
   ALL,
+  applyCascade,
   buildOptions,
   buildServerFilters,
   distinctValues,
+  REGION_MARKET_CASCADE,
+  regionMarketDefs,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -26,15 +29,16 @@ export function WorkforcePage() {
 
   const [filters, setFilters] = React.useState<FilterValues>({
     region: ALL,
+    market: ALL,
     grade: ALL,
     department: ALL,
     skill: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
 
   const filterDefs = [
-    { key: 'region', label: 'Region/Market', options: buildOptions(distinctValues(employees, 'region')) },
+    ...regionMarketDefs(employees, filters.region),
     { key: 'grade', label: 'Grade', options: buildOptions(distinctValues(employees, 'grade')) },
     {
       key: 'department',

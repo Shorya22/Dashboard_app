@@ -9,9 +9,12 @@ import {
 } from '@/lib/roster-api'
 import {
   ALL,
+  applyCascade,
   buildOptions,
   buildServerFilters,
   distinctValues,
+  REGION_MARKET_CASCADE,
+  regionMarketDefs,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -34,9 +37,10 @@ export function useHrAnalyticsFilters() {
     status: ALL,
     department: ALL,
     region: ALL,
+    market: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
 
   // KPIs come from the server WITH the filters applied, so they use the
   // YAML metric definitions rather than being recomputed here against
@@ -65,7 +69,7 @@ export function useHrAnalyticsFilters() {
       label: 'Department',
       options: buildOptions(distinctValues(employees, 'designation')),
     },
-    { key: 'region', label: 'Region/Market', options: buildOptions(distinctValues(employees, 'region')) },
+    ...regionMarketDefs(employees, filters.region),
   ]
 
   // Month Year filters trend/resignation charts directly by month label

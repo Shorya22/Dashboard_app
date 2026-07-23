@@ -14,9 +14,12 @@ import { colorsForLabels, EXPERIENCE_BAND_COLORS, REGION_COLORS, SENIORITY_CATEG
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
+  applyCascade,
   buildOptions,
   buildServerFilters,
   distinctValues,
+  REGION_MARKET_CASCADE,
+  regionMarketDefs,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -58,6 +61,7 @@ export function SkillsExperiencePage() {
 
   const [filters, setFilters] = React.useState<FilterValues>({
     region: ALL,
+    market: ALL,
     department: ALL,
     skill: ALL,
     experience: ALL,
@@ -65,7 +69,7 @@ export function SkillsExperiencePage() {
     type: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }))
+    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
 
   // Everything on this page comes from the server WITH the filters applied,
   // so it uses the single YAML definitions. The experience bands and
@@ -92,7 +96,7 @@ export function SkillsExperiencePage() {
   )
 
   const filterDefs = [
-    { key: 'region', label: 'Region/Market', options: buildOptions(distinctValues(employees, 'region')) },
+    ...regionMarketDefs(employees, filters.region),
     {
       key: 'department',
       label: 'Department',

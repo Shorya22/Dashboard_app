@@ -109,7 +109,14 @@ filters:
     label: "Department"
   region:
     column_role: region
-    label: "Region/Market"
+    label: "Region"
+  # Market nests under Region (each Market belongs to exactly one Region):
+  # the UI narrows the Market dropdown to the selected Region, but the
+  # backend just filters on whatever region/market values arrive — both are
+  # ANDed, which is consistent because the hierarchy is strict.
+  market:
+    column_role: market
+    label: "Market"
   skill:
     column_role: primary_skill
     label: "Skill"
