@@ -247,6 +247,19 @@ class EmployeeRecord(BaseModel):
     supervisor: str | None = None
 
 
+class DirectoryColumn(BaseModel):
+    key: str
+    label: str
+    display: str | None = Field(
+        None,
+        description="Frontend rendering hint: serial / experience / grade (else plain text)",
+    )
+
+
 class EmployeeDirectoryResponse(BaseModel):
     items: list[EmployeeRecord]
     total: int
+    columns: list[DirectoryColumn] = Field(
+        default_factory=list,
+        description="Ordered table columns, declared in roster_metrics.yaml",
+    )

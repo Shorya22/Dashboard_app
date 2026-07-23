@@ -97,6 +97,20 @@ def leaving_reason(kind: str) -> str:
     return load_metric_config()["attrition"]["reasons"][kind]
 
 
+def directory_fields() -> dict[str, str]:
+    """Directory record: output key -> column role."""
+    return load_metric_config()["directory"]["fields"]
+
+
+def directory_columns() -> list[dict]:
+    """Ordered display columns for the directory table (key + label + hints)."""
+    return load_metric_config()["directory"]["columns"]
+
+
+def directory_trim_keys() -> list[str]:
+    return load_metric_config()["directory"].get("trim_whitespace", [])
+
+
 def filters() -> dict[str, dict]:
     """The declared page filters, keyed by filter name."""
     return load_metric_config().get("filters", {})
@@ -270,6 +284,26 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                 f"status.counts_as_present: {value!r} is not one of the declared "
                 f"status values ({sorted(declared_status_values)}) — headcount "
                 "would silently exclude it"
+            )
+
+    directory = cfg.get("directory", {})
+    field_keys = set(directory.get("fields", {}))
+    for key, role in directory.get("fields", {}).items():
+        need_role(role, f"directory.fields.{key}")
+    for i, colspec in enumerate(directory.get("columns", [])):
+        if "key" not in colspec or "label" not in colspec:
+            problems.append(f"directory.columns[{i}]: needs `key` and `label`")
+            continue
+        # every display column except the synthetic serial must map to a field
+        if colspec.get("display") != "serial" and colspec["key"] not in field_keys:
+            problems.append(
+                f"directory.columns[{i}]: key {colspec['key']!r} is not a "
+                f"directory field (known: {sorted(field_keys)})"
+            )
+    for key in directory.get("trim_whitespace", []):
+        if key not in field_keys:
+            problems.append(
+                f"directory.trim_whitespace: {key!r} is not a directory field"
             )
 
     for i, rule in enumerate(cfg.get("seniority", {}).get("categories", [])):

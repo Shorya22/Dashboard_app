@@ -40,11 +40,57 @@ columns:
   experience_total: "Total Experience"
   primary_skill: "Primary Skill"    # stacked-bar rows on Skills & Experience
   skill: "Skill"                    # broader category — the Skills Covered card
+  grade: "GRADE"
+  work_location: "WORK_LOCATION"
+  market: "Market"
+  supervisor: "SUPERVISOR (Hexaware)"
   employment_type: "Type"                # GCC / Non GCC
   joining_date: "DOJ (DEPT)"             # drives Joiners + Month Wise Headcount
   leaving_date: "LWD"                    # drives Leavers / Month-Wise Resignation
   leaving_reason: "Reason for Leaving"   # drives Voluntary vs Involuntary
   snapshot_date: "Today"                 # "as of" date of the export
+
+# ---------------------------------------------------------------------------
+# Employee Directory — the searchable roster table.
+# ---------------------------------------------------------------------------
+# `fields` is the full record returned per employee: each output key maps to
+# a column ROLE, so a renamed source column flows through here too (the old
+# code read raw column names and would have broken on a rename). `columns`
+# is the ordered set the TABLE shows, with display hints the frontend
+# honours (serial = 1-based row number; experience = "x yrs"; grade = custom
+# grade sort). Other keys in `fields` still power the filter dropdowns on the
+# analytics pages even when not shown in the table.
+directory:
+  fields:
+    employee_id: employee_id
+    name: employee_name
+    grade: grade
+    designation: designation
+    work_location: work_location
+    total_experience: experience_total
+    working_entity: working_entity
+    client: client
+    seniority_level: seniority
+    region: region
+    market: market
+    status: status
+    type: employment_type
+    primary_skill: primary_skill
+    skill: skill
+    supervisor: supervisor
+  trim_whitespace: [name, supervisor]   # double-space gotcha in source names
+  columns:
+    - {key: serial_no,        label: "S.No.",           display: serial}
+    - {key: employee_id,      label: "Employee ID"}
+    - {key: name,             label: "Name"}
+    - {key: grade,            label: "Grade",            display: grade}
+    - {key: designation,      label: "Designation"}
+    - {key: work_location,    label: "Work Location"}
+    - {key: total_experience, label: "Total Experience", display: experience}
+    - {key: region,           label: "Region"}
+    - {key: market,           label: "Market"}
+    - {key: primary_skill,    label: "Primary Skill"}
+    - {key: status,           label: "Status"}
 
 # ---------------------------------------------------------------------------
 # Filters — the dropdowns the HR pages filter by.

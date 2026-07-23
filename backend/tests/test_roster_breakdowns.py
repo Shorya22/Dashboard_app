@@ -576,6 +576,56 @@ def test_get_employee_directory(sample_roster):
     assert alice["client"] == "Acme Corp"
 
 
+def test_directory_columns_come_from_config():
+    """
+    The table's columns (order + labels) are declared in
+    roster_metrics.yaml, not hardcoded — including the Serial No. column.
+    """
+    from app.services.roster_metrics import get_directory_columns
+
+    cols = get_directory_columns()
+    keys = [c["key"] for c in cols]
+
+    # Serial No. is first and flagged for the frontend to render as a counter
+    assert keys[0] == "serial_no"
+    assert cols[0]["display"] == "serial"
+    assert cols[0]["label"] == "S.No."
+
+    # every non-serial display column maps to a real directory field
+    from app.services import metric_config
+
+    fields = set(metric_config.directory_fields())
+    for c in cols:
+        if c.get("display") != "serial":
+            assert c["key"] in fields
+
+
+def test_directory_record_follows_a_renamed_source_column():
+    """
+    The record is built through column ROLES, so a renamed source column
+    flows through — the whole point of config-driving it. The client column
+    heading changes every period (Client as on <month>), and the directory
+    must keep showing it without a code change.
+    """
+    from app.services.roster_metrics import get_employee_directory
+    from app.services.validation.engine import prepare_dataset
+
+    df = prepare_dataset(
+        pd.DataFrame(
+            [
+                {
+                    "NEW_EMP_ID": "E1",
+                    "NAME": "Zoe Quinn",
+                    "Client as on August 2027": "Acme",  # future period heading
+                }
+            ]
+        ),
+        "roster",
+    )
+    record = get_employee_directory(df)[0]
+    assert record["client"] == "Acme"  # resolved via the `client` role
+
+
 # --------------------------------------------------------------------------
 # Regression tests against the real roster file
 # --------------------------------------------------------------------------

@@ -121,9 +121,15 @@ export interface EmployeeRecord {
   skill: string | null
   supervisor: string | null
 }
+export interface DirectoryColumn {
+  key: string
+  label: string
+  display?: 'serial' | 'experience' | 'grade' | null
+}
 export interface EmployeeDirectoryResponse {
   items: EmployeeRecord[]
   total: number
+  columns?: DirectoryColumn[]
 }
 
 export interface BookingSummary {

@@ -188,7 +188,11 @@ def roster_employees(
         df = roster_metrics.apply_filters(get_roster_df(), filters)
         records = roster_metrics.get_employee_directory(df)
         page = records[offset : offset + limit]
-        return EmployeeDirectoryResponse(items=page, total=len(records))
+        return EmployeeDirectoryResponse(
+            items=page,
+            total=len(records),
+            columns=roster_metrics.get_directory_columns(),
+        )
     except Exception:
         logger.exception("roster_employees: failed to compute employee directory")
         raise HTTPException(status_code=500, detail="Failed to compute employee directory")

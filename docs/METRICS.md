@@ -12,7 +12,7 @@ page as we verify them; anything not listed here has not been reviewed yet.
 | HR Analytics | ✅ 5 cards + 4 charts (Attrition % is a formula — see below) |
 | Workforce | ✅ 6 cards + 3 charts verified |
 | Skills & Experience | ✅ 3 cards + 4 charts verified |
-| Employee Directory | ⬜ not reviewed |
+| Employee Directory | ✅ config-driven columns + Serial No. |
 | Utilization pages | ⬜ not reviewed |
 
 Figures below were checked against the live data on 2026-07-22 (roster 52
@@ -561,6 +561,40 @@ today but had no guarantee of staying in step (locked by
 ### Chart: Total Employees by Experience Band — `7 / 0 / 2 / 12 / 31`
 The standalone `workforce_by_experience_band` chart (numeric_bands),
 identical to the one on HR Home.
+
+---
+
+## Page 6 — Employee Directory
+
+The searchable roster table. Filtering is already server-side (via the same
+YAML filters as the other pages). Two parts are now config-driven:
+
+**The record** (`directory.fields` — output key -> column role): every field
+resolves through a **role**, so a renamed source column flows through here
+exactly like it does for the cards and charts. This replaced a hardcoded
+column map that read raw headings and would have broken on a rename (e.g.
+the client column's `Client as on <month>` heading). Locked by
+`test_directory_record_follows_a_renamed_source_column`.
+
+**The table columns** (`directory.columns` — ordered key + label + display
+hint): the displayed set, order and labels come from YAML. The frontend
+supplies only presentation for a `display` hint:
+
+| `display` | Rendering |
+|---|---|
+| `serial` | 1-based **S.No.** counter, continuous across pages in the current sort |
+| `experience` | "x yrs" |
+| `grade` | grade-aware sort (G3A < G4 < …) |
+| (none) | plain text |
+
+### Serial No. (new)
+A `serial_no` column, declared first in `directory.columns`. It's a display
+row counter (position in the current sorted set), not stored data — so
+there's nothing to configure beyond its presence and label.
+
+Both parts are guarded: the config validator rejects a directory field
+pointing at an unknown role, or a display column with no matching field, at
+load time.
 
 ---
 

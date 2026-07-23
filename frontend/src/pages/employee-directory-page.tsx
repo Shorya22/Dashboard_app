@@ -27,29 +27,53 @@ import {
   type FilterValues,
 } from '@/lib/employee-filters'
 
-const columns: ColumnDef<EmployeeRecord>[] = [
-  { accessorKey: 'employee_id', header: 'Employee ID' },
-  { accessorKey: 'name', header: 'Name' },
-  {
-    accessorKey: 'grade',
-    header: 'Grade',
-    sortingFn: (rowA, rowB) => compareGrade(rowA.original.grade, rowB.original.grade),
-  },
-  { accessorKey: 'designation', header: 'Designation' },
-  { accessorKey: 'work_location', header: 'Work Location' },
-  {
-    accessorKey: 'total_experience',
-    header: 'Total Experience',
-    cell: (info) => {
-      const v = info.getValue<number | null>()
-      return v == null ? '—' : `${v.toFixed(1)} yrs`
-    },
-  },
-  { accessorKey: 'region', header: 'Region' },
-  { accessorKey: 'market', header: 'Market' },
-  { accessorKey: 'primary_skill', header: 'Primary Skill' },
-  { accessorKey: 'status', header: 'Status' },
-]
+type DirectoryColumn = { key: string; label: string; display?: string | null }
+
+// Per-`display`-hint rendering. The column SET, ORDER and LABELS come from
+// the backend (declared in roster_metrics.yaml); this only supplies the
+// small amount of presentation logic — a grade-aware sort, the "x yrs"
+// experience format, and the 1-based serial — keyed by the hint. Anything
+// without a hint renders as plain text.
+function buildColumns(cols: DirectoryColumn[]): ColumnDef<EmployeeRecord>[] {
+  return cols.map((c): ColumnDef<EmployeeRecord> => {
+    if (c.display === 'serial') {
+      return {
+        id: c.key,
+        header: c.label,
+        enableSorting: false,
+        // 1-based serial in the current sort order, continuous across pages
+        // (row.index is the row's position in the full sorted set).
+        cell: (info) => info.row.index + 1,
+      }
+    }
+    if (c.display === 'grade') {
+      return {
+        accessorKey: c.key,
+        header: c.label,
+        sortingFn: (a, b) =>
+          compareGrade(
+            (a.original as unknown as Record<string, unknown>)[c.key] as
+              | string
+              | null,
+            (b.original as unknown as Record<string, unknown>)[c.key] as
+              | string
+              | null,
+          ),
+      }
+    }
+    if (c.display === 'experience') {
+      return {
+        accessorKey: c.key,
+        header: c.label,
+        cell: (info) => {
+          const v = info.getValue<number | null>()
+          return v == null ? '\u2014' : `${v.toFixed(1)} yrs`
+        },
+      }
+    }
+    return { accessorKey: c.key, header: c.label }
+  })
+}
 
 const PAGE_SIZES = [10, 25, 50]
 
@@ -66,6 +90,14 @@ export function EmployeeDirectoryPage() {
   const allQuery = useRosterEmployeesAll()
   const allEmployees = allQuery.data?.items ?? []
   const breakdowns = useRosterBreakdowns()
+
+  // Table columns are declared in roster_metrics.yaml and returned by the
+  // API, so the displayed set/order/labels — and the new Serial No. column —
+  // are config-driven, not a hardcoded list on the frontend.
+  const columns = React.useMemo(
+    () => buildColumns(allQuery.data?.columns ?? []),
+    [allQuery.data],
+  )
 
   const [filters, setFilters] = React.useState<FilterValues>({
     department: ALL,

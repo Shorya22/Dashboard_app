@@ -1601,25 +1601,6 @@ def get_workforce_details_by_region(df: pd.DataFrame) -> list[dict]:
 # Employee Directory — full cleaned roster list
 # --------------------------------------------------------------------------
 
-EMPLOYEE_DIRECTORY_COLUMNS = {
-    "NEW_EMP_ID": "employee_id",
-    "NAME": "name",
-    "GRADE": "grade",
-    "Designation": "designation",
-    "WORK_LOCATION": "work_location",
-    "Total Experience": "total_experience",
-    "Designation": "designation",
-    "Working Entity": "working_entity",
-    "Client": "client",
-    "Seniorirty Level": "seniority_level",
-    "Region": "region",
-    "Market": "market",
-    "Status": "status",
-    "Type": "type",
-    "Primary Skill": "primary_skill",
-    "Skill": "skill",
-    "SUPERVISOR (Hexaware)": "supervisor",
-}
 
 
 @cache_on_df
@@ -1644,16 +1625,29 @@ def get_employee_directory(df: pd.DataFrame) -> list[dict]:
     field (per data-model SKILL.md's explicit multi-value handling
     rule) — returned as the raw free-text string for display/filtering.
     """
+    fields = metric_config.directory_fields()
+    trim = set(metric_config.directory_trim_keys())
+    # Resolve each output key's column ONCE (role -> physical column), so a
+    # renamed source column flows through here exactly like it does for the
+    # cards and charts.
+    resolved = {
+        out_key: metric_config.column(role) for out_key, role in fields.items()
+    }
     records = []
     for _, row in df.iterrows():
         record = {}
-        for src_col, out_key in EMPLOYEE_DIRECTORY_COLUMNS.items():
-            value = row.get(src_col)
-            if src_col in ("NAME", "SUPERVISOR (Hexaware)") and isinstance(value, str):
+        for out_key, col in resolved.items():
+            value = row.get(col)
+            if out_key in trim and isinstance(value, str):
                 value = " ".join(value.split())
             record[out_key] = value
         records.append(record)
     return records
+
+
+def get_directory_columns() -> list[dict]:
+    """The directory table's display columns (order + labels + display hints)."""
+    return metric_config.directory_columns()
 
 
 # --------------------------------------------------------------------------
