@@ -59,6 +59,7 @@ export function HrAnalyticsPage() {
     filters,
     setFilter,
     filterDefs,
+    hierarchicalFilters,
     monthFilter,
   } = useHrAnalyticsFilters()
 
@@ -172,7 +173,12 @@ export function HrAnalyticsPage() {
 
   return (
     <div className="space-y-5">
-      <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
+      <FilterBar
+        filters={filterDefs}
+        values={filters}
+        onChange={setFilter}
+        hierarchical={hierarchicalFilters}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard

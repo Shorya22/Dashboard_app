@@ -145,6 +145,62 @@ def test_grade_filter_is_declared_and_works(roster):
     assert set(out[column].astype(str).unique()) == {a_grade}
 
 
+def test_region_market_hierarchy(roster):
+    """Market nests strictly under Region: every Market belongs to exactly
+    one Region, and filtering Region+Market together equals filtering by the
+    Market alone (the hierarchy makes the extra Region redundant, never
+    contradictory). Regression for the cascading Region>Market filter."""
+    assert "market" in metric_config.filters()
+    region_col = metric_config.column("region")
+    market_col = metric_config.column("market")
+
+    # Each market maps to exactly one region.
+    for market, grp in roster.groupby(market_col):
+        regions = grp[region_col].astype(str).unique()
+        assert len(regions) == 1, f"market {market!r} spans regions {list(regions)}"
+        region = str(regions[0])
+        by_market = roster_metrics.apply_filters(roster, {"market": str(market)})
+        by_both = roster_metrics.apply_filters(
+            roster, {"region": region, "market": str(market)}
+        )
+        assert len(by_market) == len(by_both) > 0
+
+
+def test_multi_value_filter_is_or_within_field(roster):
+    """A list value means "match any of these" — what the hierarchical
+    Region/Market multi-select sends when several regions/markets are ticked.
+    The union of two single-value results equals the multi-value result."""
+    region_col = metric_config.column("region")
+    regions = sorted(roster[region_col].astype(str).unique())[:2]
+    a = roster_metrics.apply_filters(roster, {"region": regions[0]})
+    b = roster_metrics.apply_filters(roster, {"region": regions[1]})
+    both = roster_metrics.apply_filters(roster, {"region": regions})
+    assert len(both) == len(a) + len(b)
+    assert set(both[region_col].astype(str).unique()) == set(regions)
+
+
+def test_api_reads_repeated_query_params_as_list(api, roster):
+    """`?region=EMEA&region=AMER` (repeated) filters as OR-within-field over
+    HTTP, proving _filter_params reads multi-value params via getlist."""
+    headers = {"Authorization": f"Bearer {_token(api)}"}
+    region_col = metric_config.column("region")
+    regions = sorted(roster[region_col].astype(str).unique())[:2]
+    single = [
+        api.get(
+            "/api/v1/roster/employees",
+            params={"region": r, "limit": 500},
+            headers=headers,
+        ).json()["total"]
+        for r in regions
+    ]
+    multi = api.get(
+        "/api/v1/roster/employees",
+        params=[("region", regions[0]), ("region", regions[1]), ("limit", 500)],
+        headers=headers,
+    ).json()["total"]
+    assert multi == sum(single) > 0
+
+
 def test_combined_filters_intersect(roster):
     """Two filters together return the intersection, never more than either
     alone."""

@@ -1670,7 +1670,9 @@ def get_directory_columns() -> list[dict]:
 # --------------------------------------------------------------------------
 
 
-def apply_filters(df: pd.DataFrame, selected: dict[str, str] | None) -> pd.DataFrame:
+def apply_filters(
+    df: pd.DataFrame, selected: dict[str, str | list[str]] | None
+) -> pd.DataFrame:
     """
     Narrow the roster by the page filters declared in
     `configs/roster_metrics.yaml` under `filters:`.
@@ -1683,15 +1685,28 @@ def apply_filters(df: pd.DataFrame, selected: dict[str, str] | None) -> pd.DataF
     those pages did not. Filtering here means the page and the API can
     only ever agree, because there is one implementation.
 
+    Each filter value is either a single string or a LIST of strings.
+    A list means "match any of these" (OR within the field) — this is what
+    the hierarchical Region/Market multi-select sends when several regions
+    or markets are ticked. Across different filters the matches are AND-ed.
+
     Unknown filter names and blank/"all" selections are ignored.
     """
     if not selected:
         return df
 
+    def _values(value: str | list[str]) -> list[str]:
+        """Non-empty selected values as a list of strings (drops blanks)."""
+        raw = value if isinstance(value, (list, tuple)) else [value]
+        return [str(v) for v in raw if v is not None and str(v) != ""]
+
     declared = metric_config.filters()
     out = df
     for name, value in selected.items():
-        if not value or name not in declared:
+        if name not in declared:
+            continue
+        values = _values(value)
+        if not values:
             continue
         spec = declared[name]
 
@@ -1701,11 +1716,11 @@ def apply_filters(df: pd.DataFrame, selected: dict[str, str] | None) -> pd.DataF
         chart_name = spec.get("derived_from_chart")
         if chart_name:
             labels = chart_labels(out, metric_config.chart(chart_name))
-            out = out[labels.astype(str) == str(value)]
+            out = out[labels.astype(str).isin(values)]
             continue
 
         column = metric_config.column(spec["column_role"])
         if column not in out.columns:
             continue
-        out = out[out[column].astype(str) == str(value)]
+        out = out[out[column].astype(str).isin(values)]
     return out

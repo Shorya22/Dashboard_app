@@ -9,14 +9,14 @@ import {
 } from '@/lib/roster-api'
 import {
   ALL,
-  applyCascade,
   buildOptions,
+  buildRegionMarketItems,
   buildServerFilters,
   distinctValues,
-  REGION_MARKET_CASCADE,
-  regionMarketDefs,
+  regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
+import type { HierarchicalFilterDef } from '@/components/dashboard/filter-bar'
 
 /**
  * Shared data-fetching + filter state for the HR Analytics page
@@ -36,11 +36,15 @@ export function useHrAnalyticsFilters() {
     monthYear: ALL,
     status: ALL,
     department: ALL,
-    region: ALL,
-    market: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  // Region/Market is one nested multi-select (like the Search page).
+  const [regionMarket, setRegionMarket] = React.useState<string[]>([])
+  const regionMarketItems = React.useMemo(
+    () => buildRegionMarketItems(employees),
+    [employees],
+  )
 
   // KPIs come from the server WITH the filters applied, so they use the
   // YAML metric definitions rather than being recomputed here against
@@ -48,8 +52,8 @@ export function useHrAnalyticsFilters() {
   // `monthYear` is excluded — it filters the pre-aggregated trend/attrition
   // arrays in the browser (see `monthFilter`), not the roster on the server.
   const serverFilters = React.useMemo(
-    () => buildServerFilters(filters),
-    [filters],
+    () => ({ ...buildServerFilters(filters), ...regionMarketServerFilters(regionMarket) }),
+    [filters, regionMarket],
   )
   const summary = useRosterSummary(serverFilters)
   const breakdowns = useRosterBreakdowns(serverFilters)
@@ -69,7 +73,15 @@ export function useHrAnalyticsFilters() {
       label: 'Department',
       options: buildOptions(distinctValues(employees, 'designation')),
     },
-    ...regionMarketDefs(employees, filters.region),
+  ]
+  const hierarchicalFilters: HierarchicalFilterDef[] = [
+    {
+      key: 'regionMarket',
+      label: 'Region/Market',
+      items: regionMarketItems,
+      selected: regionMarket,
+      onChange: setRegionMarket,
+    },
   ]
 
   // Month Year filters trend/resignation charts directly by month label
@@ -93,6 +105,7 @@ export function useHrAnalyticsFilters() {
     filters,
     setFilter,
     filterDefs,
+    hierarchicalFilters,
     monthFilter,
   }
 }

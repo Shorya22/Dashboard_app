@@ -170,31 +170,31 @@ def sample_bookings_full() -> pd.DataFrame:
                 "Employee": "Alice", "Holding": "Acme Corp", "Project Name": "Acme Website",
                 "Booked Hours Type": "Client Hours", "Employee Booked Hours": 20.0,
                 "Region (EC)": "EMEA", "Market (EC)": "UKI", "Department": "Engineering",
-                "Team (EC)": "T1", "Monday of Week": "2026-05-04", "Date": "2026-05-04",
+                "Team (EC)": "T1", "Monday of Week": "2026-05-04", "Date": "2026-05-04", "Month": "May 26",
             },
             {
                 "Employee": "Alice", "Holding": "Acme Corp", "Project Name": "Acme Website",
                 "Booked Hours Type": "Internal Hours", "Employee Booked Hours": 5.0,
                 "Region (EC)": "EMEA", "Market (EC)": "UKI", "Department": "Engineering",
-                "Team (EC)": "T1", "Monday of Week": "2026-05-04", "Date": "2026-05-05",
+                "Team (EC)": "T1", "Monday of Week": "2026-05-04", "Date": "2026-05-05", "Month": "May 26",
             },
             {
                 "Employee": "Bob", "Holding": "Beta Inc", "Project Name": "Beta App",
                 "Booked Hours Type": "Client Hours", "Employee Booked Hours": 15.0,
                 "Region (EC)": "AMER", "Market (EC)": "AMER", "Department": "QA",
-                "Team (EC)": "T2", "Monday of Week": "2026-05-04", "Date": "2026-05-04",
+                "Team (EC)": "T2", "Monday of Week": "2026-05-04", "Date": "2026-05-04", "Month": "May 26",
             },
             {
                 "Employee": "Bob", "Holding": "Beta Inc", "Project Name": "Beta Migration",
                 "Booked Hours Type": "Client Hours", "Employee Booked Hours": 10.0,
                 "Region (EC)": "AMER", "Market (EC)": "AMER", "Department": "QA",
-                "Team (EC)": "T2", "Monday of Week": "2026-05-11", "Date": "2026-05-11",
+                "Team (EC)": "T2", "Monday of Week": "2026-05-11", "Date": "2026-05-11", "Month": "May 26",
             },
             {
                 "Employee": "Carol", "Holding": "Beta Inc", "Project Name": "Beta App",
                 "Booked Hours Type": "Internal Hours", "Employee Booked Hours": 8.0,
                 "Region (EC)": "EMEA", "Market (EC)": "DACH", "Department": "Engineering",
-                "Team (EC)": "T1", "Monday of Week": "2026-05-11", "Date": "2026-05-12",
+                "Team (EC)": "T1", "Monday of Week": "2026-05-11", "Date": "2026-05-12", "Month": "May 26",
             },
         ]
     )
@@ -243,6 +243,13 @@ def test_get_filter_options(sample_bookings_full):
     assert opts["entities"] == ["T1", "T2"]
     assert opts["holdings"] == ["Acme Corp", "Beta Inc"]
     assert opts["hours_types"] == ["Client Hours", "Internal Hours"]
+    # Year > Month > Week hierarchy for the cascading date filter: one entry
+    # per distinct week, each carrying its year (from the Monday) and its
+    # booking-sheet Month label.
+    assert opts["week_hierarchy"] == [
+        {"year": "2026", "month": "May 26", "week": "2026-05-04"},
+        {"year": "2026", "month": "May 26", "week": "2026-05-11"},
+    ]
 
 
 def test_get_filtered_records_market_filter(sample_bookings_full):

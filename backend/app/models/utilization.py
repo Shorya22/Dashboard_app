@@ -52,8 +52,23 @@ class HoursByRegionMarket(BaseModel):
     items: list[RegionMarketHours]
 
 
+class WeekHierarchyEntry(BaseModel):
+    """One week placed in its Year > Month > Week bucket, so the utilization
+    filter bar can cascade Year -> Month -> Week. `month` is the booking
+    sheet's own `Month` label (e.g. "May 26") — authoritative over deriving
+    it from the week's Monday, since the business assigns some boundary weeks
+    to the adjacent month."""
+
+    year: str
+    month: str
+    week: str
+
+
 class FilterOptions(BaseModel):
     weeks: list[str]
+    # Year > Month > Week nesting for the cascading date filter. `weeks`
+    # above is kept as the flat list (still used where no cascade is needed).
+    week_hierarchy: list[WeekHierarchyEntry]
     regions: list[str]
     markets: list[str]
     departments: list[str]

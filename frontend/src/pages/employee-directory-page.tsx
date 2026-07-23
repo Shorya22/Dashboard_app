@@ -19,13 +19,12 @@ import {
 } from '@/lib/roster-api'
 import {
   ALL,
-  applyCascade,
   buildOptions,
+  buildRegionMarketItems,
   buildServerFilters,
   compareGrade,
   distinctValues,
-  REGION_MARKET_CASCADE,
-  regionMarketDefs,
+  regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -105,11 +104,14 @@ export function EmployeeDirectoryPage() {
     department: ALL,
     allocation: ALL,
     seniorityCategory: ALL,
-    region: ALL,
-    market: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  const [regionMarket, setRegionMarket] = React.useState<string[]>([])
+  const regionMarketItems = React.useMemo(
+    () => buildRegionMarketItems(allEmployees),
+    [allEmployees],
+  )
 
   const filterDefs = [
     {
@@ -138,7 +140,6 @@ export function EmployeeDirectoryPage() {
         Object.keys(breakdowns.data?.workforce_by_seniority_category ?? {}),
       ),
     },
-    ...regionMarketDefs(allEmployees, filters.region),
   ]
 
   // Dropdown filters are applied SERVER-side against the YAML column roles,
@@ -148,8 +149,8 @@ export function EmployeeDirectoryPage() {
   // not a metric definition, so it is applied client-side over the
   // already-filtered rows.
   const serverFilters = React.useMemo(
-    () => buildServerFilters(filters),
-    [filters],
+    () => ({ ...buildServerFilters(filters), ...regionMarketServerFilters(regionMarket) }),
+    [filters, regionMarket],
   )
   const { data, isLoading, isError, isFetching } = useRosterEmployeesAll(serverFilters)
 
@@ -201,7 +202,20 @@ export function EmployeeDirectoryPage() {
             className="pl-8"
           />
         </div>
-        <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
+        <FilterBar
+          filters={filterDefs}
+          values={filters}
+          onChange={setFilter}
+          hierarchical={[
+            {
+              key: 'regionMarket',
+              label: 'Region/Market',
+              items: regionMarketItems,
+              selected: regionMarket,
+              onChange: setRegionMarket,
+            },
+          ]}
+        />
       </div>
 
       <div className="flex justify-end">

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from './api-client'
+import type { HierarchicalItem } from '@/components/dashboard/hierarchical-multi-select'
 
 // Types mirror /api/v1/utilization/* responses (see /openapi.json). Keep
 // field names exact — measure names confirmed against the running backend.
@@ -38,8 +39,35 @@ export interface ByRegionMarketResponse {
   items: RegionMarketHours[]
 }
 
+export interface WeekHierarchyEntry {
+  year: string
+  month: string
+  week: string
+}
+
+/** Build the Month > Week tree for the hierarchical date multi-select, from
+ * the backend's Year>Month>Week hierarchy. Each Month (the booking sheet's
+ * own label, e.g. "May 26") is a synthetic parent group; each Week is a
+ * selectable leaf whose value is the ISO week-start date — so ticking a month
+ * selects all its weeks, and the filter always sends exact `week` values.
+ * Entries arrive week-sorted, so months render chronologically. */
+export function weekHierarchyToItems(
+  hierarchy: WeekHierarchyEntry[] | undefined,
+): HierarchicalItem[] {
+  return (hierarchy ?? []).map((e) => {
+    const d = new Date(`${e.week}T00:00:00`)
+    const dayLabel = d.toLocaleDateString(undefined, {
+      day: '2-digit',
+      month: 'short',
+    })
+    return { value: e.week, label: dayLabel, parent: e.month }
+  })
+}
+
 export interface FilterOptions {
   weeks: string[]
+  /** Year > Month > Week nesting for the cascading date filter. */
+  week_hierarchy: WeekHierarchyEntry[]
   regions: string[]
   markets: string[]
   departments: string[]

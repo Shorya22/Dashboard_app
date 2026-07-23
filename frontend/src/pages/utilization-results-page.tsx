@@ -15,10 +15,12 @@ import { FiltersPanel } from '@/components/dashboard/filters-panel'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
 import { marketDisplayLabel } from '@/lib/chart-colors'
 import {
+  weekHierarchyToItems,
   useUtilizationRecords,
   useUtilizationFilterOptions,
   type UtilizationRecord,
 } from '@/lib/utilization-api'
+import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
 
 /** Formats a KPI number, falling back to a dash instead of "NaN"/"undefined"
  * when the backend returns a null/undefined value (e.g. Internal Hours can
@@ -129,6 +131,18 @@ export function UtilizationResultsPage() {
     const next = new URLSearchParams(searchParams)
     next.delete(key)
     if (value) next.set(key, value)
+    next.delete('page')
+    setSearchParams(next)
+  }
+
+  // Date is one hierarchical Month > Week multi-select (like the Search
+  // page). Selecting weeks replaces the `week` URL params with the exact
+  // week-start dates ticked.
+  const dateItems = weekHierarchyToItems(filterOptions.data?.week_hierarchy)
+  const setWeeks = (values: string[]) => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('week')
+    for (const v of values) next.append('week', v)
     next.delete('page')
     setSearchParams(next)
   }
@@ -299,12 +313,17 @@ export function UtilizationResultsPage() {
       </div>
 
       <FiltersPanel>
-        <FilterSelect
-          label="Week"
-          value={filters.week?.[0]}
-          options={filterOptions.data?.weeks ?? []}
-          onChange={(v) => setFilter('week', v)}
-        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
+          <label className="text-xs font-medium text-muted-foreground">Month / Week</label>
+          <div className="w-full min-w-0 sm:w-[180px]">
+            <HierarchicalMultiSelect
+              items={dateItems}
+              selected={filters.week ?? []}
+              onChange={setWeeks}
+              placeholder="All Weeks"
+            />
+          </div>
+        </div>
         <FilterSelect
           label="Region"
           value={filters.region?.[0]}

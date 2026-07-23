@@ -10,12 +10,11 @@ import { STATUS_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
-  applyCascade,
   buildOptions,
+  buildRegionMarketItems,
   buildServerFilters,
   distinctValues,
-  REGION_MARKET_CASCADE,
-  regionMarketDefs,
+  regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -33,16 +32,19 @@ export function HrPortalHomePage() {
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
   const [filters, setFilters] = React.useState<FilterValues>({
-    region: ALL,
-    market: ALL,
     status: ALL,
     department: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  // Region/Market is one nested multi-select (see buildRegionMarketItems).
+  const [regionMarket, setRegionMarket] = React.useState<string[]>([])
+  const regionMarketItems = React.useMemo(
+    () => buildRegionMarketItems(employees),
+    [employees],
+  )
 
   const filterDefs = [
-    ...regionMarketDefs(employees, filters.region),
     {
       key: 'status',
       label: 'Status',
@@ -62,8 +64,8 @@ export function HrPortalHomePage() {
   // Employees where the definition is distinct employee ids — two silent
   // ways to drift from the backend.
   const serverFilters = React.useMemo(
-    () => buildServerFilters(filters),
-    [filters],
+    () => ({ ...buildServerFilters(filters), ...regionMarketServerFilters(regionMarket) }),
+    [filters, regionMarket],
   )
   const summary = useRosterSummary(serverFilters)
   const breakdowns = useRosterBreakdowns(serverFilters)
@@ -125,7 +127,20 @@ export function HrPortalHomePage() {
 
   return (
     <div className="space-y-5">
-      <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
+      <FilterBar
+        filters={filterDefs}
+        values={filters}
+        onChange={setFilter}
+        hierarchical={[
+          {
+            key: 'regionMarket',
+            label: 'Region/Market',
+            items: regionMarketItems,
+            selected: regionMarket,
+            onChange: setRegionMarket,
+          },
+        ]}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard

@@ -323,8 +323,25 @@ def get_filter_options(df: pd.DataFrame) -> dict:
     hierarchical, not just cosmetic.
     """
     weeks = pd.to_datetime(df["Monday of Week"].dropna().unique())
+    # Year > Month > Week hierarchy for the cascading date filter. Month is
+    # the booking sheet's own `Month` label (authoritative — see
+    # WeekHierarchyEntry); year comes from the week's Monday date. Each week
+    # maps to exactly one Month in the data, so this nests strictly.
+    wk = df[["Monday of Week", "Month"]].dropna(subset=["Monday of Week"]).copy()
+    wk["Monday of Week"] = pd.to_datetime(wk["Monday of Week"])
+    seen: dict[str, dict] = {}
+    for monday, month in zip(wk["Monday of Week"], wk["Month"]):
+        week_str = monday.strftime("%Y-%m-%d")
+        if week_str not in seen:
+            seen[week_str] = {
+                "year": str(monday.year),
+                "month": str(month),
+                "week": week_str,
+            }
+    week_hierarchy = sorted(seen.values(), key=lambda e: e["week"])
     return {
         "weeks": sorted(w.strftime("%Y-%m-%d") for w in weeks),
+        "week_hierarchy": week_hierarchy,
         "regions": sorted(df["Region (EC)"].dropna().unique().tolist()),
         "markets": sorted(df["Market (EC)"].dropna().unique().tolist()),
         "departments": sorted(df["Department"].dropna().unique().tolist()),

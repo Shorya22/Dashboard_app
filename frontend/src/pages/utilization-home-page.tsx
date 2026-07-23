@@ -5,11 +5,13 @@ import { ChartCard } from '@/components/dashboard/chart-states'
 import { FilterSelect } from '@/components/dashboard/filter-select'
 import { CustomBarChart } from '@/components/dashboard/custom-bar-chart'
 import {
+  weekHierarchyToItems,
   useUtilizationByRegionMarket,
   useUtilizationFilterOptions,
   useUtilizationRecordsAll,
   useUtilizationSummary,
 } from '@/lib/utilization-api'
+import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
 import { marketDisplayLabel, HOURS_TYPE_COLORS } from '@/lib/chart-colors'
 
 // Hoisted to module scope so its array reference is stable across renders,
@@ -27,12 +29,20 @@ export function UtilizationHomePage() {
 
   const [hoursType, setHoursType] = React.useState<string | undefined>()
   const [region, setRegion] = React.useState<string | undefined>()
-  const [week, setWeek] = React.useState<string | undefined>()
+  // Date is one hierarchical Month > Week multi-select (like the Search page):
+  // the selection is a list of exact week-start dates, so ticking a month
+  // ticks all its weeks.
+  const [weeks, setWeeks] = React.useState<string[]>([])
   const [department, setDepartment] = React.useState<string | undefined>()
 
+  const dateItems = React.useMemo(
+    () => weekHierarchyToItems(filterOptions.data?.week_hierarchy),
+    [filterOptions.data],
+  )
+
   const filters = React.useMemo(
-    () => ({ hours_type: hoursType, region, week, department }),
-    [hoursType, region, week, department],
+    () => ({ hours_type: hoursType, region, week: weeks, department }),
+    [hoursType, region, weeks, department],
   )
 
   const recordsAll = useUtilizationRecordsAll(filters)
@@ -103,12 +113,17 @@ export function UtilizationHomePage() {
           options={filterOptions.data?.regions ?? []}
           onChange={setRegion}
         />
-        <FilterSelect
-          label="Week"
-          value={week}
-          options={filterOptions.data?.weeks ?? []}
-          onChange={setWeek}
-        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
+          <label className="text-xs font-medium text-muted-foreground">Month / Week</label>
+          <div className="w-full min-w-0 sm:w-[180px]">
+            <HierarchicalMultiSelect
+              items={dateItems}
+              selected={weeks}
+              onChange={setWeeks}
+              placeholder="All Weeks"
+            />
+          </div>
+        </div>
         <FilterSelect
           label="Department"
           value={department}

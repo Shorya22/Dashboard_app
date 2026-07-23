@@ -10,12 +10,11 @@ import { withTruncatedLabels } from '@/lib/chart-labels'
 import { TYPE_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import {
   ALL,
-  applyCascade,
   buildOptions,
+  buildRegionMarketItems,
   buildServerFilters,
   distinctValues,
-  REGION_MARKET_CASCADE,
-  regionMarketDefs,
+  regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -28,17 +27,19 @@ export function WorkforcePage() {
   const employees = React.useMemo(() => employeesQuery.data?.items ?? [], [employeesQuery.data])
 
   const [filters, setFilters] = React.useState<FilterValues>({
-    region: ALL,
-    market: ALL,
     grade: ALL,
     department: ALL,
     skill: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  const [regionMarket, setRegionMarket] = React.useState<string[]>([])
+  const regionMarketItems = React.useMemo(
+    () => buildRegionMarketItems(employees),
+    [employees],
+  )
 
   const filterDefs = [
-    ...regionMarketDefs(employees, filters.region),
     { key: 'grade', label: 'Grade', options: buildOptions(distinctValues(employees, 'grade')) },
     {
       key: 'department',
@@ -60,8 +61,8 @@ export function WorkforcePage() {
   // / custom-donut-chart.tsx), so keeping stable references here means an
   // unrelated re-render doesn't force every chart to redraw.
   const serverFilters = React.useMemo(
-    () => buildServerFilters(filters),
-    [filters],
+    () => ({ ...buildServerFilters(filters), ...regionMarketServerFilters(regionMarket) }),
+    [filters, regionMarket],
   )
   const summary = useRosterSummary(serverFilters)
   const breakdowns = useRosterBreakdowns(serverFilters)
@@ -116,7 +117,20 @@ export function WorkforcePage() {
 
   return (
     <div className="space-y-5">
-      <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
+      <FilterBar
+        filters={filterDefs}
+        values={filters}
+        onChange={setFilter}
+        hierarchical={[
+          {
+            key: 'regionMarket',
+            label: 'Region/Market',
+            items: regionMarketItems,
+            selected: regionMarket,
+            onChange: setRegionMarket,
+          },
+        ]}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard

@@ -41,13 +41,19 @@ def _filter_params(request: Request) -> dict[str, str]:
     adding a filter to the config's `filters:` block makes this endpoint
     accept it automatically, and removing one stops it being read. Query
     params that aren't declared filters (or are blank) are ignored.
+
+    A filter repeated in the query string (`?region=EMEA&region=AMER`) is
+    read as a list (OR within that field) — what the hierarchical
+    Region/Market multi-select sends; a single occurrence stays a plain
+    string.
     """
     declared = metric_config.filters()
-    out: dict[str, str] = {}
+    out: dict[str, str | list[str]] = {}
     for name in declared:
-        value = request.query_params.get(name)
-        if value:
-            out[name] = value
+        values = [v for v in request.query_params.getlist(name) if v]
+        if not values:
+            continue
+        out[name] = values if len(values) > 1 else values[0]
     return out
 
 

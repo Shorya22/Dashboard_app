@@ -159,7 +159,11 @@ export interface BookingSummary {
 export type RosterFilterParams = {
   status?: string
   department?: string
-  region?: string
+  // Region/Market come from the hierarchical multi-select, so they can be a
+  // single value or a list (OR within the field) — repeated as
+  // `?region=EMEA&region=AMER` by REPEAT_PARAMS below.
+  region?: string | string[]
+  market?: string | string[]
   skill?: string
   type?: string
   allocation?: string
@@ -168,10 +172,19 @@ export type RosterFilterParams = {
   seniorityCategory?: string
 }
 
+// Serialize array values as repeated params (`?region=EMEA&region=AMER`)
+// rather than axios's default `region[]=` / comma-joined forms, matching
+// what the backend's `_filter_params` reads via `getlist`.
+export const REPEAT_PARAMS = { indexes: null } as const
+
 function filterQuery(filters?: RosterFilterParams) {
-  const params: Record<string, string> = {}
+  const params: Record<string, string | string[]> = {}
   for (const [key, value] of Object.entries(filters ?? {})) {
-    if (value) params[key] = value
+    if (Array.isArray(value)) {
+      if (value.length > 0) params[key] = value
+    } else if (value) {
+      params[key] = value
+    }
   }
   return params
 }
@@ -181,7 +194,7 @@ export function useRosterSummary(filters?: RosterFilterParams) {
   return useQuery({
     queryKey: ['roster', 'summary', params],
     queryFn: async () =>
-      (await apiClient.get<RosterSummary>('/v1/roster/summary', { params })).data,
+      (await apiClient.get<RosterSummary>('/v1/roster/summary', { params, paramsSerializer: REPEAT_PARAMS })).data,
   })
 }
 
@@ -190,7 +203,7 @@ export function useRosterBreakdowns(filters?: RosterFilterParams) {
   return useQuery({
     queryKey: ['roster', 'breakdowns', params],
     queryFn: async () =>
-      (await apiClient.get<RosterBreakdowns>('/v1/roster/breakdowns', { params })).data,
+      (await apiClient.get<RosterBreakdowns>('/v1/roster/breakdowns', { params, paramsSerializer: REPEAT_PARAMS })).data,
   })
 }
 
@@ -199,7 +212,7 @@ export function useRosterTrends(filters?: RosterFilterParams) {
   return useQuery({
     queryKey: ['roster', 'trends', params],
     queryFn: async () =>
-      (await apiClient.get<RosterTrends>('/v1/roster/trends', { params })).data,
+      (await apiClient.get<RosterTrends>('/v1/roster/trends', { params, paramsSerializer: REPEAT_PARAMS })).data,
   })
 }
 
@@ -208,7 +221,7 @@ export function useRosterAttritionDetail(filters?: RosterFilterParams) {
   return useQuery({
     queryKey: ['roster', 'attrition-detail', params],
     queryFn: async () =>
-      (await apiClient.get<RosterAttritionDetail>('/v1/roster/attrition-detail', { params })).data,
+      (await apiClient.get<RosterAttritionDetail>('/v1/roster/attrition-detail', { params, paramsSerializer: REPEAT_PARAMS })).data,
   })
 }
 
@@ -217,7 +230,7 @@ export function useRosterSkills(filters?: RosterFilterParams) {
   return useQuery({
     queryKey: ['roster', 'skills', params],
     queryFn: async () =>
-      (await apiClient.get<RosterSkills>('/v1/roster/skills', { params })).data,
+      (await apiClient.get<RosterSkills>('/v1/roster/skills', { params, paramsSerializer: REPEAT_PARAMS })).data,
   })
 }
 
@@ -242,7 +255,7 @@ export function useRosterEmployeesAll(filters?: RosterFilterParams) {
   return useQuery({
     queryKey: ['roster', 'employees', 'all', params],
     queryFn: async () =>
-      (await apiClient.get<EmployeeDirectoryResponse>('/v1/roster/employees', { params }))
+      (await apiClient.get<EmployeeDirectoryResponse>('/v1/roster/employees', { params, paramsSerializer: REPEAT_PARAMS }))
         .data,
   })
 }

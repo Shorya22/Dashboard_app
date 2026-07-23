@@ -14,12 +14,11 @@ import { colorsForLabels, EXPERIENCE_BAND_COLORS, REGION_COLORS, SENIORITY_CATEG
 import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
-  applyCascade,
   buildOptions,
+  buildRegionMarketItems,
   buildServerFilters,
   distinctValues,
-  REGION_MARKET_CASCADE,
-  regionMarketDefs,
+  regionMarketServerFilters,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -60,8 +59,6 @@ export function SkillsExperiencePage() {
   )
 
   const [filters, setFilters] = React.useState<FilterValues>({
-    region: ALL,
-    market: ALL,
     department: ALL,
     skill: ALL,
     experience: ALL,
@@ -69,7 +66,12 @@ export function SkillsExperiencePage() {
     type: ALL,
   })
   const setFilter = (key: string, value: string) =>
-    setFilters((prev) => applyCascade(prev, key, value, REGION_MARKET_CASCADE))
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  const [regionMarket, setRegionMarket] = React.useState<string[]>([])
+  const regionMarketItems = React.useMemo(
+    () => buildRegionMarketItems(employees),
+    [employees],
+  )
 
   // Everything on this page comes from the server WITH the filters applied,
   // so it uses the single YAML definitions. The experience bands and
@@ -77,8 +79,8 @@ export function SkillsExperiencePage() {
   // (deriveExperienceBand / deriveSeniorityCategory) — a second copy of the
   // thresholds that had to be kept in step with config by hand.
   const serverFilters = React.useMemo(
-    () => buildServerFilters(filters),
-    [filters],
+    () => ({ ...buildServerFilters(filters), ...regionMarketServerFilters(regionMarket) }),
+    [filters, regionMarket],
   )
   const summaryQuery = useRosterSummary(serverFilters)
   const skillsQuery = useRosterSkills(serverFilters)
@@ -96,7 +98,6 @@ export function SkillsExperiencePage() {
   )
 
   const filterDefs = [
-    ...regionMarketDefs(employees, filters.region),
     {
       key: 'department',
       label: 'Department',
@@ -191,7 +192,20 @@ export function SkillsExperiencePage() {
 
   return (
     <div className="space-y-5">
-      <FilterBar filters={filterDefs} values={filters} onChange={setFilter} />
+      <FilterBar
+        filters={filterDefs}
+        values={filters}
+        onChange={setFilter}
+        hierarchical={[
+          {
+            key: 'regionMarket',
+            label: 'Region/Market',
+            items: regionMarketItems,
+            selected: regionMarket,
+            onChange: setRegionMarket,
+          },
+        ]}
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard
