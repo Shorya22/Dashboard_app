@@ -32,6 +32,26 @@ export interface FilterDef {
   options: FilterOption[]
 }
 
+/**
+ * Convert a page's raw filter state into the server query params.
+ *
+ * Every non-`ALL` filter is passed through by key, so a dropdown can never
+ * be shown on a page without also being sent to the API — the class of bug
+ * where a filter appears to do nothing. `monthYear` is excluded by default
+ * because it filters the time-series charts in the browser, not the roster.
+ */
+export function buildServerFilters(
+  filters: FilterValues,
+  exclude: string[] = ['monthYear'],
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(filters)) {
+    if (exclude.includes(key)) continue
+    out[key] = value === ALL ? undefined : value
+  }
+  return out
+}
+
 /** Distinct, sorted, non-empty values for a field across a list of employees. */
 export function distinctValues(
   employees: EmployeeRecord[],

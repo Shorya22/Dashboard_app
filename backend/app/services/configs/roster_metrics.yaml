@@ -119,6 +119,9 @@ filters:
   allocation:
     column_role: client
     label: "Allocation"
+  grade:
+    column_role: grade
+    label: "Grade"
 
   # DERIVED filters — they reuse a chart's own bucketing rules rather than
   # re-deriving the bands, so filtering by "5-8 Years" and the chart that

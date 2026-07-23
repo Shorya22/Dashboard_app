@@ -11,6 +11,7 @@ import { TYPE_COLORS, colorsForLabels } from '@/lib/chart-colors'
 import {
   ALL,
   buildOptions,
+  buildServerFilters,
   distinctValues,
   type FilterValues,
 } from '@/lib/employee-filters'
@@ -55,12 +56,8 @@ export function WorkforcePage() {
   // / custom-donut-chart.tsx), so keeping stable references here means an
   // unrelated re-render doesn't force every chart to redraw.
   const serverFilters = React.useMemo(
-    () => ({
-      status: filters.status === ALL ? undefined : filters.status,
-      department: filters.department === ALL ? undefined : filters.department,
-      region: filters.region === ALL ? undefined : filters.region,
-    }),
-    [filters.status, filters.department, filters.region],
+    () => buildServerFilters(filters),
+    [filters],
   )
   const summary = useRosterSummary(serverFilters)
   const breakdowns = useRosterBreakdowns(serverFilters)

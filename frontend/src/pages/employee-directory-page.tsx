@@ -20,10 +20,9 @@ import {
 import {
   ALL,
   buildOptions,
+  buildServerFilters,
   compareGrade,
-  distinctNormalizedValues,
   distinctValues,
-  normalizeDesignationLabel,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -117,7 +116,11 @@ export function EmployeeDirectoryPage() {
       // building dropdown options so it doesn't show two entries for the
       // same job title (same bug class already fixed for the Departments
       // KPI and the Primary Skill filter elsewhere).
-      options: buildOptions(distinctNormalizedValues(allEmployees, 'designation', normalizeDesignationLabel)),
+      // Raw distinct values so the option a user picks matches the raw
+      // Designation the server filters on. Casing-duplicates are already
+      // collapsed at ingestion (normalize_case), so this stays clean —
+      // re-normalizing here would send a value the column never contains.
+      options: buildOptions(distinctValues(allEmployees, 'designation')),
     },
     {
       key: 'allocation',
@@ -145,13 +148,7 @@ export function EmployeeDirectoryPage() {
   // not a metric definition, so it is applied client-side over the
   // already-filtered rows.
   const serverFilters = React.useMemo(
-    () => ({
-      department: filters.department === ALL ? undefined : filters.department,
-      allocation: filters.allocation === ALL ? undefined : filters.allocation,
-      region: filters.region === ALL ? undefined : filters.region,
-      seniorityCategory:
-        filters.seniorityCategory === ALL ? undefined : filters.seniorityCategory,
-    }),
+    () => buildServerFilters(filters),
     [filters],
   )
   const { data, isLoading, isError, isFetching } = useRosterEmployeesAll(serverFilters)

@@ -7,7 +7,13 @@ import {
   useRosterBreakdowns,
   useRosterTrends,
 } from '@/lib/roster-api'
-import { ALL, buildOptions, distinctValues, type FilterValues } from '@/lib/employee-filters'
+import {
+  ALL,
+  buildOptions,
+  buildServerFilters,
+  distinctValues,
+  type FilterValues,
+} from '@/lib/employee-filters'
 
 /**
  * Shared data-fetching + filter state for the HR Analytics page
@@ -35,13 +41,11 @@ export function useHrAnalyticsFilters() {
   // KPIs come from the server WITH the filters applied, so they use the
   // YAML metric definitions rather than being recomputed here against
   // hardcoded status strings. ALL means "no filter" and is dropped.
+  // `monthYear` is excluded — it filters the pre-aggregated trend/attrition
+  // arrays in the browser (see `monthFilter`), not the roster on the server.
   const serverFilters = React.useMemo(
-    () => ({
-      status: filters.status === ALL ? undefined : filters.status,
-      department: filters.department === ALL ? undefined : filters.department,
-      region: filters.region === ALL ? undefined : filters.region,
-    }),
-    [filters.status, filters.department, filters.region],
+    () => buildServerFilters(filters),
+    [filters],
   )
   const summary = useRosterSummary(serverFilters)
   const breakdowns = useRosterBreakdowns(serverFilters)

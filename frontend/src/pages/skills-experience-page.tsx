@@ -15,9 +15,8 @@ import { withTruncatedLabels } from '@/lib/chart-labels'
 import {
   ALL,
   buildOptions,
-  distinctNormalizedValues,
+  buildServerFilters,
   distinctValues,
-  normalizePrimarySkillLabel,
   type FilterValues,
 } from '@/lib/employee-filters'
 
@@ -73,13 +72,10 @@ export function SkillsExperiencePage() {
   // seniority categories used to be re-derived here in JavaScript
   // (deriveExperienceBand / deriveSeniorityCategory) — a second copy of the
   // thresholds that had to be kept in step with config by hand.
-  const serverFilters = React.useMemo(() => {
-    const out: Record<string, string | undefined> = {}
-    for (const [key, value] of Object.entries(filters)) {
-      out[key] = value === ALL ? undefined : value
-    }
-    return out
-  }, [filters])
+  const serverFilters = React.useMemo(
+    () => buildServerFilters(filters),
+    [filters],
+  )
   const summaryQuery = useRosterSummary(serverFilters)
   const skillsQuery = useRosterSkills(serverFilters)
   const employeesQuery = useRosterEmployeesAll(serverFilters)
@@ -105,9 +101,10 @@ export function SkillsExperiencePage() {
     {
       key: 'skill',
       label: 'Primary Skill',
-      options: buildOptions(
-        distinctNormalizedValues(employees, 'primary_skill', normalizePrimarySkillLabel),
-      ),
+      // Raw distinct values so the picked option matches the raw Primary
+      // Skill the server filters on (casing already canonicalised at
+      // ingestion). Normalizing here would send an unmatchable value.
+      options: buildOptions(distinctValues(employees, 'primary_skill')),
     },
     { key: 'experience', label: 'Experience', options: buildOptions(experienceOptions) },
     {

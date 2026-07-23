@@ -152,10 +152,20 @@ export interface BookingSummary {
 // definitions. Pages pass their filter state straight through rather than
 // re-deriving KPIs in the browser against hardcoded status strings, which
 // duplicated each definition and drifted the moment config changed.
+// Keys must match the `filters:` block in backend
+// configs/roster_metrics.yaml. `filterQuery` passes every set key through,
+// so the backend (which reads exactly its declared filters) is the single
+// source of truth for which of these actually filter.
 export type RosterFilterParams = {
   status?: string
   department?: string
   region?: string
+  skill?: string
+  type?: string
+  allocation?: string
+  grade?: string
+  experience?: string
+  seniorityCategory?: string
 }
 
 function filterQuery(filters?: RosterFilterParams) {

@@ -598,6 +598,48 @@ load time.
 
 ---
 
+## Page filters — how the dropdowns work
+
+Every filterable page (HR Home, HR Analytics, Workforce, Skills &
+Experience, Employee Directory — Home has none) filters **server-side**:
+the page sends the selected values to the `/roster` endpoints, which
+re-run the YAML metric definitions over the narrowed rows. The filters
+themselves are declared once, in the `filters:` block of
+`configs/roster_metrics.yaml`, and used by both layers:
+
+| Filter | Backed by | Notes |
+|---|---|---|
+| Status | `status` column | |
+| Department | `designation` column | raw values — casing already canonicalised at ingestion |
+| Region/Market | `region` column | |
+| Skill | `primary_skill` column | raw values |
+| Type | `employment_type` column | GCC / Non GCC |
+| Allocation | `client` column | exact match on the raw client string (multi-client cells are one value, matching the naive `Clients Covered` count) |
+| Grade | `grade` column | |
+| Experience | *derived* from `workforce_by_experience_band` chart | reuses the chart's own band boundaries |
+| Seniority Category | *derived* from `workforce_by_seniority_category` chart | reuses the chart's own buckets |
+
+Design rules that keep filters honest:
+
+- **One declaration, no drift.** The API reads *exactly* the filters
+  declared in the config (`_filter_params` iterates `metric_config.filters()`),
+  so adding a filter to the YAML makes the endpoints accept it and removing
+  one stops it — the HTTP layer can never disagree with the config.
+- **A shown dropdown is always sent.** The frontend converts filter state
+  with one shared `buildServerFilters` helper, so a page can't display a
+  dropdown without also passing it to the server (the bug that made
+  Workforce's Grade and Skill dropdowns do nothing).
+- **Dropdown values match the raw column.** Options are the raw distinct
+  values the server compares against — never a re-normalised label, which
+  would send a value the column never contains and silently return 0 rows.
+- **Derived filters reuse chart bucketing.** Experience and Seniority
+  Category filter by the *same* band logic the matching chart draws, so a
+  band and its chart can never disagree about where a boundary is.
+
+Enforced by `tests/test_roster_filters.py`: every option of every filter
+must narrow to only matching rows, single-value filters must partition the
+whole roster, and each declared filter must work end-to-end over HTTP.
+
 ## Consistency rules we enforce automatically
 
 Checked by `metric_invariants.py` — in the test suite *and* on every

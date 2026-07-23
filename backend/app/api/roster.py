@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core.security import get_current_user
 from app.db.models import User
@@ -21,7 +21,7 @@ from app.models.roster import (
     RosterSummary,
     RosterTrends,
 )
-from app.services import roster_metrics
+from app.services import metric_config, roster_metrics
 from app.services.data_loader import get_roster_df
 
 logger = logging.getLogger(__name__)
@@ -34,30 +34,21 @@ router = APIRouter(prefix="/roster", tags=["roster"])
 # configs/roster_metrics.yaml and applied here, so a filtered page asks the
 # API for its numbers rather than recomputing them in the browser against
 # hardcoded status strings. See roster_metrics.apply_filters.
-def _filter_params(
-    status: str | None = Query(None, description="Filter by Status"),
-    department: str | None = Query(None, description="Filter by Department"),
-    region: str | None = Query(None, description="Filter by Region/Market"),
-    skill: str | None = Query(None, description="Filter by Primary Skill"),
-    type: str | None = Query(None, description="Filter by Type (GCC / Non GCC)"),
-    allocation: str | None = Query(None, description="Filter by Client/Allocation"),
-    experience: str | None = Query(None, description="Filter by Experience Band"),
-    seniorityCategory: str | None = Query(None, description="Filter by Seniority Category"),
-) -> dict[str, str]:
-    return {
-        key: value
-        for key, value in (
-            ("status", status),
-            ("department", department),
-            ("region", region),
-            ("skill", skill),
-            ("type", type),
-            ("allocation", allocation),
-            ("experience", experience),
-            ("seniorityCategory", seniorityCategory),
-        )
-        if value
-    }
+def _filter_params(request: Request) -> dict[str, str]:
+    """Read exactly the filters declared in the metric config.
+
+    Config-driven so the API can never drift from `roster_metrics.yaml`:
+    adding a filter to the config's `filters:` block makes this endpoint
+    accept it automatically, and removing one stops it being read. Query
+    params that aren't declared filters (or are blank) are ignored.
+    """
+    declared = metric_config.filters()
+    out: dict[str, str] = {}
+    for name in declared:
+        value = request.query_params.get(name)
+        if value:
+            out[name] = value
+    return out
 
 
 @router.get("/summary", response_model=RosterSummary)
