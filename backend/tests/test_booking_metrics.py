@@ -257,6 +257,41 @@ def test_get_filter_options(sample_bookings_full):
     ]
 
 
+def test_get_filter_options_week_hierarchy_formats_timestamp_month():
+    """Real xlsx uploads store the `Month` column as a datetime cell (pandas
+    reads it as Timestamp). Regression: earlier the code did `str(month)`
+    which produced `"2026-04-26 00:00:00"` as the month label. Timestamps
+    must be formatted to the documented `%b %y` shape (e.g. "May 26") so
+    both curated string fixtures and real Timestamp uploads produce the
+    same label.
+    """
+    df = pd.DataFrame(
+        [
+            {"Region (EC)": "AMER", "Market (EC)": "AMER", "Department": "QA",
+             "Team (EC)": "T1", "Holding": "H1", "Booked Hours Type": "Client Hours",
+             "Employee Booked Hours": 1.0,
+             "Monday of Week": pd.Timestamp("2026-05-04"),
+             "Month": pd.Timestamp("2026-05-01")},
+            {"Region (EC)": "AMER", "Market (EC)": "AMER", "Department": "QA",
+             "Team (EC)": "T1", "Holding": "H1", "Booked Hours Type": "Client Hours",
+             "Employee Booked Hours": 1.0,
+             "Monday of Week": pd.Timestamp("2027-01-04"),
+             "Month": pd.Timestamp("2027-01-01")},
+            {"Region (EC)": "AMER", "Market (EC)": "AMER", "Department": "QA",
+             "Team (EC)": "T1", "Holding": "H1", "Booked Hours Type": "Client Hours",
+             "Employee Booked Hours": 1.0,
+             "Monday of Week": pd.Timestamp("2027-02-01"),
+             "Month": None},  # missing Month -> derived from Monday
+        ]
+    )
+    opts = get_filter_options(df)
+    assert opts["week_hierarchy"] == [
+        {"year": "2026", "month": "May 26", "week": "2026-05-04"},
+        {"year": "2027", "month": "Jan 27", "week": "2027-01-04"},
+        {"year": "2027", "month": "Feb 27", "week": "2027-02-01"},
+    ]
+
+
 def test_get_filter_options_region_market_hierarchy_unions_roster_and_booking():
     """Phase 1: Region/Market hierarchy is UNIONED across roster + booking.
     A region that only appears in the roster (e.g. APAC, Region TBD) still

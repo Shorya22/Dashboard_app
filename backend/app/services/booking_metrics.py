@@ -360,15 +360,27 @@ def get_filter_options(df: pd.DataFrame, roster_df: pd.DataFrame | None = None) 
     # the booking sheet's own `Month` label (authoritative — see
     # WeekHierarchyEntry); year comes from the week's Monday date. Each week
     # maps to exactly one Month in the data, so this nests strictly.
+    #
+    # `Month` in real xlsx uploads is a datetime cell (pandas reads it as
+    # Timestamp); in older/curated fixtures it can be a plain string like
+    # "May 26". Format Timestamps as `%b %y` so both shapes converge on the
+    # same label. If the cell is missing/NaN, fall back to the week's own
+    # Monday-derived month so the entry still lands in a sensible bucket.
     wk = df[["Monday of Week", "Month"]].dropna(subset=["Monday of Week"]).copy()
     wk["Monday of Week"] = pd.to_datetime(wk["Monday of Week"])
     seen: dict[str, dict] = {}
     for monday, month in zip(wk["Monday of Week"], wk["Month"]):
         week_str = monday.strftime("%Y-%m-%d")
         if week_str not in seen:
+            if pd.isna(month):
+                month_label = monday.strftime("%b %y")
+            elif isinstance(month, pd.Timestamp):
+                month_label = month.strftime("%b %y")
+            else:
+                month_label = str(month).strip()
             seen[week_str] = {
                 "year": str(monday.year),
-                "month": str(month),
+                "month": month_label,
                 "week": week_str,
             }
     week_hierarchy = sorted(seen.values(), key=lambda e: e["week"])
