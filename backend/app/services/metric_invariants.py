@@ -178,17 +178,25 @@ def _charts_account_for_everyone(df: pd.DataFrame) -> tuple[bool, str]:
     """
     from app.services import metric_config
 
-    expected = {
-        "all": roster_metrics.get_total_employees(df),
-        "present": roster_metrics.get_closing_headcount(df),
-    }
     bad: list[str] = []
     for name in metric_config.chart_names():
         spec = metric_config.chart(name)
+        # Only the group-by charts partition the population and so must
+        # reconcile to a total. A `monthly_series` is a time series (one
+        # row per month, returned as a list), not a partition — summing it
+        # is meaningless, so it is skipped here.
+        if spec["type"] == "monthly_series":
+            continue
+        # Target = the distinct employees in the chart's OWN scope, derived
+        # the same way the chart derives it, so every scope (all / present /
+        # exited) is handled uniformly with no hardcoded lookup.
+        scope_df = roster_metrics._chart_scope(df, spec)
+        target = roster_metrics.get_total_employees(scope_df)
         counted = sum(roster_metrics.evaluate_chart(df, name).values())
-        target = expected[spec.get("scope", "all")]
         if counted != target:
-            bad.append(f"{name}={counted} vs {spec.get('scope','all')} total {target}")
+            bad.append(
+                f"{name}={counted} vs {spec.get('scope', 'all')} total {target}"
+            )
     return not bad, ("all charts reconcile" if not bad else "; ".join(bad))
 
 

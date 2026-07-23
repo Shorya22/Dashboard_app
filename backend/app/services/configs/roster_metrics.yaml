@@ -131,6 +131,16 @@ cards:
     column_role: employee_id
     status_filter: present
 
+  # Inactive Employees and Exits are the SAME people by the SAME rule
+  # (Status = inactive) — declared as two cards only because they carry
+  # different labels on different pages. Same status_filter, so they are
+  # equal by construction; the exits_equals_inactive invariant guards it.
+  inactive_employees:
+    label: "Inactive Employees"
+    counts: distinct
+    column_role: employee_id
+    status_filter: inactive
+
   # Confirmed 2026-07-22: Exits and Inactive are the same people, so they
   # are the same number — one definition, not two. This replaced an
   # LWD-date-based count that returned 5 while Inactive returned 14.
@@ -235,6 +245,25 @@ charts:
     type: count_by
     column_role: status
     scope: present
+
+  # --- Workforce page ----------------------------------------------------
+  # Whole-roster composition (scope: all — the page's headline is Total
+  # Employees = 52, not the present workforce). Both count distinct
+  # employees; blanks fold into the dataset's own TBD convention rather
+  # than being dropped.
+  headcount_by_seniority:
+    label: "Headcount by Seniority"
+    type: count_by
+    column_role: seniority          # RAW Seniorirty Level values, whatever they are
+    scope: all
+    blank_label: "Seniority TBD"
+
+  workforce_by_type:
+    label: "Workforce by Type"
+    type: count_by
+    column_role: employment_type    # GCC / Non GCC
+    scope: all
+    blank_label: "Type TBD"
 
   # --- HR Analytics ------------------------------------------------------
   # `monthly_series` walks the dataset's month range and evaluates each

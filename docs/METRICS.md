@@ -10,7 +10,7 @@ page as we verify them; anything not listed here has not been reviewed yet.
 | Home | ✅ 3 cards + 4 charts |
 | HR Home (HR Portal) | ✅ all 4 cards + 4 charts verified |
 | HR Analytics | ✅ 5 cards + 4 charts (Attrition % is a formula — see below) |
-| Workforce | ⬜ not reviewed |
+| Workforce | ✅ 6 cards + 3 charts verified |
 | Skills & Experience | ⬜ not reviewed |
 | Employee Directory | ⬜ not reviewed |
 | Utilization pages | ⬜ not reviewed |
@@ -498,6 +498,38 @@ the dashboard still works.
 
 *Month Wise Headcount and the two charts above have not otherwise been
 reviewed yet.*
+
+---
+
+## Page 4 — Workforce
+
+Whole-roster composition. All six cards reuse definitions already covered
+(Total 52, Active 35, Strategic Pool 3, Departments 27, Projects 31), plus:
+
+### Card: Inactive Employees — `14`
+Distinct `employee_id` where `Status` = "Inactive". **Same people, same
+rule as the Exits card on HR Analytics** — declared as a separate card
+only because the label differs per page. Equal by construction (same
+`status_filter`), guarded by the `exits_equals_inactive` invariant.
+
+### Chart: Headcount by Seniority — `52`
+`count_by` on the **raw `Seniorirty Level`** column — every distinct value
+is its own bar (Standard Lead 12, Seniority TBD 9, Standard/Premium Senior
+9/8, Premium Lead 6, Premium Mid 4, Standard Mid 3, Premium TSDM 1). The
+set of values can grow or shrink with the data; casing duplicates are
+folded at ingestion, so no normalization lives in the chart.
+
+### Chart: Workforce by Type — `52`
+`count_by` on `Type` (GCC 49 / Non GCC 3). Blank -> "Type TBD".
+
+### Chart: Workforce Details by Region — `52`
+Reuses the **same `headcount_by_region` chart** as HR Home — AMER 15,
+EMEA 34, APAC 1, Region TBD 2.
+
+> Fixed a real bug here: the frontend previously hardcoded the region list
+> as `AMER / APAC / EMEA / Hexaware`, which showed an always-empty
+> **Hexaware** bar and **hid the Region TBD** employees entirely. It now
+> renders whatever regions the data contains.
 
 ---
 

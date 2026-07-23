@@ -15,7 +15,6 @@ import {
   type FilterValues,
 } from '@/lib/employee-filters'
 
-const REGION_QUADRANTS = ['AMER', 'APAC', 'EMEA', 'Hexaware'] as const
 
 
 export function WorkforcePage() {
@@ -101,10 +100,18 @@ export function WorkforcePage() {
     [typeData],
   )
 
-  const regionCounts = REGION_QUADRANTS.map((region) => ({
-    region,
-    count: breakdowns.data?.headcount_by_region?.[region] ?? 0,
-  }))
+  // Whatever regions the data actually contains — driven by the
+  // headcount_by_region chart declared in roster_metrics.yaml (blanks
+  // already labelled "Region TBD"). Replaces a hardcoded AMER/APAC/EMEA/
+  // Hexaware list that showed an always-empty Hexaware bar and hid the
+  // Region TBD employees.
+  const regionCounts = React.useMemo(
+    () =>
+      Object.entries(breakdowns.data?.headcount_by_region ?? {}).map(
+        ([region, count]) => ({ region, count }),
+      ),
+    [breakdowns.data],
+  )
 
   return (
     <div className="space-y-5">
@@ -199,7 +206,7 @@ export function WorkforcePage() {
       <div className="grid grid-cols-1 items-start gap-4">
         <ChartCard
           title="Workforce Details by Region"
-          subtitle="AMER / APAC / EMEA / Hexaware — total headcount per region"
+          subtitle="Total headcount per region"
           isLoading={isLoading}
           isError={isError}
           isEmpty={regionCounts.every((r) => r.count === 0)}

@@ -518,7 +518,7 @@ def get_inactive_employees(df: pd.DataFrame) -> int:
     `Inactive Employees` = CALCULATE([Total Employees], Status = "Inactive").
     Reads: `Status`, `NEW_EMP_ID`.
     """
-    return get_total_employees(df[df["Status"] == "Inactive"])
+    return evaluate_card(df, "inactive_employees")
 
 
 @cache_on_df
@@ -1199,29 +1199,8 @@ def get_status_split(df: pd.DataFrame) -> dict[str, int]:
 
 @cache_on_df
 def get_workforce_by_type(df: pd.DataFrame) -> dict[str, int]:
-    """
-    Backs the "Workforce by Type" / "GCC vs Non-GCC" donuts (Main page
-    and Workforce page) — GCC vs Non GCC counts over the full roster,
-    wrapping the existing confirmed `get_gcc_employees` /
-    `get_non_gcc_employees` measures into dict shape.
-
-    NOTE on ambiguity: the task's reference-page description lists a
-    "'GCC vs Non-GCC' donut by Seniority Category" on the Main page,
-    which is ambiguous phrasing — it could mean (a) a plain GCC/Non-GCC
-    donut (this function), or (b) a GCC/Non-GCC split cross-tabulated
-    BY Seniority Category (i.e. a stacked/grouped chart, not a donut).
-    This function implements interpretation (a), the simple two-slice
-    donut, since "donut" and a 2-value split match `Type` directly and
-    the real model has confirmed standalone `GCC Employees`/`Non GCC
-    Employees` measures for exactly this. If a Seniority-Category
-    cross-tab was actually intended, that's a distinct chart request —
-    flagging rather than silently also building a guessed cross-tab.
-    Reads: `Type`, `NEW_EMP_ID`.
-    """
-    return {
-        "GCC": get_gcc_employees(df),
-        "Non GCC": get_non_gcc_employees(df),
-    }
+    """GCC vs Non GCC. Declared as `workforce_by_type` in roster_metrics.yaml."""
+    return evaluate_chart(df, "workforce_by_type")
 
 
 @cache_on_df
@@ -1294,31 +1273,13 @@ def _normalize_designation_label(value: str) -> str:
 @cache_on_df
 def get_headcount_by_seniority(df: pd.DataFrame) -> dict[str, int]:
     """
-    Backs the Workforce page "Headcount by Seniority" bar chart — distinct
-    employee count per `Seniorirty Level` value, CASE-NORMALIZED via
-    `_normalize_seniority_label` so casing-duplicate source values
-    (confirmed: "Premium Lead"/"Premium lead", "Standard Senior"/
-    "Standard senior") collapse into one bar instead of splitting a
-    single logical category into two. This is distinct from the derived
-    Senior/Lead/Mid/Other `Seniority Category` bucketing — see
-    `get_workforce_by_seniority_category` for that.
-
-    The underlying casing inconsistency is NOT silently hidden: it is
-    still surfaced as-is via the `seniority_level_casing_mismatch`
-    warning in `get_data_quality_warnings()`. This function only
-    produces a clean, chart-ready breakdown.
-
-    Reads: `Seniorirty Level`, `NEW_EMP_ID`.
-    Edge cases: NaN `Seniorirty Level` values are dropped (unchanged
-    from prior behavior) rather than folded into a synthetic label.
+    Distinct employees per RAW Seniorirty Level value (whatever values the
+    column holds — the set can grow or shrink over time). Declared as
+    `headcount_by_seniority` in roster_metrics.yaml. Casing duplicates are
+    already folded at ingestion (normalize_case), so a plain group-by is
+    correct here.
     """
-    normalized = df["Seniorirty Level"].apply(
-        lambda v: _normalize_seniority_label(v) if pd.notna(v) else v
-    )
-    return {
-        str(level): get_total_employees(group)
-        for level, group in df.groupby(normalized, dropna=True)
-    }
+    return evaluate_chart(df, "headcount_by_seniority")
 
 
 # --------------------------------------------------------------------------

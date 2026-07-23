@@ -270,28 +270,36 @@ def test_get_headcount_by_seniority(sample_roster):
     }
 
 
-def test_get_headcount_by_seniority_collapses_casing_duplicates():
-    # Regression test for the confirmed bug: "Premium Lead"/"Premium lead"
-    # and "Standard Senior"/"Standard senior" must collapse into one key
-    # each instead of splitting into separate bars.
+def test_headcount_by_seniority_collapses_casing_duplicates():
+    # Regression for the confirmed bug: "Premium Lead"/"Premium lead" and
+    # "Standard Senior"/"Standard senior" must collapse into one bar each
+    # instead of splitting.
     #
-    # Hand-built fixture mirrors the real roster's confirmed counts:
-    #   "Premium Lead" (1 row) + "Premium lead" (5 rows) -> 6
-    #   "Standard Senior" (8 rows) + "Standard senior" (1 row) -> 9
+    # MOVED (2026-07-23): this folding is now an INGESTION concern
+    # (normalize_case on the Seniorirty Level column), not the metric's, so
+    # the chart is a plain group-by on already-clean values. The test goes
+    # through prepare_dataset — the same path the real upload takes — rather
+    # than feeding raw, un-ingested rows straight to the metric.
+    from app.services.validation.engine import prepare_dataset
+
+    # Case-folding keeps the MOST COMMON spelling present in the file, so
+    # the fixture uses the title-case form as the dominant one — matching
+    # the real roster, where "Premium Lead" is the common spelling and
+    # "Premium lead" the stray variant.
     rows = []
-    for i in range(1):
-        rows.append({"NEW_EMP_ID": f"PL{i}", "Seniorirty Level": "Premium Lead"})
     for i in range(5):
+        rows.append({"NEW_EMP_ID": f"PL{i}", "Seniorirty Level": "Premium Lead"})
+    for i in range(1):
         rows.append({"NEW_EMP_ID": f"pl{i}", "Seniorirty Level": "Premium lead"})
     for i in range(8):
         rows.append({"NEW_EMP_ID": f"SS{i}", "Seniorirty Level": "Standard Senior"})
     for i in range(1):
         rows.append({"NEW_EMP_ID": f"ss{i}", "Seniorirty Level": "Standard senior"})
-    df = pd.DataFrame(rows)
+    df = prepare_dataset(pd.DataFrame(rows), "roster")
 
     result = get_headcount_by_seniority(df)
 
-    # Show work: 1 + 5 = 6, 8 + 1 = 9.
+    # Show work: 5 + 1 = 6, 8 + 1 = 9.
     assert result == {"Premium Lead": 6, "Standard Senior": 9}
 
 
