@@ -13,6 +13,7 @@ typed response model. Persistence goes through `app.db.session.get_db`
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -35,6 +36,7 @@ from app.models.auth import (
     RegisterRequest,
     RegisterResponse,
 )
+from app.services.sso_service import SsoError, build_auth_redirect, complete_auth_flow, get_or_create_sso_user
 from app.services.user_service import (
     EmailAlreadyRegisteredError,
     create_user,
@@ -156,3 +158,41 @@ def me(user: User = Depends(get_current_user)) -> CurrentUser:
     """Trivial protected route demonstrating `get_current_user` actually
     gates access — not a business endpoint."""
     return CurrentUser(id=user.id, email=user.email, role=user.role.value)
+
+
+@router.get("/login/microsoft")
+def login_microsoft() -> RedirectResponse:
+    """Starts the SSO flow: redirects the browser to Microsoft's login
+    page. Not called via axios/fetch — the frontend navigates the whole
+    page here (a real browser redirect), since Microsoft's login page
+    can't be loaded inside an XHR/fetch response."""
+    try:
+        auth_url = build_auth_redirect()
+    except SsoError as exc:
+        logger.error("login_microsoft: %s", exc)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SSO is not available")
+    return RedirectResponse(auth_url)
+
+
+@router.get("/saml/acs")
+def sso_callback(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+    """OIDC callback (name kept from an earlier, abandoned SAML ticket —
+    see config.py's azure_redirect_uri comment). Validates the auth code,
+    creates/links the user, then hands off to the browser exactly like a
+    normal login: sets the httpOnly refresh cookie and redirects to the
+    frontend, where ProtectedRoute's existing silent-refresh-on-mount
+    logic picks up an access token from that cookie with no new frontend
+    token-handling code required.
+    """
+    try:
+        claims = complete_auth_flow(dict(request.query_params))
+        user = get_or_create_sso_user(db, claims)
+    except SsoError as exc:
+        logger.info("sso_callback: failed (%s)", exc)
+        return RedirectResponse(f"{settings.frontend_url}/login?sso_error=1")
+
+    refresh_token = create_refresh_token(user)
+    response = RedirectResponse(f"{settings.frontend_url}/welcome")
+    _set_refresh_cookie(response, refresh_token)
+    logger.info("sso_callback: success for user_id=%s", user.id)
+    return response

@@ -65,6 +65,27 @@ class Settings:
     seed_admin_email: str = os.environ.get("SEED_ADMIN_EMAIL", "admin@example.com")
     seed_admin_password: str = os.environ.get("SEED_ADMIN_PASSWORD", "devpassword123")
 
+    # --- SSO (Microsoft Entra ID, OIDC) ---
+    azure_tenant_id: str = os.environ.get("AZURE_TENANT_ID", "")
+    azure_client_id: str = os.environ.get("AZURE_CLIENT_ID", "")
+    azure_client_secret: str = os.environ.get("AZURE_CLIENT_SECRET", "")
+    # Kept as the value actually registered on the Azure app (originally
+    # reserved for a since-abandoned SAML attempt) — see PLAN.md / SSO
+    # conversation history for why the path says "saml". Functionally this
+    # is a plain OIDC redirect URI; rename only alongside re-registering it
+    # in Azure.
+    azure_redirect_uri: str = os.environ.get(
+        "AZURE_REDIRECT_URI", "http://localhost:8000/api/auth/saml/acs"
+    )
+
+    @property
+    def azure_authority(self) -> str:
+        return f"https://login.microsoftonline.com/{self.azure_tenant_id}"
+
+    @property
+    def sso_configured(self) -> bool:
+        return bool(self.azure_tenant_id and self.azure_client_id and self.azure_client_secret)
+
 
 settings = Settings()
 

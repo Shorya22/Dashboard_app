@@ -13,3 +13,6 @@ passlib==1.7.4
 bcrypt==4.0.1
 slowapi==0.1.9
 email-validator==2.3.0
+
+# SSO: Microsoft Entra ID (OIDC, Authorization Code flow)
+msal==1.31.0

@@ -69,6 +69,17 @@ export function LoginPage() {
     }
   }, [registeredEmail])
 
+  // Set by the backend's /api/auth/saml/acs redirect on a failed SSO
+  // attempt (expired/invalid state, or Microsoft rejecting the code
+  // exchange) — surfaced the same way a password-login error is.
+  const ssoFailed = new URLSearchParams(location.search).get('sso_error') === '1'
+  React.useEffect(() => {
+    if (ssoFailed) {
+      window.history.replaceState({}, '', location.pathname)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [showPassword, setShowPassword] = React.useState(false)
   const [shake, setShake] = React.useState(false)
 
@@ -81,7 +92,9 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   })
 
-  const [serverError, setServerError] = React.useState<string | null>(null)
+  const [serverError, setServerError] = React.useState<string | null>(
+    ssoFailed ? 'Sign-in with Microsoft failed. Please try again.' : null,
+  )
 
   const loginMutation = useMutation({
     mutationFn: async (values: LoginFormValues) => {
@@ -402,6 +415,32 @@ export function LoginPage() {
                 {!loginMutation.isPending && (
                   <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                 )}
+              </Button>
+
+              <div className="relative py-1 text-center">
+                <span className="relative bg-card px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Or
+                </span>
+                <span className="absolute inset-x-0 top-1/2 -z-10 h-px bg-border" aria-hidden="true" />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 w-full gap-2.5 text-[15px] font-semibold"
+                // Real browser navigation, not an axios call — Microsoft's
+                // login page can't be loaded inside an XHR/fetch response.
+                onClick={() => {
+                  window.location.href = '/api/auth/login/microsoft'
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
+                  <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                  <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                  <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                </svg>
+                Sign in with Microsoft
               </Button>
 
               <p className="pt-2 text-center text-sm text-muted-foreground">

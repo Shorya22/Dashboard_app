@@ -33,7 +33,7 @@ from app.api.health import router as health_router
 from app.api.router import api_v1_router
 from app.core.config import configure_logging, settings
 from app.core.limiter import limiter
-from app.db.session import Base, SessionLocal, engine
+from app.db.session import Base, SessionLocal, engine, run_startup_migrations
 from app.services.user_service import seed_dev_admin_if_empty
 
 configure_logging()
@@ -81,6 +81,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 @app.on_event("startup")
 def _startup_create_db_and_seed() -> None:
     Base.metadata.create_all(bind=engine)
+    run_startup_migrations()
     db = SessionLocal()
     try:
         seed_dev_admin_if_empty(db)
