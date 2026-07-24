@@ -310,12 +310,13 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
     filters_block = cfg.get("filters", {})
     for name, spec in filters_block.items():
         chart_ref = spec.get("derived_from_chart")
-        # `client_only: true` marks a page-local filter that narrows a
-        # pre-aggregated response client-side (e.g. HR Analytics' Month /
-        # Year filter, which picks months out of the trend arrays the
-        # browser already has) — it has neither a source column nor a
-        # backing chart, and it's never sent through `apply_filters`.
-        if spec.get("client_only"):
+        # `time_filter: true` marks a filter whose values are month labels
+        # ("Mon YYYY"), not raw column values — `apply_filters` narrows
+        # to rows active in any of the selected months (see
+        # `_apply_month_year_filter` in roster_metrics). No `column_role`
+        # / `derived_from_chart` needed because no single column carries
+        # those month strings.
+        if spec.get("time_filter"):
             pass
         elif chart_ref is not None:
             if chart_ref not in charts:

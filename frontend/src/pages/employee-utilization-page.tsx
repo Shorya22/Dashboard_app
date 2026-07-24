@@ -494,7 +494,15 @@ function EmployeeUtilizationDetail({ employee }: { employee: string }) {
       </div>
 
       <FiltersPanel>
-        <FilterSelect label="Hours Type" value={hoursType} options={HOURS_TYPES} onChange={setHoursType} />
+        <FilterSelect
+          label={filterLabel(filterConfig.data?.filters, 'hours_type', 'Hours Type')}
+          value={hoursType}
+          options={HOURS_TYPES}
+          onChange={setHoursType}
+        />
+        {/* Project is a page-local option list (this employee's distinct
+            project set), not a global filter declared in YAML — kept
+            hardcoded. Same treatment as `Employee` on the project page. */}
         <FilterSelect label="Project" value={project} options={projectOptions} onChange={setProject} />
         <FilterControl label={filterLabel(filterConfig.data?.filters, 'week', 'Month / Week')}>
           <HierarchicalMultiSelect

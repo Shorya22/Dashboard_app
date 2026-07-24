@@ -1670,6 +1670,72 @@ def get_directory_columns() -> list[dict]:
 # --------------------------------------------------------------------------
 
 
+def _parse_month_labels(labels: list[str]) -> list[pd.Timestamp]:
+    """"Mon YYYY" -> first-of-month `Timestamp`s, silently dropping any
+    label that doesn't parse (a malformed filter value shouldn't crash a
+    KPI request — the label list is derived on the frontend and could
+    theoretically arrive corrupted; a dropped value narrows to fewer
+    months rather than the whole roster, which is the safe direction)."""
+    out: list[pd.Timestamp] = []
+    for label in labels:
+        ts = pd.to_datetime(label, format="%b %Y", errors="coerce")
+        if pd.notna(ts):
+            out.append(ts)
+    return out
+
+
+def _apply_month_year_filter(
+    df: pd.DataFrame, month_labels: list[str]
+) -> pd.DataFrame:
+    """Keep rows active during ANY of the "Mon YYYY" labels — i.e. at
+    least one date in [start-of-M, end-of-M] lies inside the row's
+    employment window [DOJ, LWD] (LWD open when null).
+
+    Mirrors the "person-month" definition the monthly-series charts
+    already use (`_evaluate_monthly_series` counts an employee in month M
+    iff DOJ ≤ end-of-M AND LWD is null-or-≥ start-of-M), so a Month/Year
+    pick narrows the KPI cards to exactly the same population the trend
+    charts draw for that month.
+    """
+    months = _parse_month_labels(month_labels)
+    if not months:
+        # An empty / all-malformed selection means "no rows can be in any
+        # picked month" — return an empty frame, not the full roster
+        # (which would silently ignore the filter). This matches every
+        # other filter's contract: if the user picked something the data
+        # can't satisfy, the answer is 0 rows, not "the whole thing".
+        return df.iloc[0:0]
+
+    doj = pd.to_datetime(
+        df[metric_config.column("joining_date")], format=DATE_FORMAT, errors="coerce"
+    )
+    lwd = pd.to_datetime(
+        df[metric_config.column("leaving_date")], format=DATE_FORMAT, errors="coerce"
+    )
+
+    mask = pd.Series(False, index=df.index)
+    for month_start in months:
+        month_end = month_start + pd.offsets.MonthEnd(0)
+        active_this_month = (
+            doj.notna() & (doj <= month_end) & (lwd.isna() | (lwd >= month_start))
+        )
+        mask = mask | active_this_month
+    return df[mask]
+
+
+def filter_monthly_rows(
+    rows: list[dict], month_labels: list[str] | None
+) -> list[dict]:
+    """Narrow a `_evaluate_monthly_series`-shaped list (each row keyed by
+    `month` = "Mon YYYY") to only the ticked months. Empty / falsy
+    `month_labels` is a no-op — matches the "nothing picked means show
+    everything" convention every other filter uses in the frontend."""
+    if not month_labels:
+        return rows
+    picked = set(month_labels)
+    return [row for row in rows if row.get("month") in picked]
+
+
 def apply_filters(
     df: pd.DataFrame, selected: dict[str, str | list[str]] | None
 ) -> pd.DataFrame:
@@ -1710,11 +1776,16 @@ def apply_filters(
             continue
         spec = declared[name]
 
-        # Client-only filters (e.g. HR Analytics' Month / Year) narrow a
-        # pre-aggregated response in the browser and never reach the roster
-        # scan — they carry no column_role / derived_from_chart. Silently
-        # skip so a page can safely forward its whole filter state.
-        if spec.get("client_only"):
+        # Time filters (e.g. HR Analytics' Month / Year) pick "Mon YYYY"
+        # labels: narrow the roster to employees active during ANY of the
+        # selected months, so the KPIs on top of a filtered page reflect
+        # the same population the trend charts are showing rather than the
+        # full roster. Semantics: DOJ ≤ end-of-M AND (LWD null OR LWD ≥
+        # start-of-M) for any picked M — chosen to match how the
+        # existing `_evaluate_monthly_series` charts already draw a
+        # person-month (Closing Headcount / Joiners vs Leavers).
+        if spec.get("time_filter"):
+            out = _apply_month_year_filter(out, values)
             continue
 
         # A filter can be a plain column, or a DERIVED bucket reusing a

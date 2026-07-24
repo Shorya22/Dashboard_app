@@ -170,6 +170,12 @@ export type RosterFilterParams = {
   grade?: string
   experience?: string
   seniorityCategory?: string
+  // HR Analytics month picker — one or more "Mon YYYY" labels. The
+  // backend interprets these as "active during any of these months"
+  // (`time_filter: true` in `roster_metrics.yaml::filters.month_year`)
+  // so BOTH the KPIs and the trend/attrition arrays react to the
+  // picker, not just the pre-aggregated monthly charts as before.
+  month_year?: string | string[]
 }
 
 // Serialize array values as repeated params (`?region=EMEA&region=AMER`)

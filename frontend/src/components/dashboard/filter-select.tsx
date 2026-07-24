@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FilterControl, filterTriggerClasses } from './filter-control'
+import { cn } from '@/lib/utils'
 
 interface FilterSelectProps {
   label: string
@@ -36,8 +37,23 @@ export function FilterSelect({
               roster-derived Department option "BE Salesforce Commerce
               cloud Developer") ellipsize inside the fixed 180px trigger
               instead of overflowing the border. `min-w-0 flex-1` lets
-              the span shrink; `truncate` applies overflow-ellipsis. */}
-          <span className="min-w-0 flex-1 truncate text-left">
+              the span shrink; `truncate` applies overflow-ellipsis.
+
+              When no user selection is active (value = ALL), the trigger
+              shows "All …" in `text-muted-foreground` to match
+              HierarchicalMultiSelect's inactive-placeholder style — this
+              was the actual "Hours Type / Department look darker than
+              Region/Market / Month / Week" delta on Utilization Home:
+              the labels above have always been identical, but Radix
+              Select was rendering the ALL placeholder in the darker
+              `text-foreground` colour inherited from `filterTriggerClasses`
+              while the hierarchical trigger dimmed its own "All" text. */}
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-left',
+              (value === undefined || value === ALL) && 'text-muted-foreground',
+            )}
+          >
             <SelectValue placeholder={placeholder ?? `All ${label}`} />
           </span>
         </SelectTrigger>

@@ -48,14 +48,14 @@ def roster() -> pd.DataFrame:
 
 
 def _server_filters() -> dict[str, dict]:
-    """Every filter that actually runs through `apply_filters` — client-only
-    filters (e.g. Month/Year narrowing the trend arrays in the browser)
-    have no server-side row-filter behavior and are excluded from tests
-    that iterate the roster."""
+    """Every filter that runs through `apply_filters` as a plain column
+    match. Excludes `time_filter: true` filters (Month/Year), whose values
+    are "Mon YYYY" labels that don't map to distinct column values — those
+    get their own dedicated test below (`test_month_year_time_filter_*`)."""
     return {
         name: spec
         for name, spec in metric_config.filters().items()
-        if not spec.get("client_only")
+        if not spec.get("time_filter")
     }
 
 
@@ -273,6 +273,99 @@ def test_api_applies_each_declared_filter(api, roster):
         assert resp.status_code == 200, f"{name}={value}: {resp.text}"
         got = resp.json()["total"]
         assert 0 < got <= total, f"{name}={value}: {got} not a subset of {total}"
+
+
+def _first_available_month(api, headers) -> str:
+    """First "Mon YYYY" label the unfiltered trends endpoint emits — the
+    same list the frontend Month/Year picker builds from, so a value
+    picked here is guaranteed to match at least one row."""
+    resp = api.get("/api/v1/roster/trends", headers=headers)
+    assert resp.status_code == 200, resp.text
+    months = [m["month"] for m in resp.json()["month_wise_closing_headcount"]]
+    assert months, "roster trends returned no months — cannot exercise month_year"
+    return months[0]
+
+
+def test_month_year_time_filter_narrows_roster_rows(roster):
+    """The `time_filter: true` branch of `apply_filters` keeps only rows
+    active during at least one selected month (DOJ ≤ end-of-M AND (LWD
+    null OR LWD ≥ start-of-M)) — never the full roster, never zero
+    rows for a valid label, never a plain column-value match."""
+    doj_col = metric_config.column("joining_date")
+    # Pick a month clearly inside the roster's DOJ range — first non-null
+    # DOJ month. `%b %Y` matches the trend endpoint's own label format.
+    dojs = pd.to_datetime(roster[doj_col], format="%d-%b-%y", errors="coerce")
+    a_month = dojs.dropna().sort_values().iloc[0].strftime("%b %Y")
+    narrowed = roster_metrics.apply_filters(roster, {"month_year": a_month})
+    assert 0 < len(narrowed) <= len(roster)
+    # Everyone in the narrowed frame joined by end-of-month at the latest.
+    end_of_m = pd.to_datetime(a_month, format="%b %Y") + pd.offsets.MonthEnd(0)
+    narrowed_dojs = pd.to_datetime(
+        narrowed[doj_col], format="%d-%b-%y", errors="coerce"
+    )
+    assert (narrowed_dojs.notna() & (narrowed_dojs <= end_of_m)).all()
+
+
+def test_month_year_time_filter_empty_selection_returns_empty(roster):
+    """A malformed / unparseable month label narrows to zero rows rather
+    than silently returning the whole roster — matches every other
+    filter's "no valid values" contract."""
+    out = roster_metrics.apply_filters(roster, {"month_year": ["not-a-month"]})
+    assert len(out) == 0
+
+
+def test_month_year_multi_value_is_or_within_field(roster):
+    """Two months ORed within `month_year` return the union of each
+    single-month result — same shape as the region multi-value test."""
+    doj_col = metric_config.column("joining_date")
+    dojs = pd.to_datetime(roster[doj_col], format="%d-%b-%y", errors="coerce").dropna()
+    labels = sorted({d.strftime("%b %Y") for d in dojs})[:2]
+    if len(labels) < 2:
+        pytest.skip("roster has only one DOJ month — cannot exercise OR")
+    a = roster_metrics.apply_filters(roster, {"month_year": labels[0]})
+    b = roster_metrics.apply_filters(roster, {"month_year": labels[1]})
+    both = roster_metrics.apply_filters(roster, {"month_year": labels})
+    # OR: everyone in either single-picked set is in the union; and no
+    # extra rows (the multi-value contract).
+    expected = set(a.index) | set(b.index)
+    assert set(both.index) == expected
+
+
+def test_api_month_year_narrows_kpis_and_trends(api):
+    """HR Analytics contract: picking a month narrows /roster/summary
+    (KPIs) AND /roster/trends (monthly arrays) AND /roster/attrition-detail
+    (monthly resignation) in one round trip. This is the user-visible
+    guarantee that Month/Year is now a real server-side filter, not a
+    client-only membership check that only touched some charts."""
+    headers = {"Authorization": f"Bearer {_token(api)}"}
+    month = _first_available_month(api, headers)
+
+    unfiltered_summary = api.get("/api/v1/roster/summary", headers=headers).json()
+    filtered_summary = api.get(
+        "/api/v1/roster/summary", params={"month_year": month}, headers=headers
+    ).json()
+    # Total Employees is a distinct-employee-id count; narrowing to one
+    # month can never return MORE people than the full roster.
+    assert filtered_summary["total_employees"] <= unfiltered_summary["total_employees"]
+
+    trends = api.get(
+        "/api/v1/roster/trends", params={"month_year": month}, headers=headers
+    ).json()
+    months_in_trend = {row["month"] for row in trends["month_wise_closing_headcount"]}
+    assert months_in_trend == {month}
+    jvl_months = {row["month"] for row in trends["monthly_joiners_vs_leavers"]}
+    assert jvl_months == {month}
+
+    attrition = api.get(
+        "/api/v1/roster/attrition-detail",
+        params={"month_year": month},
+        headers=headers,
+    ).json()
+    resig_months = {row["month"] for row in attrition["month_wise_resignation"]}
+    # Resignation is a subset — months with zero exits are dropped from
+    # the trend by the underlying series, so the ticked month may or may
+    # not appear. What must NEVER appear is any OTHER month.
+    assert resig_months.issubset({month})
 
 
 def test_api_ignores_undeclared_query_param(api):

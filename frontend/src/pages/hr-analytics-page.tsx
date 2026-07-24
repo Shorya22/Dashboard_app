@@ -60,7 +60,6 @@ export function HrAnalyticsPage() {
     setFilter,
     filterDefs,
     hierarchicalFilters,
-    monthFilter,
   } = useHrAnalyticsFilters()
 
   // Status/Department/Region filter the roster directly (EmployeeRecord
@@ -90,34 +89,36 @@ export function HrAnalyticsPage() {
   const strategicPool = breakdowns.data?.strategic_pool
   const exits = summary.data?.exits
 
-  // Memoized so an unrelated page re-render (e.g. the exits table below
-  // changing its internal TanStack Table sort state) doesn't recreate these
-  // arrays with new references and force every chart to redraw. `monthFilter`
-  // is itself `useCallback`'d in the hook (keyed on the Month/Year
-  // hierarchical selection), so depending on it here is both correct and
-  // stable.
+  // The trend and attrition arrays arrive from the server already
+  // narrowed by the Month/Year picker (see `filter_monthly_rows` in the
+  // roster router), so this just reshapes them into each chart's
+  // preferred column names — no client-side month membership check.
   const headcountData = useMemo(
     () =>
-      (trends.data?.month_wise_closing_headcount ?? [])
-        .filter((m) => monthFilter(m.month))
-        .map((m) => ({ month: m.month, 'Closing Headcount': m.closing_headcount })),
-    [trends.data, monthFilter],
+      (trends.data?.month_wise_closing_headcount ?? []).map((m) => ({
+        month: m.month,
+        'Closing Headcount': m.closing_headcount,
+      })),
+    [trends.data],
   )
 
   const joinersLeaversData = useMemo(
     () =>
-      (trends.data?.monthly_joiners_vs_leavers ?? [])
-        .filter((m) => monthFilter(m.month))
-        .map((m) => ({ month: m.month, Joiners: m.joiners, Exits: m.exits })),
-    [trends.data, monthFilter],
+      (trends.data?.monthly_joiners_vs_leavers ?? []).map((m) => ({
+        month: m.month,
+        Joiners: m.joiners,
+        Exits: m.exits,
+      })),
+    [trends.data],
   )
 
   const resignationData = useMemo(
     () =>
-      (attrition.data?.month_wise_resignation ?? [])
-        .filter((m) => monthFilter(m.month))
-        .map((m) => ({ month: m.month, Exits: m.exits })),
-    [attrition.data, monthFilter],
+      (attrition.data?.month_wise_resignation ?? []).map((m) => ({
+        month: m.month,
+        Exits: m.exits,
+      })),
+    [attrition.data],
   )
 
   // The server returns the Voluntary/Involuntary split with this page's

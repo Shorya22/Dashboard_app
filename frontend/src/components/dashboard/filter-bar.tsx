@@ -46,25 +46,42 @@ export function FilterBar({ filters, values, onChange, hierarchical }: FilterBar
           />
         </FilterControl>
       ))}
-      {filters.map((f) => (
-        <FilterControl key={f.key} label={f.label} htmlFor={`filter-${f.key}`}>
-          <div className="relative w-full">
-            <select
-              id={`filter-${f.key}`}
-              value={values[f.key] ?? ALL}
-              onChange={(e) => onChange(f.key, e.target.value)}
-              className={cn(filterTriggerClasses, 'appearance-none pr-8')}
-            >
-              {f.options.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
-          </div>
-        </FilterControl>
-      ))}
+      {filters.map((f) => {
+        const current = values[f.key] ?? ALL
+        // Match FilterSelect / HierarchicalMultiSelect's inactive-placeholder
+        // style: when nothing is picked (value = ALL), the trigger text is
+        // `text-muted-foreground` (light). A real selection uses
+        // `text-foreground` (dark). Keeps every filter trigger on every page
+        // visually identical in each of the two states.
+        const isEmpty = current === ALL
+        return (
+          <FilterControl key={f.key} label={f.label} htmlFor={`filter-${f.key}`}>
+            <div className="relative w-full">
+              <select
+                id={`filter-${f.key}`}
+                value={current}
+                onChange={(e) => onChange(f.key, e.target.value)}
+                className={cn(
+                  filterTriggerClasses,
+                  'appearance-none pr-8',
+                  isEmpty && 'text-muted-foreground',
+                )}
+              >
+                {f.options.map((opt) => (
+                  <option
+                    key={opt.value}
+                    value={opt.value}
+                    className="text-foreground"
+                  >
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+            </div>
+          </FilterControl>
+        )
+      })}
     </div>
   )
 }

@@ -119,6 +119,16 @@ def roster_breakdowns(
         raise HTTPException(status_code=500, detail="Failed to compute roster breakdowns")
 
 
+def _month_year_labels(filters: dict) -> list[str] | None:
+    """Extract the `month_year` selection ("Mon YYYY" strings) from the
+    filter dict without altering it. Returns None when nothing is picked,
+    so `filter_monthly_rows` can no-op and return every month row."""
+    raw = filters.get("month_year")
+    if not raw:
+        return None
+    return list(raw) if isinstance(raw, (list, tuple)) else [raw]
+
+
 @router.get("/trends", response_model=RosterTrends)
 def roster_trends(
     user: User = Depends(get_current_user),
@@ -126,9 +136,19 @@ def roster_trends(
 ) -> RosterTrends:
     try:
         df = roster_metrics.apply_filters(get_roster_df(), filters)
+        # `apply_filters` narrowed the roster ROWS to those active in the
+        # picked month(s); the trend arrays are one row per available
+        # month regardless, so we further narrow the output to just the
+        # ticked months so the HR Analytics line/bar charts show the same
+        # slice the KPI cards above do.
+        picked_months = _month_year_labels(filters)
         return RosterTrends(
-            month_wise_closing_headcount=roster_metrics.get_month_wise_closing_headcount(df),
-            monthly_joiners_vs_leavers=roster_metrics.get_monthly_joiners_vs_leavers(df),
+            month_wise_closing_headcount=roster_metrics.filter_monthly_rows(
+                roster_metrics.get_month_wise_closing_headcount(df), picked_months
+            ),
+            monthly_joiners_vs_leavers=roster_metrics.filter_monthly_rows(
+                roster_metrics.get_monthly_joiners_vs_leavers(df), picked_months
+            ),
         )
     except Exception:
         logger.exception("roster_trends: failed to compute roster trends")
@@ -142,8 +162,11 @@ def roster_attrition_detail(
 ) -> RosterAttritionDetail:
     try:
         df = roster_metrics.apply_filters(get_roster_df(), filters)
+        picked_months = _month_year_labels(filters)
         return RosterAttritionDetail(
-            month_wise_resignation=roster_metrics.get_month_wise_resignation(df),
+            month_wise_resignation=roster_metrics.filter_monthly_rows(
+                roster_metrics.get_month_wise_resignation(df), picked_months
+            ),
             voluntary_involuntary_split=roster_metrics.get_voluntary_involuntary_split(df),
             exits_table=roster_metrics.get_exits_table(df),
         )
