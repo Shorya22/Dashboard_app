@@ -782,6 +782,91 @@ def test_real_bookings_employee_and_project_detail(real_bookings):
     assert get_project_detail(real_bookings, "Definitely Not A Real Holding") is None
 
 
+# --------------------------------------------------------------------------
+# Config-driven card / chart dispatch (Utilization Home Phase 2, 2026-07-24)
+# --------------------------------------------------------------------------
+#
+# Every Utilization Home KPI/chart is declared in configs/booking_metrics.yaml
+# and computed through `evaluate_booking_card` / `evaluate_booking_chart`.
+# The tests below assert the DECLARATION drives the number on screen — a
+# card pointed at a different column role returns a different value with
+# no Python change.
+
+
+def test_evaluate_booking_card_dispatches_by_measure_type(sample_bookings_full):
+    from app.services.booking_metrics import evaluate_booking_card
+
+    # distinct_count over `Employee` role -> 3 (Alice, Bob, Carol)
+    assert evaluate_booking_card(sample_bookings_full, "total_employees_booking") == 3
+    # sum over `hours_value` role -> 20+5+15+10+8 = 58
+    assert evaluate_booking_card(sample_bookings_full, "total_hours") == pytest.approx(58.0)
+    # sum + filter_column_role: Client Hours only -> 20+15+10 = 45
+    assert evaluate_booking_card(sample_bookings_full, "client_hours") == pytest.approx(45.0)
+    # Internal Hours only -> 5+8 = 13
+    assert evaluate_booking_card(sample_bookings_full, "internal_hours") == pytest.approx(13.0)
+    # distinct_count over `project` role (-> Project Name column) -> 3
+    assert evaluate_booking_card(sample_bookings_full, "total_projects") == 3
+
+
+def test_get_functions_route_through_dispatcher(sample_bookings_full):
+    """Regression: the public get_* API must produce the same values the
+    dispatcher does, so callers get one contract not two."""
+    from app.services.booking_metrics import (
+        evaluate_booking_card,
+        get_client_hours,
+        get_internal_hours,
+        get_total_employees,
+        get_total_hours,
+        get_total_projects,
+    )
+
+    assert get_total_hours(sample_bookings_full) == pytest.approx(
+        evaluate_booking_card(sample_bookings_full, "total_hours")
+    )
+    assert get_client_hours(sample_bookings_full) == pytest.approx(
+        evaluate_booking_card(sample_bookings_full, "client_hours")
+    )
+    assert get_internal_hours(sample_bookings_full) == pytest.approx(
+        evaluate_booking_card(sample_bookings_full, "internal_hours")
+    )
+    assert get_total_employees(sample_bookings_full) == evaluate_booking_card(
+        sample_bookings_full, "total_employees_booking"
+    )
+    assert get_total_projects(sample_bookings_full) == evaluate_booking_card(
+        sample_bookings_full, "total_projects"
+    )
+
+
+def test_evaluate_booking_chart_sum_by_hierarchical(sample_bookings_full):
+    """`sum_by_hierarchical` returns {primary, secondary, value} rows,
+    sorted by value descending. The chart function just renames these
+    keys into the response model's {region, market, total_hours} shape."""
+    from app.services.booking_metrics import evaluate_booking_chart
+
+    result = evaluate_booking_chart(
+        sample_bookings_full, "total_hours_by_region_market"
+    )
+    by_pair = {(r["primary"], r["secondary"]): r["value"] for r in result}
+    assert by_pair[("EMEA", "UKI")] == pytest.approx(25.0)
+    assert by_pair[("AMER", "AMER")] == pytest.approx(25.0)
+    assert by_pair[("EMEA", "DACH")] == pytest.approx(8.0)
+
+
+def test_evaluate_booking_chart_sum_by_with_split(sample_bookings_full):
+    """`sum_by` with `split_column_role` returns a pivot table — one row
+    per group, columns per split value. The weekly-trend function projects
+    this into the {week_start, client_hours, internal_hours} shape."""
+    from app.services.booking_metrics import evaluate_booking_chart
+
+    grouped = sample_bookings_full.copy()
+    grouped["Monday of Week"] = pd.to_datetime(grouped["Monday of Week"])
+    pivot = evaluate_booking_chart(grouped, "weekly_hours_trend")
+    # 2026-05-04: Client 20+15=35, Internal 5
+    row = pivot.loc[pd.Timestamp("2026-05-04")]
+    assert row["Client Hours"] == pytest.approx(35.0)
+    assert row["Internal Hours"] == pytest.approx(5.0)
+
+
 def test_real_bookings_records_to_dicts_includes_region_department_team(real_bookings):
     # Duddi Kumar's first row (2026-04-13): Region (EC)=AMER,
     # Department=Creative Content, Team (EC)=CMUS -- hand-verified against

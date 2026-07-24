@@ -88,14 +88,68 @@ def test_booking_invariant_catches_a_new_hours_category():
     A category the donut doesn't know about (e.g. "Leave Hours") would
     still count toward total hours but appear in neither slice, quietly
     under-reporting. That must be flagged, and the culprit named.
+
+    `weekly_trend_sums_to_total_hours` also fires here because
+    `get_weekly_hours_trend` returns only the Client + Internal columns
+    from its per-week pivot, so any third category's hours are dropped
+    from the chart total while still contributing to Total Hours. Both
+    firing at once is the correct behaviour — the two invariants guard
+    different UI reconciliation contracts even though the root cause is
+    the same data drift.
     """
     from app.services.booking_metrics import load_booking_data
 
     df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx").copy()
     df.loc[df.index[:40], "Booked Hours Type"] = "Leave Hours"
     bad = metric_invariants.violations(df, "booking")
-    assert [r.name for r in bad] == ["hours_split_covers_all_hours"]
-    assert "Leave Hours" in bad[0].detail
+    names = [r.name for r in bad]
+    assert "hours_split_covers_all_hours" in names
+    detail = next(r.detail for r in bad if r.name == "hours_split_covers_all_hours")
+    assert "Leave Hours" in detail
+
+
+def test_booking_new_invariants_hold_on_real_data():
+    """The two new Utilization-Home reconciliation invariants must hold
+    on the frozen booking snapshot — the chart totals reconcile to the
+    Total Hours KPI, accounting for any rows the chart can't place."""
+    from app.services.booking_metrics import load_booking_data
+
+    df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
+    results = metric_invariants.run_invariants(df, "booking")
+    by_name = {r.name: r for r in results}
+    # Every booking invariant must have been evaluated.
+    assert set(by_name) == set(metric_invariants.BOOKING_INVARIANTS)
+    assert by_name["weekly_trend_sums_to_total_hours"].ok, by_name[
+        "weekly_trend_sums_to_total_hours"
+    ].detail
+    assert by_name["region_market_bars_sum_to_total_hours"].ok, by_name[
+        "region_market_bars_sum_to_total_hours"
+    ].detail
+
+
+def test_weekly_trend_invariant_flags_drift():
+    """If the trend chart's per-week hours don't add up to Total Hours
+    (and the difference isn't explained by unplaced rows), the invariant
+    must fire — the KPI card and the chart beside it would disagree."""
+    # Mock scenario: patch get_weekly_hours_trend to return under-count,
+    # bypass unplaced-rows explanation.
+    from app.services import booking_metrics
+    from app.services.booking_metrics import load_booking_data
+
+    df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
+    real_trend = booking_metrics.get_weekly_hours_trend
+
+    def bad_trend(_df):
+        rows = real_trend(_df)
+        # halve every week's client hours so the trend under-reports
+        return [{**r, "client_hours": r["client_hours"] * 0.5} for r in rows]
+
+    booking_metrics.get_weekly_hours_trend = bad_trend
+    try:
+        bad = metric_invariants.violations(df, "booking")
+        assert "weekly_trend_sums_to_total_hours" in {r.name for r in bad}
+    finally:
+        booking_metrics.get_weekly_hours_trend = real_trend
 
 
 def test_new_status_is_reflected_but_its_meaning_is_flagged(real_roster):

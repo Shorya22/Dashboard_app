@@ -267,3 +267,61 @@ def test_rollback_removes_new_values_from_filter_options(client):
     assert "IBERIA" not in rolled["markets"]
     assert "Data Engineering" not in rolled["departments"]
     assert "2027" not in {w["year"] for w in rolled["week_hierarchy"]}
+
+
+# --------------------------------------------------------------------- #
+# Booking-only Employee — locking test for cross-dataset SOFT warning
+# --------------------------------------------------------------------- #
+# Coordinator decision (2026-07-23): the roster-vs-booking count gap is a
+# WARNING, never a blocker — a booking upload can legitimately arrive
+# before the corresponding roster refresh. This test locks that contract:
+# a booking upload with an Employee not present in the current roster
+# must (1) commit, (2) surface exactly the `unmatched_in_roster` warning,
+# and (3) produce zero ERROR-severity issues.
+def test_booking_only_employee_warns_but_does_not_block_upload(client):
+    token = _admin_token(client)
+
+    # Establish the real roster as the baseline (so "booking-only" is a
+    # meaningful comparison — an Employee this roster does not contain).
+    r_resp = client.post(
+        "/api/v1/data/upload/roster",
+        files=_files(_xlsx_bytes(pd.read_excel(REAL_ROSTER))),
+        headers=_auth(token),
+    )
+    assert r_resp.status_code == 200
+    assert r_resp.json()["status"] == "promoted"
+
+    # Booking upload with one row whose Employee is deliberately NOT in
+    # the roster (single-token name that cannot subset-match any real
+    # roster row — the token-subset matcher in cross_dataset.py accepts
+    # any subset relation, so a totally unique token is the safest
+    # guarantee of "unmatched").
+    b_df = pd.read_excel(REAL_BOOKING)
+    ghost_row = b_df.iloc[0].to_dict()
+    ghost_row["Employee"] = "Zzzghostemployee Xyzzy"
+    ghost_row["Employee Booked Hours"] = 4.0
+    ghost_row["Booked Hours Type"] = "Client Hours"
+    b_df = pd.concat([b_df, pd.DataFrame([ghost_row])], ignore_index=True)
+
+    b_resp = client.post(
+        "/api/v1/data/upload/booking",
+        files=_files(_xlsx_bytes(b_df)),
+        headers=_auth(token),
+    )
+    # (1) upload committed — never blocked.
+    assert b_resp.status_code == 200, b_resp.text
+    body = b_resp.json()
+    assert body["status"] == "promoted"
+    report = body["report"]
+
+    # (3) zero ERROR-severity issues.
+    assert report["error_count"] == 0, report["issues"]
+
+    # (2) exactly one `unmatched_in_roster` warning naming our ghost.
+    ghost_warnings = [
+        i for i in report["issues"]
+        if i["severity"] == "warning"
+        and i["rule"] == "unmatched_in_roster"
+        and i.get("value") == "Zzzghostemployee Xyzzy"
+    ]
+    assert len(ghost_warnings) == 1, ghost_warnings

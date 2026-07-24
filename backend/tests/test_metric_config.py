@@ -81,6 +81,77 @@ def test_config_mistakes_are_caught_at_load(cfg, label, mutate, expected_in_mess
     assert expected_in_message in str(err.value), label
 
 
+# --------------------------------------------------------------------------
+# Booking / Utilization-side config validation (Phase 2, 2026-07-24)
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def booking_cfg() -> dict:
+    return copy.deepcopy(metric_config.load_metric_config("booking"))
+
+
+def test_the_real_booking_config_is_valid(booking_cfg):
+    metric_config.validate_metric_config(booking_cfg, dataset="booking")
+
+
+@pytest.mark.parametrize(
+    "label,mutate,expected_in_message",
+    [
+        (
+            "unsupported measure_type",
+            lambda c: c["cards"]["total_hours"].__setitem__("measure_type", "avg"),
+            "avg",
+        ),
+        (
+            "card column_role typo",
+            lambda c: c["cards"]["total_employees_booking"].__setitem__(
+                "column_role", "employe"
+            ),
+            "employe",
+        ),
+        (
+            "filter_column_role names an unknown role",
+            lambda c: c["cards"]["client_hours"].__setitem__(
+                "filter_column_role", "nope_role"
+            ),
+            "nope_role",
+        ),
+        (
+            "filter_label_key not in hours block",
+            lambda c: c["cards"]["client_hours"].__setitem__(
+                "filter_label_key", "billable_label"
+            ),
+            "billable_label",
+        ),
+        (
+            "sum_by_hierarchical missing primary_group_role",
+            lambda c: c["charts"]["total_hours_by_region_market"].pop(
+                "primary_group_role"
+            ),
+            # `need_role` reports a missing role by its column_role message
+            # (the same shape every chart type uses); the chart name pins
+            # WHICH declaration is at fault.
+            "total_hours_by_region_market",
+        ),
+        (
+            "sum_by split_column_role names an unknown role",
+            lambda c: c["charts"]["weekly_hours_trend"].__setitem__(
+                "split_column_role", "made_up"
+            ),
+            "made_up",
+        ),
+    ],
+)
+def test_booking_config_mistakes_are_caught_at_load(
+    booking_cfg, label, mutate, expected_in_message
+):
+    mutate(booking_cfg)
+    with pytest.raises(metric_config.MetricConfigError) as err:
+        metric_config.validate_metric_config(booking_cfg, dataset="booking")
+    assert expected_in_message in str(err.value), label
+
+
 def test_last_band_must_be_the_catch_all(cfg):
     """
     Every band except the last declares a `below`. If the last one also had
