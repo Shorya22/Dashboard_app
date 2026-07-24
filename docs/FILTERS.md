@@ -41,7 +41,28 @@ filters:
     derived_from_chart: <chart>    # for chart-derived filters
     nests: <other_filter_key>      # declares hierarchy
     applies_to_pages: [<slug>, ...]
+    order: <int>                   # optional; ascending display order
+    searchable: true | false       # optional; inline dropdown search input
 ```
+
+### Filter widget metadata
+
+| Field | Meaning | Default |
+|---|---|---|
+| `label` | Human label shown next to the dropdown | required |
+| `type` | `single` / `multi` / `hierarchical` — widget shape | required |
+| `column_role` | Physical column via the `columns:` block. Mutually exclusive with `derived_from_chart` and `time_filter: true` | one of these three is required |
+| `derived_from_chart` | Reuses another chart's bucketing rules (Experience bands, Seniority buckets) | — |
+| `nests` | Parent filter for a hierarchical child (Region nests Market) | — |
+| `applies_to_pages` | Page-slug allowlist — endpoints iterating `metric_config.filters()` still accept the key on any page, but the frontend only renders it on the listed ones | `[]` |
+| `order` | Ascending integer display order in the filter grid. Missing sorts to the end, keeping declaration position as tiebreaker. YAML-driven so reordering (e.g. moving Employee first on Utilization Search) is a config edit, not a code change | `null` |
+| `searchable` | Opt-in inline search input inside the dropdown. Rule of thumb: enable when the option list can plausibly exceed ~10 entries. Leave off for short enums (Status, Type, Hours Type) where the input would be noise | `false` |
+
+Widget order and search-enablement are read by the frontend via
+`useFilterConfig` (`frontend/src/lib/filter-config.ts`) — the
+`sortedFilters` helper does the actual ordering, and every page's filter
+grid iterates its keys via that helper rather than a hardcoded array.
+Adding, reordering, or opting a new filter into search is one YAML edit.
 
 The frontend reads these definitions via
 `GET /api/v1/config/filters?dataset=roster|booking` (see

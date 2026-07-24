@@ -11,7 +11,12 @@ import {
   useUtilizationByRegionMarket,
   weekHierarchyToItems,
 } from '@/lib/utilization-api'
-import { useFilterConfig, filterLabel } from '@/lib/filter-config'
+import {
+  useFilterConfig,
+  filterLabel,
+  filterSearchable,
+  sortedFilters,
+} from '@/lib/filter-config'
 import { HierarchicalMultiSelect, type HierarchicalItem } from '@/components/dashboard/hierarchical-multi-select'
 import { FilterControl } from '@/components/dashboard/filter-control'
 import { marketDisplayLabel } from '@/lib/chart-colors'
@@ -25,18 +30,20 @@ type FilterKey =
   | 'hours_type'
   | 'employee'
 
-// Field ORDER lives here (a display concern the config doesn't own);
-// LABELS come from the booking YAML via `useFilterConfig('booking')`.
-// `employee` was added 2026-07-24 as the 8th filter — flat multi-select
-// (like Entity), backed by the new `employees` list on filter-options.
-const FIELD_KEYS: FilterKey[] = [
+// The full set of filters this page renders. DISPLAY ORDER is YAML-driven
+// via `filters.<key>.order` in `booking_metrics.yaml` — the render pass
+// below runs `sortedFilters(config, FIELD_KEYS_ALL)` so re-sequencing
+// (e.g. Employee first) is a config edit, not a code edit. The fallback
+// order here matches the YAML for the first paint before /config/filters
+// has resolved.
+const FIELD_KEYS_ALL: FilterKey[] = [
+  'employee',
   'week',
   'region',
   'department',
   'entity',
   'holding',
   'hours_type',
-  'employee',
 ]
 
 // Holding->Project child values are encoded as "<holding>::<project>" so
@@ -71,7 +78,7 @@ export function UtilizationSearchPage() {
   // array of selected values (multi-select) instead of a single string.
   const [values, setValues] = React.useState<Record<FilterKey, string[]>>(() => {
     const initial = {} as Record<FilterKey, string[]>
-    FIELD_KEYS.forEach((key) => {
+    FIELD_KEYS_ALL.forEach((key) => {
       initial[key] = searchParams.getAll(key)
     })
     return initial
@@ -130,7 +137,7 @@ export function UtilizationSearchPage() {
 
   const handleReset = () => {
     const cleared = {} as Record<FilterKey, string[]>
-    FIELD_KEYS.forEach((k) => (cleared[k] = []))
+    FIELD_KEYS_ALL.forEach((k) => (cleared[k] = []))
     setValues(cleared)
   }
 
@@ -194,12 +201,24 @@ export function UtilizationSearchPage() {
     }
   }, [filterOptions.data, holdingsProjects.data, byRegionMarket.data])
 
+  // Display order + per-widget `searchable` come from booking_metrics.yaml
+  // via /config/filters. Reordering is a YAML edit — see
+  // `sortedFilters` in `@/lib/filter-config`. Before /config/filters
+  // resolves, `sortedFilters` returns the fallback keys in their
+  // FIELD_KEYS_ALL declaration order (Employee first), so the initial
+  // paint is stable.
+  const displayKeys: FilterKey[] = React.useMemo(() => {
+    const sorted = sortedFilters(filterConfig.data?.filters, FIELD_KEYS_ALL)
+    if (sorted.length === 0) return FIELD_KEYS_ALL
+    return sorted.map((f) => f.key as FilterKey)
+  }, [filterConfig.data])
+
   return (
     <div className="space-y-5">
       <Card className="rounded-2xl border-border bg-card p-6 shadow-card">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FIELD_KEYS.map((key) => (
+            {displayKeys.map((key) => (
               // `sm:w-auto` restores the grid cell's own width — FilterControl's
               // default `sm:w-[180px]` fits every other filter row on the app,
               // but here the Search form is a 2/3-column grid whose cells are
@@ -217,7 +236,10 @@ export function UtilizationSearchPage() {
                     items={hierarchies[key]}
                     selected={values[key]}
                     onChange={(next) => setField(key, next)}
-                    searchable={key === 'holding'}
+                    // Per-widget `searchable` is YAML-driven — long lists
+                    // (Employee/Holding/Department/Entity/Region/Market/Week)
+                    // opt in via `searchable: true` in booking_metrics.yaml.
+                    searchable={filterSearchable(filterConfig.data?.filters, key)}
                   />
                 )}
               </FilterControl>

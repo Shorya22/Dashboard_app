@@ -30,6 +30,15 @@ class FilterDefinition(BaseModel):
     derived_from_chart: str | None = None
     nests: str | None = None
     applies_to_pages: list[str] = []
+    # Widget-metadata fields — optional in YAML, defaulted here so the
+    # frontend never has to check for undefined. `order` is a stable
+    # display index (ascending); missing means "sort to the end in
+    # declaration order" — the frontend treats null as +Infinity while
+    # keeping the original config-array position as the tiebreaker.
+    # `searchable` opts a dropdown into rendering an inline search input
+    # (see HierarchicalMultiSelect's `searchable` prop).
+    order: int | None = None
+    searchable: bool = False
 
 
 class FilterConfigResponse(BaseModel):
@@ -68,6 +77,8 @@ def get_filter_config(
             derived_from_chart=spec.get("derived_from_chart"),
             nests=spec.get("nests"),
             applies_to_pages=list(spec.get("applies_to_pages", []) or []),
+            order=spec.get("order"),
+            searchable=bool(spec.get("searchable", False)),
         )
         for key, spec in raw.items()
     ]

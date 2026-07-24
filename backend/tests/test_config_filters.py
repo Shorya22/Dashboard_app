@@ -93,6 +93,37 @@ def test_applies_to_pages_must_be_list_of_strings(booking_cfg):
         metric_config.validate_metric_config(booking_cfg, dataset="booking")
 
 
+# --- widget-metadata: `order` + `searchable` (2026-07-24) -----------------
+
+
+def test_searchable_must_be_bool(booking_cfg):
+    booking_cfg["filters"]["region"]["searchable"] = "yes"
+    with pytest.raises(metric_config.MetricConfigError, match="searchable"):
+        metric_config.validate_metric_config(booking_cfg, dataset="booking")
+
+
+def test_order_must_be_int(booking_cfg):
+    booking_cfg["filters"]["region"]["order"] = "1"
+    with pytest.raises(metric_config.MetricConfigError, match="order"):
+        metric_config.validate_metric_config(booking_cfg, dataset="booking")
+
+
+def test_order_bool_is_rejected(booking_cfg):
+    # bool is a subclass of int in Python — screen it out explicitly so a
+    # stray `order: true` doesn't silently sort like `order: 1`.
+    booking_cfg["filters"]["region"]["order"] = True
+    with pytest.raises(metric_config.MetricConfigError, match="order"):
+        metric_config.validate_metric_config(booking_cfg, dataset="booking")
+
+
+def test_order_and_searchable_optional(booking_cfg):
+    # Both fields removed -> config still validates.
+    for spec in booking_cfg["filters"].values():
+        spec.pop("order", None)
+        spec.pop("searchable", None)
+    metric_config.validate_metric_config(booking_cfg, dataset="booking")
+
+
 # --- endpoint -------------------------------------------------------------
 
 
@@ -131,6 +162,35 @@ def test_config_filters_booking_endpoint(client):  # noqa: F811
     employee = next(f for f in body["filters"] if f["key"] == "employee")
     assert employee["type"] == "multi"
     assert employee["label"] == "Employee"
+    # Widget metadata (2026-07-24): Employee is now the first filter on
+    # the Search page (`order: 1`) and its dropdown supports search.
+    assert employee["order"] == 1
+    assert employee["searchable"] is True
+    # Hours Type: short enum, no search input.
+    hours_type = next(f for f in body["filters"] if f["key"] == "hours_type")
+    assert hours_type["searchable"] is False
+    # Every filter carries `order` + `searchable` (defaults applied where
+    # the YAML omitted them).
+    for f in body["filters"]:
+        assert "order" in f
+        assert "searchable" in f
+        assert isinstance(f["searchable"], bool)
+
+
+def test_config_filters_roster_widget_metadata(client):  # noqa: F811
+    """Roster filters carry `order` + `searchable` too — reordering the
+    HR filter row is a YAML edit, not code."""
+    resp = client.get("/api/v1/config/filters?dataset=roster", headers=_auth_headers(client))
+    body = resp.json()
+    orders = {f["key"]: f["order"] for f in body["filters"]}
+    # Status leads the HR filter row.
+    assert orders["status"] == 1
+    # Every long-list HR filter opts into search; Status / Type do not.
+    by_key = {f["key"]: f for f in body["filters"]}
+    assert by_key["department"]["searchable"] is True
+    assert by_key["skill"]["searchable"] is True
+    assert by_key["status"]["searchable"] is False
+    assert by_key["type"]["searchable"] is False
 
 
 def test_config_filters_unknown_dataset_returns_400(client):  # noqa: F811

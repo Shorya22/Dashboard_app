@@ -413,6 +413,26 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                 problems.append(
                     f"filters.{name}: applies_to_pages must be a list of strings"
                 )
+        # `order` (display order in the frontend filter grid) and
+        # `searchable` (opt-in dropdown search input) are optional YAML-level
+        # widget-metadata fields. They are strictly typed here so a stray
+        # `searchable: "yes"` or `order: "1"` fails at load time rather
+        # than silently misbehaving on the frontend (which would coerce a
+        # string "0" to a truthy value under `+Infinity`-style sort keys).
+        # `isinstance(bool, int)` is True in Python, so screen booleans
+        # out of the `order` check explicitly.
+        if "order" in spec:
+            order = spec["order"]
+            if isinstance(order, bool) or not isinstance(order, int):
+                problems.append(
+                    f"filters.{name}: order must be an integer (got {type(order).__name__})"
+                )
+        if "searchable" in spec:
+            searchable = spec["searchable"]
+            if not isinstance(searchable, bool):
+                problems.append(
+                    f"filters.{name}: searchable must be a boolean (got {type(searchable).__name__})"
+                )
 
     declared_status_values = {
         v for k, v in statuses.items() if k != "counts_as_present"

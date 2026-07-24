@@ -101,51 +101,72 @@ directory:
 # which meant a status renamed in this file would silently stop matching
 # on those pages while the backend followed along correctly.
 filters:
+  # `order` + `searchable` conventions — see `docs/FILTERS.md` "Filter
+  # widget metadata". `order` ascending is display order; `searchable`
+  # opts in to an inline dropdown search input (rule of thumb: option
+  # list plausibly > ~10). Both are optional; frontends default order
+  # to +Infinity (declaration-tail) and searchable to false.
   status:
     column_role: status
     label: "Status"
     type: multi
     applies_to_pages: [hr-portal-home, hr-analytics]
-  department:
-    column_role: designation
-    label: "Department"
-    type: multi
-    applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
-  # Region nests Market (each Market belongs to exactly one Region): the UI
-  # narrows the Market dropdown to the selected Region, but the backend just
-  # filters on whatever region/market values arrive — both are ANDed, which
-  # is consistent because the hierarchy is strict.
+    order: 1
+    # searchable omitted — short enum (Active / Inactive / Strategic Pool)
   region:
+    # Region nests Market (each Market belongs to exactly one Region): the UI
+    # narrows the Market dropdown to the selected Region, but the backend just
+    # filters on whatever region/market values arrive — both are ANDed, which
+    # is consistent because the hierarchy is strict.
     column_role: region
     label: "Region"
     type: multi
     nests: market
     applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
+    order: 2
+    searchable: true
   market:
     column_role: market
     label: "Market"
     type: multi
     applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
-  skill:
-    column_role: primary_skill
-    label: "Skill"
+    order: 3
+    searchable: true
+  department:
+    column_role: designation
+    label: "Department"
     type: multi
-    applies_to_pages: [workforce, skills-experience]
-  type:
-    column_role: employment_type
-    label: "Type"
-    type: multi
-    applies_to_pages: [skills-experience]
-  allocation:
-    column_role: client
-    label: "Allocation"
-    type: multi
-    applies_to_pages: [employee-directory]
+    applies_to_pages: [hr-portal-home, hr-analytics, workforce, skills-experience, employee-directory]
+    order: 4
+    searchable: true
   grade:
     column_role: grade
     label: "Grade"
     type: multi
     applies_to_pages: [workforce]
+    order: 5
+    searchable: true
+  type:
+    column_role: employment_type
+    label: "Type"
+    type: multi
+    applies_to_pages: [skills-experience]
+    order: 6
+    # searchable omitted — short enum (GCC / Non GCC)
+  allocation:
+    column_role: client
+    label: "Allocation"
+    type: multi
+    applies_to_pages: [employee-directory]
+    order: 7
+    searchable: true
+  skill:
+    column_role: primary_skill
+    label: "Skill"
+    type: multi
+    applies_to_pages: [workforce, skills-experience]
+    order: 8
+    searchable: true
 
   # DERIVED filters — they reuse a chart's own bucketing rules rather than
   # re-deriving the bands, so filtering by "5-8 Years" and the chart that
@@ -164,22 +185,24 @@ filters:
   # (cards + charts) reacts to the same picker in one round trip.
   # `hierarchical` shape: the frontend nests each "Mon YYYY" leaf under its
   # Year group (see `monthsToHierarchy` in `frontend/src/lib/utilization-api.ts`).
-  month_year:
-    time_filter: true
-    label: "Month / Year"
-    type: hierarchical
-    applies_to_pages: [hr-analytics]
-
   experience:
     derived_from_chart: workforce_by_experience_band
     label: "Experience"
     type: multi
     applies_to_pages: [skills-experience]
+    order: 9
   seniorityCategory:
     derived_from_chart: workforce_by_seniority_category
     label: "Seniority Category"
     type: multi
     applies_to_pages: [skills-experience, employee-directory]
+    order: 10
+  month_year:
+    time_filter: true
+    label: "Month / Year"
+    type: hierarchical
+    applies_to_pages: [hr-analytics]
+    order: 11
 
 # ---------------------------------------------------------------------------
 # Card definitions — what each KPI on the dashboard counts.
