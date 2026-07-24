@@ -13,7 +13,8 @@ page as we verify them; anything not listed here has not been reviewed yet.
 | Workforce | ✅ 6 cards + 3 charts verified |
 | Skills & Experience | ✅ 3 cards + 4 charts verified |
 | Employee Directory | ✅ config-driven columns + Serial No. |
-| Utilization pages | ⬜ not reviewed |
+| Utilization Home | ✅ 5 cards + 2 charts |
+| Utilization Search / Results / drill-throughs | ⬜ not reviewed |
 
 Figures below were checked against the live data on 2026-07-22 (roster 52
 rows, booking 2,961 rows) and are shown only to make the rules concrete —
@@ -598,6 +599,127 @@ load time.
 
 ---
 
+## Page 7 — Utilization Home
+
+The first Utilization portal page — a KPI strip over the booking sheet
+plus two breakdown charts. Every card and chart on this page is
+declared in `configs/booking_metrics.yaml` (under `cards:` / `charts:`)
+and computed by the generic dispatcher (`evaluate_booking_card` /
+`evaluate_booking_chart`) — the same pattern the roster side already
+follows. Current values below are from the booking snapshot of 1,522
+rows (2026-07-24) and are shown only to make the rules concrete.
+
+All four filters on the page (Hours Type, Region/Market, Month/Week,
+Department) narrow the same booking DataFrame via
+`booking_metrics.get_filtered_records`, before any card or chart
+computes — so every widget on this page reacts to every filter.
+
+### Card: Total Employees — `46`
+Distinct values of the **`Employee`** column on the booking sheet.
+
+> Same label as the Total Employees card on HR Home, DIFFERENT
+> definition: HR Home counts distinct `NEW_EMP_ID` over the whole
+> roster (52), Utilization Home only sees employees who booked hours
+> (46). The booking sheet is a subset of the roster by construction,
+> so booking's Total Employees ≤ roster's Total Employees always.
+> Declared as `total_employees_booking` in `cards:` so a diff between
+> the two definitions is intentional and named, not accidental.
+>
+> **Cross-page relationship: a booking-only Employee is a WARNING, not
+> an error.** A booking file can legitimately arrive before its
+> matching roster refresh. `cross_dataset._unmatched_warning_check`
+> surfaces every such Employee as a per-name warning on upload and the
+> upload still commits — mirroring the "9 rows missing LWD" pattern on
+> HR Analytics. Locked by
+> `test_booking_only_employee_warns_but_does_not_block_upload`.
+
+Real DAX measure name is `Total Employeess` (sic — typo preserved
+verbatim from the exported Power BI model per the data-model skill).
+
+### Card: Total Hours — `8,928.6`
+Sum of the **`Employee Booked Hours`** column across every booking
+row. Real DAX: `SUM('Sheet1'[Employee Booked Hours])`. Declared as
+`total_hours` in `cards:` (`measure_type: sum`, `column_role:
+hours_value`).
+
+### Card: Client Hours — `6,467.7`
+Sum of `Employee Booked Hours` narrowed to rows where
+`Booked Hours Type` = "Client Hours". Declared as `client_hours`,
+with `filter_column_role: hours_type` and `filter_label_key:
+client_label` — the literal `"Client Hours"` lives in the `hours:`
+block, so renaming it (e.g. "Billable Hours") is a one-line config
+change.
+
+### Card: Internal Hours — `2,460.9`
+Mirror of Client Hours, narrowed to `Booked Hours Type` = "Internal
+Hours". Guaranteed to satisfy `Client + Internal = Total` by the
+`hours_split_covers_all_hours` invariant, which fires at upload time
+if a third `Booked Hours Type` value ever appears (e.g. "Leave
+Hours"). That invariant also serves as the arithmetic
+`client_plus_internal_equals_total_hours` KPI-strip contract —
+matching the exact shape of the roster's
+`status_measures_partition_roster` (Active + Inactive + Strategic
+Pool = Total).
+
+### Card: Total Projects — `66`
+Distinct values of the **`Project Name`** column, excluding blanks.
+
+> **PROVISIONAL COLUMN RESOLUTION.** The real DAX measure targets
+> `Sheet1[Project]`, but the source file has no column literally named
+> `Project` — only `Project Name`. Resolved to `Project Name` as the
+> only plausible match; if a real `Project` column later appears in
+> the source, change the `project:` role in
+> `configs/booking_metrics.yaml` and every reference follows.
+
+### Chart: Weekly Hours Trend
+Client Hours vs Internal Hours summed per **`Monday of Week`** — one
+clustered bar per week, split by hours type. Declared as
+`weekly_hours_trend` in `charts:` (`type: sum_by`, `group_column_role:
+week_start`, `value_column_role: hours_value`, `split_column_role:
+hours_type`). `split_column_role` was added specifically for this
+chart — a `sum_by` with a split is a pivot over the split values.
+
+Reconciles to the Total Hours card by construction: the
+`weekly_trend_sums_to_total_hours` invariant asserts that every week's
+(client + internal) hours summed equals the Total Hours KPI, with any
+NaN-`Monday of Week` rows accounted for separately in the detail.
+
+### Chart: Total Hours by Region / Market
+Sum of hours grouped by `Region (EC)` and `Market (EC)`, rendered as
+one bar per (region, market) pair with a combined "Region/Market"
+label. Declared as `total_hours_by_region_market` in `charts:`
+(`type: sum_by_hierarchical`, `primary_group_role: region`,
+`secondary_group_role: market`, `value_column_role: hours_value`).
+`sum_by_hierarchical` is a new chart type introduced specifically for
+this shape — two group columns, one value column.
+
+> **Renamed 2026-07-24** from the reference PDF's "Total Hours by
+> Market(EC) and Region(EC)" to match METRICS.md house style (no
+> source-column parentheticals). The Power BI original is what we're
+> replacing; house style wins over verbatim fidelity.
+>
+> **UNCONFIRMED as a named Power BI measure.** No single DAX measure
+> in the exported model combines `Region (EC)` and `Market (EC)` into
+> one grouped total — this chart is a best-effort extension of the
+> per-region total to also group by market, built to match the
+> reference screenshot's combined-label behavior.
+
+Reconciles to the Total Hours card by construction: the
+`region_market_bars_sum_to_total_hours` invariant asserts every bar's
+hours sum to Total Hours, with any rows carrying a blank
+`Region (EC)` or `Market (EC)` accounted for separately in the
+detail.
+
+### Known data-quality note
+Employees who booked hours must appear in the roster to be counted
+in HR Home's Total Employees. Two exports arriving out of order —
+booking before roster refresh — is expected and does NOT fail
+validation: each booking-only Employee is a warning on the upload
+report, and the upload still commits. This mirrors the "9 rows
+missing LWD" pattern on HR Analytics: a data fix, not a code fix.
+
+---
+
 ## Page filters — how the dropdowns work
 
 Every filterable page (HR Home, HR Analytics, Workforce, Skills &
@@ -657,7 +779,9 @@ flagged before it goes live:
 | `every_status_has_a_workforce_meaning` | No status is left without a decision on whether it counts as present |
 | `exits_equals_inactive` | Exits and Inactive stay the same number — they are the same people |
 | `every_exit_has_a_leaving_date` | Every exit has an `LWD`, so the monthly leavers trend can account for all of them |
-| `hours_split_covers_all_hours` | Client + Internal = total booked hours, so no hours category is silently missing from the donut |
+| `hours_split_covers_all_hours` | Client + Internal = total booked hours, so no hours category is silently missing from the donut (also serves as `client_plus_internal_equals_total_hours` — same arithmetic, one check) |
+| `weekly_trend_sums_to_total_hours` | Utilization Home's Weekly Hours Trend, summed across every week, equals Total Hours (any unplaced NaN-week rows are named in the detail) |
+| `region_market_bars_sum_to_total_hours` | Utilization Home's Total Hours by Region / Market bars sum to Total Hours (any rows with a blank Region or Market are named in the detail) |
 
 Each one exists because of a real failure, not a hypothetical: the
 Strategic Pool 1-vs-3 split across two pages, the Closing Headcount

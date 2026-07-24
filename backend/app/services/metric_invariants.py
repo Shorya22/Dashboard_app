@@ -256,11 +256,18 @@ def _hours_split_covers_all_hours(df: pd.DataFrame) -> tuple[bool, str]:
     """
     Client Hours + Internal Hours must equal total booked hours.
 
-    The Internal-v-Client donut splits on two configured labels. If the
-    source ever adds or renames a category (e.g. "Leave Hours"), those
-    hours would still land in the total but in neither slice — the donut
-    would quietly under-report with nothing on screen to indicate it.
-    This turns that into a visible warning at upload time.
+    Guards two contracts at once (they are the same arithmetic):
+      1. The Internal-v-Client donut on the Home page — a new hours
+         category (e.g. "Leave Hours") would still land in the total but
+         in neither donut slice, silently under-reporting.
+      2. `client_plus_internal_equals_total_hours` — the Utilization Home
+         KPI-strip arithmetic: the three cards (Client / Internal / Total)
+         must reconcile the same way `status_measures_partition_roster`
+         asserts Active + Inactive + Strategic Pool = Total on the roster
+         side. Named as one invariant, not two, because the underlying
+         check is identical and duplicating the logic would let a future
+         refactor move one and not the other. See METRICS.md's
+         "Consistency rules we enforce automatically" table.
     """
     from app.services import booking_metrics
 
@@ -279,8 +286,79 @@ def _hours_split_covers_all_hours(df: pd.DataFrame) -> tuple[bool, str]:
     return ok, detail
 
 
+def _weekly_trend_sums_to_total_hours(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    The Utilization Home "Weekly Hours Trend" chart is a per-week
+    breakdown of the same booked hours the "Total Hours" KPI totals up.
+    Summing every week's (client + internal) must reproduce Total Hours
+    exactly, or the two surfaces disagree about how many hours were
+    booked overall.
+
+    A row with a NaN `Monday of Week` is dropped from the chart (the
+    week is unknown) but still contributes to Total Hours. In that case
+    the invariant does not fail — it accepts the shortfall as long as it
+    is entirely accounted for by rows the chart could not place, and
+    names those rows in the detail so an admin can fix them.
+    """
+    from app.services import booking_metrics
+
+    total = booking_metrics.get_total_hours(df)
+    trend = booking_metrics.get_weekly_hours_trend(df)
+    chart_total = sum(row["client_hours"] + row["internal_hours"] for row in trend)
+
+    week_col = metric_config.booking_column("week_start")
+    value_col = metric_config.hours_value_column()
+    unplaced_mask = df[week_col].isna()
+    unplaced_hours = float(df.loc[unplaced_mask, value_col].sum())
+
+    ok = abs((chart_total + unplaced_hours) - total) < 0.01
+    detail = (
+        f"weekly_trend_sum={chart_total:,.1f}, unplaced (NaN Monday of Week)="
+        f"{unplaced_hours:,.1f}, total_hours={total:,.1f}"
+    )
+    if not ok:
+        detail += "; chart and Total Hours would disagree"
+    return ok, detail
+
+
+def _region_market_bars_sum_to_total_hours(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    The Utilization Home "Total Hours by Region / Market" chart is a
+    per-(Region, Market) breakdown of the same hours the "Total Hours"
+    KPI totals up. Blank Region or Market values are dropped by the
+    chart's group-by — the invariant accepts the resulting shortfall as
+    long as it is entirely accounted for by rows the chart could not
+    place, and names the missing-region/market hours in the detail.
+    """
+    from app.services import booking_metrics
+
+    total = booking_metrics.get_total_hours(df)
+    bars = booking_metrics.get_hours_by_region_market(df)
+    bars_total = sum(row["total_hours"] for row in bars)
+
+    region_col = metric_config.booking_column("region")
+    market_col = metric_config.booking_column("market")
+    value_col = metric_config.hours_value_column()
+    unplaced_mask = df[region_col].isna() | df[market_col].isna()
+    unplaced_hours = float(df.loc[unplaced_mask, value_col].sum())
+
+    ok = abs((bars_total + unplaced_hours) - total) < 0.01
+    detail = (
+        f"region_market_bars_sum={bars_total:,.1f}, unplaced (blank Region/Market)="
+        f"{unplaced_hours:,.1f}, total_hours={total:,.1f}"
+    )
+    if not ok:
+        detail += "; chart and Total Hours would disagree"
+    return ok, detail
+
+
 BOOKING_INVARIANTS: dict[str, InvariantCheck] = {
+    # `hours_split_covers_all_hours` also serves as the arithmetic
+    # `client_plus_internal_equals_total_hours` contract for the Utilization
+    # Home KPI strip — one check, two guarantees. See its docstring.
     "hours_split_covers_all_hours": _hours_split_covers_all_hours,
+    "weekly_trend_sums_to_total_hours": _weekly_trend_sums_to_total_hours,
+    "region_market_bars_sum_to_total_hours": _region_market_bars_sum_to_total_hours,
 }
 
 INVARIANTS_BY_FILE_TYPE: dict[str, dict[str, InvariantCheck]] = {
