@@ -14,7 +14,8 @@ page as we verify them; anything not listed here has not been reviewed yet.
 | Skills & Experience | ✅ 3 cards + 4 charts verified |
 | Employee Directory | ✅ config-driven columns + Serial No. |
 | Utilization Home | ✅ 5 cards + 2 charts |
-| Utilization Search / Results / drill-throughs | ⬜ not reviewed |
+| Utilization Search / Results | ✅ form + 5 cards + records table |
+| Utilization drill-throughs | ⬜ not reviewed |
 
 Figures below were checked against the live data on 2026-07-22 (roster 52
 rows, booking 2,961 rows) and are shown only to make the rules concrete —
@@ -718,6 +719,79 @@ validation: each booking-only Employee is a warning on the upload
 report, and the upload still commits. This mirrors the "9 rows
 missing LWD" pattern on HR Analytics: a data fix, not a code fix.
 
+### Search / Results
+
+The Search page (`/utilization/search`) is a **form only** — 6 filter
+dropdowns (Month / Week, Region, Department, Entity, Holding, Hours
+Type), no KPIs and no charts. Submitting it navigates to
+`/utilization/results?...` with the selected values encoded as repeated
+query parameters. Every one of those dropdowns is a `filters:` entry
+in `configs/booking_metrics.yaml` (`applies_to_pages` includes
+`utilization-search`), so the form's field set cannot drift from the
+server's accepted parameter set.
+
+The Results page (`/utilization/results`) renders **5 KPI cards and a
+paginated records table** over the booking sheet narrowed by the same
+filter set. Every KPI is declared under `cards:` and computed through
+`evaluate_booking_card`, so the values here and on Utilization Home
+cannot compute the same label two different ways. The
+`records_summary_reuses_declared_cards` invariant locks that in — one
+declaration per KPI, one function per number.
+
+Four of the five KPIs REUSE the Utilization Home declarations exactly:
+
+| KPI | Reuses card | Definition |
+|---|---|---|
+| Total Hours | `total_hours` | see Page 7 above |
+| Client Hours | `client_hours` | see Page 7 above |
+| Internal Hours | `internal_hours` | see Page 7 above |
+| Total Projects | `total_projects` | see Page 7 above |
+
+The 5th KPI is Results-only:
+
+#### Card: Average Hours — `5.87`
+Mean of `Employee Booked Hours` across every booking row in the current
+filtered slice. Declared as `average_hours` in `cards:` with a new
+`measure_type: mean` — the fifth booking measure type, alongside
+`distinct_count`, `sum`, and `count_rows`. Empty filtered set -> `0.0`
+(the dispatcher guards against pandas' `NaN`-on-empty mean, matching
+the Results endpoint's response-model contract that `average_hours` is
+always a plain float).
+
+> **UNCONFIRMED as a named Power BI measure.** No `Average Hours` DAX
+> measure appears in the exported model — this KPI is a Search/Results
+> summary-strip tile with no Power BI counterpart, kept because it
+> gives the paginated records table a "hours-per-row" anchor that
+> Total Hours divided by row count would otherwise force the frontend
+> to compute client-side. Flagged PROVISIONAL alongside `total_projects`.
+
+> Previously computed inline in `booking_metrics.get_records_summary`
+> as `df["Employee Booked Hours"].mean()` — every other summary KPI
+> already routed through the dispatcher, this one didn't. Now it does,
+> and the routing is guarded by
+> `records_summary_reuses_declared_cards`.
+
+#### Records table
+The paginated list of matching booking rows (Week Start, Date,
+Employee, Project, Holding, Department, Team (EC), Region, Hours Type,
+Hours). Row shape lives in `booking_metrics.records_to_dicts`; the
+table's `total` field is the pre-pagination filtered row count, and
+its footer's "Total" hours cell reads `summary.total_hours` directly
+(no client-side aggregation), so the footer and the top-strip KPI
+cannot disagree.
+
+Filter sidebar semantics match Utilization Home's filter row: URL-driven,
+propagates to every server request through the shared
+`_booking_filter_params` FastAPI dependency — the same one Utilization
+Home's summary/weekly-trend/region-market endpoints use. See
+`docs/FILTERS.md` for the full filter semantics.
+
+### Consistency rules (Search / Results additions)
+
+| Invariant | Guarantees |
+|---|---|
+| `records_summary_reuses_declared_cards` | Results-page summary KPIs go through the same `evaluate_booking_card` declarations as Utilization Home — the two pages cannot compute the same label two different ways |
+
 ---
 
 ## Page filters — how the dropdowns work
@@ -782,6 +856,7 @@ flagged before it goes live:
 | `hours_split_covers_all_hours` | Client + Internal = total booked hours, so no hours category is silently missing from the donut (also serves as `client_plus_internal_equals_total_hours` — same arithmetic, one check) |
 | `weekly_trend_sums_to_total_hours` | Utilization Home's Weekly Hours Trend, summed across every week, equals Total Hours (any unplaced NaN-week rows are named in the detail) |
 | `region_market_bars_sum_to_total_hours` | Utilization Home's Total Hours by Region / Market bars sum to Total Hours (any rows with a blank Region or Market are named in the detail) |
+| `records_summary_reuses_declared_cards` | Utilization Results' 5 summary KPIs route through the same declared cards as Utilization Home — same label, same declaration, no page-to-page drift |
 
 Each one exists because of a real failure, not a hypothetical: the
 Strategic Pool 1-vs-3 split across two pages, the Closing Headcount

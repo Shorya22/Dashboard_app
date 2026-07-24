@@ -352,6 +352,46 @@ def _region_market_bars_sum_to_total_hours(df: pd.DataFrame) -> tuple[bool, str]
     return ok, detail
 
 
+def _records_summary_reuses_declared_cards(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    The Utilization Results page's KPI strip (Total Hours, Client Hours,
+    Internal Hours, Total Projects, Average Hours) must reuse the same
+    declared cards that drive the Utilization Home strip — otherwise the
+    two pages could compute the same KPI two different ways and quietly
+    diverge, the exact bug class METRICS.md's "one business concept =
+    one definition" rule exists to prevent.
+
+    Guarantees that `get_records_summary(df)` (`/utilization/records`'s
+    summary block) is byte-for-byte equal to routing each of its four
+    reusable KPIs through `evaluate_booking_card` against the same frame.
+    `average_hours` is Results-only (no Utilization Home counterpart) but
+    is still declared as a card, so it goes through the dispatcher too —
+    keeping every summary-strip value on the same rails.
+    """
+    from app.services import booking_metrics
+
+    summary = booking_metrics.get_records_summary(df)
+    expected = {
+        "total_hours": float(booking_metrics.evaluate_booking_card(df, "total_hours")),
+        "client_hours": float(booking_metrics.evaluate_booking_card(df, "client_hours")),
+        "internal_hours": float(booking_metrics.evaluate_booking_card(df, "internal_hours")),
+        "total_projects": int(booking_metrics.evaluate_booking_card(df, "total_projects")),
+        "average_hours": float(booking_metrics.evaluate_booking_card(df, "average_hours")),
+    }
+    mismatched = {
+        k: (summary[k], expected[k])
+        for k in expected
+        if abs(float(summary[k]) - float(expected[k])) > 0.01
+    }
+    ok = not mismatched
+    detail = (
+        "records summary matches declared cards"
+        if ok
+        else f"records summary drifted from declared cards: {mismatched}"
+    )
+    return ok, detail
+
+
 BOOKING_INVARIANTS: dict[str, InvariantCheck] = {
     # `hours_split_covers_all_hours` also serves as the arithmetic
     # `client_plus_internal_equals_total_hours` contract for the Utilization
@@ -359,6 +399,10 @@ BOOKING_INVARIANTS: dict[str, InvariantCheck] = {
     "hours_split_covers_all_hours": _hours_split_covers_all_hours,
     "weekly_trend_sums_to_total_hours": _weekly_trend_sums_to_total_hours,
     "region_market_bars_sum_to_total_hours": _region_market_bars_sum_to_total_hours,
+    # Utilization Search / Results reuse-lock: the Results-page summary
+    # KPIs must route through the same declared cards as Utilization Home
+    # so the two pages cannot compute the same label two different ways.
+    "records_summary_reuses_declared_cards": _records_summary_reuses_declared_cards,
 }
 
 INVARIANTS_BY_FILE_TYPE: dict[str, dict[str, InvariantCheck]] = {

@@ -231,7 +231,7 @@ SUPPORTED_FILTER_TYPES = {"single", "multi", "hierarchical"}
 # Utilization-side card measures. Every booking card declares one of these,
 # so the compute is dispatched from the declaration rather than a bespoke
 # function per card (mirrors the roster's `counts: distinct` contract).
-SUPPORTED_BOOKING_CARD_MEASURES = {"distinct_count", "sum", "count_rows"}
+SUPPORTED_BOOKING_CARD_MEASURES = {"distinct_count", "sum", "count_rows", "mean"}
 
 
 class MetricConfigError(ValueError):

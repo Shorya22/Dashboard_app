@@ -86,6 +86,16 @@ def evaluate_booking_card(df: pd.DataFrame, card_name: str) -> float | int:
         return float(scope[column].sum())
     if measure_type == "count_rows":
         return int(len(scope))
+    if measure_type == "mean":
+        # Powers the `average_hours` card on the Utilization Results page:
+        # pandas .mean() on an empty Series returns NaN, but the endpoint
+        # response model wants a plain float and the KPI card would render
+        # "NaN" — coerce that back to 0.0 to match get_records_summary's
+        # existing empty-frame contract (see its test_get_records_summary_empty).
+        if len(scope) == 0:
+            return 0.0
+        value = float(scope[column].mean())
+        return 0.0 if pd.isna(value) else value
     # Guarded by the config validator — reaching this means the validator
     # missed a case, which is a developer error, not user data.
     raise ValueError(
@@ -684,20 +694,37 @@ def get_holdings_with_projects(df: pd.DataFrame) -> list[dict]:
     return items
 
 
+def get_average_hours(df: pd.DataFrame) -> float:
+    """
+    `Average Hours` — mean of `Employee Booked Hours` across every row in
+    the (typically filtered) slice. Declared as the `average_hours` card
+    in `configs/booking_metrics.yaml` (`measure_type: mean`, introduced
+    for the Utilization Results page's summary strip). PROVISIONAL — no
+    Power BI counterpart in the exported model.
+    Reads: `Employee Booked Hours`.
+    Edge cases: empty frame -> 0.0 (matches the previous inline behaviour
+    the Results page's summary strip already assumed).
+    """
+    return float(evaluate_booking_card(df, "average_hours"))
+
+
 def get_records_summary(df: pd.DataFrame) -> dict:
     """
     Summary KPIs for a (typically filtered) slice of the booking sheet —
     Total/Client/Internal Hours, Total Projects, Average Hours. Powers the
-    Results page's summary strip above the paginated table.
+    Results page's summary strip above the paginated table. All five
+    values now route through `evaluate_booking_card` (see the declarations
+    under `cards:` in `configs/booking_metrics.yaml`), so the Results
+    strip and the Utilization Home strip cannot compute the same KPI
+    differently — they read from the same declaration.
     Reads: `Booked Hours Type`, `Employee Booked Hours`, `Project Name`.
     """
-    total_hours = get_total_hours(df)
     return {
-        "total_hours": total_hours,
+        "total_hours": get_total_hours(df),
         "client_hours": get_client_hours(df),
         "internal_hours": get_internal_hours(df),
         "total_projects": get_total_projects(df),
-        "average_hours": float(df["Employee Booked Hours"].mean()) if len(df) else 0.0,
+        "average_hours": get_average_hours(df),
     }
 
 

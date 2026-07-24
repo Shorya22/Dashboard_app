@@ -127,6 +127,45 @@ def test_booking_new_invariants_hold_on_real_data():
     ].detail
 
 
+def test_records_summary_invariant_holds_on_real_data():
+    """The Utilization Results summary strip must be byte-for-byte the
+    dispatcher's output on the real booking snapshot — no drift between
+    the same-labeled KPIs on Utilization Home and Utilization Results."""
+    from app.services.booking_metrics import load_booking_data
+
+    df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
+    results = metric_invariants.run_invariants(df, "booking")
+    by_name = {r.name: r for r in results}
+    assert by_name["records_summary_reuses_declared_cards"].ok, by_name[
+        "records_summary_reuses_declared_cards"
+    ].detail
+
+
+def test_records_summary_invariant_flags_drift(monkeypatch):
+    """If a future change ever reintroduces bespoke arithmetic in
+    `get_records_summary` (bypassing the dispatcher), the invariant must
+    fire and name the drifted keys — this is the whole point of the
+    reuse-lock."""
+    from app.services import booking_metrics
+    from app.services.booking_metrics import load_booking_data
+
+    df = load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
+    real_summary = booking_metrics.get_records_summary
+
+    def bad_summary(_df):
+        out = real_summary(_df)
+        return {**out, "average_hours": out["average_hours"] + 1.0}
+
+    monkeypatch.setattr(booking_metrics, "get_records_summary", bad_summary)
+    bad = metric_invariants.violations(df, "booking")
+    names = {r.name for r in bad}
+    assert "records_summary_reuses_declared_cards" in names
+    detail = next(
+        r.detail for r in bad if r.name == "records_summary_reuses_declared_cards"
+    )
+    assert "average_hours" in detail
+
+
 def test_weekly_trend_invariant_flags_drift():
     """If the trend chart's per-week hours don't add up to Total Hours
     (and the difference isn't explained by unplaced rows), the invariant

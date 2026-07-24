@@ -270,6 +270,82 @@ def test_rollback_removes_new_values_from_filter_options(client):
 
 
 # --------------------------------------------------------------------- #
+# Search / Results — end-to-end upload-reflection regression
+# --------------------------------------------------------------------- #
+# Locks that uploading a booking file with a new Holding + Entity + Region
+# / Market surfaces immediately in the Utilization Search page's filter
+# dropdowns AND in the Results page's KPI strip + records table, with no
+# code or YAML changes. Mirrors the roster reflection test above but
+# targets the Search -> Results flow the coordinator just extended.
+def test_search_results_reflect_new_booking_data(client):
+    token = _admin_token(client)
+
+    # Baseline: none of these synthetic values appear yet.
+    before = client.get(
+        "/api/v1/utilization/filter-options", headers=_auth(token)
+    ).json()
+    assert "SyntheticHolding" not in before["holdings"]
+    assert "LATAM" not in before["regions"]
+
+    # Upload the modified booking sheet (adds LATAM/MEX rows tied to a
+    # synthetic holding + employees).
+    r_df = _append_roster_rows(pd.read_excel(REAL_ROSTER))
+    b_df = _append_booking_rows(pd.read_excel(REAL_BOOKING))
+    assert (
+        client.post(
+            "/api/v1/data/upload/roster",
+            files=_files(_xlsx_bytes(r_df)),
+            headers=_auth(token),
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/data/upload/booking",
+            files=_files(_xlsx_bytes(b_df)),
+            headers=_auth(token),
+        ).status_code
+        == 200
+    )
+
+    # (1) Search filter dropdowns now show the new holding + region.
+    after = client.get(
+        "/api/v1/utilization/filter-options", headers=_auth(token)
+    ).json()
+    assert "SyntheticHolding" in after["holdings"]
+    assert "LATAM" in after["regions"]
+
+    # (2) Results endpoint (`/utilization/records`) — filtering by the
+    # new holding returns the synthetic rows AND the KPI strip's Total
+    # Hours + Average Hours reflect them (the summary must route through
+    # the config-driven cards, matching the
+    # `records_summary_reuses_declared_cards` invariant).
+    resp = client.get(
+        "/api/v1/utilization/records?holding=SyntheticHolding",
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    # 5 synthetic rows, 8.0h each -> 40h total, 8h mean.
+    assert body["total"] == 5
+    assert body["summary"]["total_hours"] == pytest.approx(40.0)
+    assert body["summary"]["client_hours"] == pytest.approx(40.0)  # all Client Hours
+    assert body["summary"]["internal_hours"] == pytest.approx(0.0)
+    assert body["summary"]["average_hours"] == pytest.approx(8.0)
+    # SyntheticProject was the only project row for this holding.
+    assert body["summary"]["total_projects"] == 1
+    # Every returned record must belong to the synthetic holding.
+    assert all(item["holding"] == "SyntheticHolding" for item in body["items"])
+
+    # (3) The Search-page holdings-projects hierarchy also reflects it.
+    hp = client.get(
+        "/api/v1/utilization/holdings-projects", headers=_auth(token)
+    ).json()
+    holdings = {h["holding"]: h["projects"] for h in hp["items"]}
+    assert "SyntheticProject" in holdings.get("SyntheticHolding", [])
+
+
+# --------------------------------------------------------------------- #
 # Booking-only Employee — locking test for cross-dataset SOFT warning
 # --------------------------------------------------------------------- #
 # Coordinator decision (2026-07-23): the roster-vs-booking count gap is a

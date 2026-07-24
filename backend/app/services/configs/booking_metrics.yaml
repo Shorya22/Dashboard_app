@@ -156,6 +156,18 @@ cards:
     measure_type: distinct_count
     column_role: project
 
+  # Utilization Search / Results — Average Hours KPI (the 5th tile on the
+  # Results page's summary strip). `measure_type: mean` was introduced for
+  # this card so per-row aggregations follow the same declared-in-YAML
+  # pattern as sum/count. Empty filtered set -> 0.0 (dispatcher guards
+  # against pandas' NaN mean on an empty frame). NOT a named DAX measure —
+  # a Search/Results-specific summary tile with no Power BI counterpart,
+  # flagged PROVISIONAL. See METRICS.md Page 7's "Search / Results" section.
+  average_hours:
+    label: "Average Hours"
+    measure_type: mean
+    column_role: hours_value
+
 # ---------------------------------------------------------------------------
 # Chart definitions — same idea as the roster's `charts:` block.
 # ---------------------------------------------------------------------------

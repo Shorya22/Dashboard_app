@@ -837,6 +837,55 @@ def test_get_functions_route_through_dispatcher(sample_bookings_full):
     )
 
 
+def test_evaluate_booking_card_mean_average_hours(sample_bookings_full):
+    """`average_hours` is a Search/Results-only card declared with the new
+    `measure_type: mean`. Locks that the dispatcher's mean branch produces
+    the same number the old inline `df[...].mean()` did — routed, not
+    reimplemented."""
+    from app.services.booking_metrics import evaluate_booking_card, get_average_hours
+
+    # 5 rows, hours 20+5+15+10+8 = 58, mean = 11.6
+    assert evaluate_booking_card(sample_bookings_full, "average_hours") == pytest.approx(11.6)
+    assert get_average_hours(sample_bookings_full) == pytest.approx(11.6)
+
+
+def test_evaluate_booking_card_mean_empty_frame_is_zero():
+    """Empty filtered slice must return 0.0 (not NaN) — the Results page's
+    `average_hours` response field is a plain float, and rendering "NaN"
+    would show up as `—` at best and a JSON deserialisation error at worst.
+    Matches the previous inline `if len(df) else 0.0` guard."""
+    from app.services.booking_metrics import evaluate_booking_card, get_average_hours
+
+    empty = pd.DataFrame(columns=["Employee Booked Hours", "Booked Hours Type"])
+    assert evaluate_booking_card(empty, "average_hours") == 0.0
+    assert get_average_hours(empty) == 0.0
+
+
+def test_get_records_summary_routes_every_kpi_through_dispatcher(sample_bookings_full):
+    """All five summary KPIs must equal the dispatcher's output for the
+    same frame — this is exactly what the
+    `records_summary_reuses_declared_cards` invariant asserts, checked
+    here at the unit level so a routing regression is caught before the
+    invariant tests run."""
+    from app.services.booking_metrics import evaluate_booking_card, get_records_summary
+
+    filtered = get_filtered_records(sample_bookings_full, holding="Beta Inc")
+    summary = get_records_summary(filtered)
+    assert summary["total_hours"] == pytest.approx(
+        evaluate_booking_card(filtered, "total_hours")
+    )
+    assert summary["client_hours"] == pytest.approx(
+        evaluate_booking_card(filtered, "client_hours")
+    )
+    assert summary["internal_hours"] == pytest.approx(
+        evaluate_booking_card(filtered, "internal_hours")
+    )
+    assert summary["total_projects"] == evaluate_booking_card(filtered, "total_projects")
+    assert summary["average_hours"] == pytest.approx(
+        evaluate_booking_card(filtered, "average_hours")
+    )
+
+
 def test_evaluate_booking_chart_sum_by_hierarchical(sample_bookings_full):
     """`sum_by_hierarchical` returns {primary, secondary, value} rows,
     sorted by value descending. The chart function just renames these
