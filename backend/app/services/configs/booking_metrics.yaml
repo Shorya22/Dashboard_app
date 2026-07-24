@@ -9,15 +9,17 @@
 #   The `Booked Hours Type` column holds the split, and hours are summed
 #   from `Employee Booked Hours` per category.
 
-version: 1
+version: 2
 
 # ---------------------------------------------------------------------------
 # Column roles — the booking-side equivalent of the roster's `columns:` block.
 # ---------------------------------------------------------------------------
-# The filters block below references these ROLES so a renamed source column
-# is a one-line change here rather than a hunt through Python. Hours-side
-# columns still live under `hours:` for backward-compat with existing
-# metric_config.booking_column() call sites (hours_type / hours_value).
+# The filters/cards/charts blocks below reference these ROLES so a renamed
+# source column is a one-line change here rather than a hunt through Python.
+# Hours-side columns still live under `hours:` for backward-compat with
+# existing metric_config.booking_column() call sites (hours_type /
+# hours_value); the validator seeds those two roles from the hours: block
+# automatically so cards/charts can reference them uniformly.
 columns:
   region: "Region (EC)"
   market: "Market (EC)"
@@ -27,6 +29,15 @@ columns:
   hours_type: "Booked Hours Type"
   week_start: "Monday of Week"
   month: "Month"
+  # Newly declared roles (Utilization Home config-driven work, 2026-07-24):
+  # cards/charts now go through these instead of raw column names.
+  employee: "Employee"
+  # PROVISIONAL — the real DAX for `Total Projects` targets `Sheet1[Project]`
+  # (a column that does not exist in the source file). Resolved to the file's
+  # actual `Project Name` column, the only plausible match. Documented in
+  # `docs/METRICS.md` under Page 7 as a PROVISIONAL note. If a `Project`
+  # column later appears in the source, change this one line.
+  project: "Project Name"
 
 # ---------------------------------------------------------------------------
 # Filters — the dropdowns the Utilization pages filter by.
@@ -90,13 +101,104 @@ hours:
   internal_label: "Internal Hours"
 
 # ---------------------------------------------------------------------------
+# Card definitions — what each KPI on the Utilization Home page counts.
+# ---------------------------------------------------------------------------
+# Same declarative shape as the roster's `cards:` block. Every card names
+# a `measure_type` (distinct_count / sum / count_rows) and a `column_role`,
+# so the computation follows the config rather than a bespoke function per
+# card. A card that only counts rows matching a category (Client Hours,
+# Internal Hours) also declares a `filter_column_role` + `filter_label_key`
+# — the label_key is looked up in the `hours:` block so renaming the value
+# ("Client Hours" -> "Billable Hours") is a one-line change there.
+cards:
+  # Distinct count of booking-sheet Employee values. DIFFERS by construction
+  # from the roster's `total_employees` card (distinct NEW_EMP_ID over the
+  # whole workforce file): this only counts employees who booked hours. The
+  # cross-dataset upload check
+  # (`cross_dataset._unmatched_warning_check("Employee", "roster", ...)`)
+  # warns per booking-only Employee but never blocks the upload — see
+  # docs/METRICS.md Page 7 "Previously..." for the roster vs booking
+  # relationship. Real DAX measure name is "Total Employeess" (sic typo
+  # preserved verbatim per data-model skill).
+  total_employees_booking:
+    label: "Total Employees"
+    measure_type: distinct_count
+    column_role: employee
+
+  total_hours:
+    label: "Total Hours"
+    measure_type: sum
+    column_role: hours_value
+    # Real DAX: SUM('Sheet1'[Employee Booked Hours]).
+
+  # Client / Internal split — same value column, different filter values.
+  # `filter_label_key` names an entry in the `hours:` block so renaming
+  # "Client Hours" -> "Billable Hours" is a one-line change there.
+  client_hours:
+    label: "Client Hours"
+    measure_type: sum
+    column_role: hours_value
+    filter_column_role: hours_type
+    filter_label_key: client_label
+  internal_hours:
+    label: "Internal Hours"
+    measure_type: sum
+    column_role: hours_value
+    filter_column_role: hours_type
+    filter_label_key: internal_label
+
+  # PROVISIONAL COLUMN RESOLUTION — the real DAX references
+  # `Sheet1[Project]`, but the source file has no `Project` column, only
+  # `Project Name`. Resolved to `Project Name` as the only plausible match;
+  # locked in the `project` column role above. Flagged in METRICS.md Page 7.
+  total_projects:
+    label: "Total Projects"
+    measure_type: distinct_count
+    column_role: project
+
+# ---------------------------------------------------------------------------
 # Chart definitions — same idea as the roster's `charts:` block.
 # ---------------------------------------------------------------------------
 # `sum_by` sums a value column grouped by a category column, rather than
-# counting rows — hours are a quantity, not a headcount.
+# counting rows — hours are a quantity, not a headcount. An optional
+# `split_column_role` extends `sum_by` with a second dimension: rather
+# than one value per group, each group is split across the values of the
+# split column (used by the Weekly Hours Trend chart to give one bar per
+# week with a Client/Internal stack).
+#
+# `sum_by_hierarchical` groups by TWO group roles (primary, secondary)
+# and sums the value role — used by the Total Hours by Region / Market
+# chart, which stacks Region + Market into one combined bar-label. The
+# backend returns {primary, secondary, value} tuples; the frontend
+# concatenates them into "Region/Market" display strings.
 charts:
+  # Home page (NOT Utilization Home). Kept unchanged.
   internal_vs_client_hours:
     label: "Internal v Client Utilization"
     type: sum_by
     group_column_role: hours_type    # Booked Hours Type
     value_column_role: hours_value   # Employee Booked Hours
+
+  # Utilization Home — Weekly Hours Trend clustered bar. `split_column_role`
+  # pivots the sum across Client/Internal per week, matching the
+  # {week_start, client_hours, internal_hours} payload the endpoint returns
+  # today.
+  weekly_hours_trend:
+    label: "Weekly Hours Trend"
+    type: sum_by
+    group_column_role: week_start
+    value_column_role: hours_value
+    split_column_role: hours_type
+
+  # Utilization Home — combined Region / Market bar chart. UNCONFIRMED as
+  # a named Power BI measure (no single DAX combines Region (EC) + Market
+  # (EC) into one grouped total in the exported model). Renamed from the
+  # original screenshot's "Total Hours by Market(EC) and Region(EC)" to
+  # match METRICS.md house style (no source-column parentheticals). See
+  # METRICS.md Page 7 for the UNCONFIRMED flag.
+  total_hours_by_region_market:
+    label: "Total Hours by Region / Market"
+    type: sum_by_hierarchical
+    primary_group_role: region
+    secondary_group_role: market
+    value_column_role: hours_value

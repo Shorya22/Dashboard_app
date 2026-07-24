@@ -235,8 +235,12 @@ export function UtilizationHomePage() {
           />
         </ChartCard>
 
+        {/* Renamed 2026-07-24 from "Total Hours by Market(EC) and Region(EC)"
+            to match METRICS.md house style (no source-column parentheticals).
+            The label lives in `configs/booking_metrics.yaml` under
+            `charts.total_hours_by_region_market.label`. */}
         <ChartCard
-          title="Total Hours by Market(EC) and Region(EC)"
+          title="Total Hours by Region / Market"
           subtitle="Combined Region/Market breakdown"
           isLoading={byRegionMarket.isLoading}
           isError={byRegionMarket.isError}

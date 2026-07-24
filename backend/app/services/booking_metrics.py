@@ -43,6 +43,108 @@ CLIENT_HOURS_LABEL = metric_config.client_hours_label()
 INTERNAL_HOURS_LABEL = metric_config.internal_hours_label()
 
 
+# ---------------------------------------------------------------------------
+# Config-driven KPI / chart dispatchers (Phase 2 — Utilization Home).
+# ---------------------------------------------------------------------------
+# Mirrors the roster's `evaluate_card` / `evaluate_chart`: the values on
+# screen come from the DECLARATION in `configs/booking_metrics.yaml`, not
+# a bespoke function per KPI. Every public `get_*` below now routes
+# through one of these two entry points, so a card/chart is a config
+# edit rather than a code + test change.
+
+def evaluate_booking_card(df: pd.DataFrame, card_name: str) -> float | int:
+    """
+    Compute a Utilization-side KPI straight from its declaration in
+    `configs/booking_metrics.yaml` under `cards:`.
+
+    Supported today:
+      * measure_type: `distinct_count` — nunique over the declared column
+        (dropna default, matches DAX DISTINCTCOUNT semantics)
+      * measure_type: `sum` — sum over the declared column, optionally
+        narrowed by `filter_column_role == hours[filter_label_key]`
+      * measure_type: `count_rows` — plain row count over the (optionally
+        filtered) frame
+
+    Same design contract as the roster's `evaluate_card`: the declaration
+    is authoritative rather than merely documentary. Pointing a card at a
+    different column role changes the number on screen — no Python edit.
+    """
+    spec = metric_config.booking_card(card_name)
+    column = metric_config.booking_column(spec["column_role"])
+
+    scope = df
+    filter_role = spec.get("filter_column_role")
+    if filter_role is not None:
+        filter_col = metric_config.booking_column(filter_role)
+        filter_value = metric_config.hours_label(spec["filter_label_key"])
+        scope = scope[scope[filter_col] == filter_value]
+
+    measure_type = spec.get("measure_type", "distinct_count")
+    if measure_type == "distinct_count":
+        return int(scope[column].nunique(dropna=True))
+    if measure_type == "sum":
+        return float(scope[column].sum())
+    if measure_type == "count_rows":
+        return int(len(scope))
+    # Guarded by the config validator — reaching this means the validator
+    # missed a case, which is a developer error, not user data.
+    raise ValueError(
+        f"Card {card_name!r} declares unsupported measure_type={measure_type!r}"
+    )
+
+
+def evaluate_booking_chart(df: pd.DataFrame, chart_name: str):
+    """
+    Compute a Utilization-side chart straight from its declaration in
+    `configs/booking_metrics.yaml` under `charts:`.
+
+    Supported types:
+      * `sum_by` (no split): {group_value: total} dict
+      * `sum_by` (with `split_column_role`): a pivot table returned as
+        a list of dicts, one per group, keyed by the group column + each
+        split-value
+      * `sum_by_hierarchical`: list of {primary, secondary, value} dicts,
+        sorted by value descending
+
+    Every chart on the Utilization Home page goes through this.
+    """
+    spec = metric_config.booking_chart(chart_name)
+    kind = spec["type"]
+    value_col = metric_config.booking_column(spec["value_column_role"])
+
+    if kind == "sum_by":
+        group_col = metric_config.booking_column(spec["group_column_role"])
+        split_role = spec.get("split_column_role")
+        if split_role is None:
+            grouped = df.groupby(group_col, dropna=True)[value_col].sum()
+            return {str(k): float(v) for k, v in grouped.items()}
+        # Split pivot — one row per group, columns = distinct split values.
+        split_col = metric_config.booking_column(split_role)
+        pivot = (
+            df.groupby([group_col, split_col], dropna=True)[value_col]
+            .sum()
+            .unstack(fill_value=0.0)
+            .sort_index()
+        )
+        return pivot  # let the caller shape it — different pages need
+                     # different projections (see `get_weekly_hours_trend`).
+
+    if kind == "sum_by_hierarchical":
+        primary_col = metric_config.booking_column(spec["primary_group_role"])
+        secondary_col = metric_config.booking_column(spec["secondary_group_role"])
+        grouped = (
+            df.groupby([primary_col, secondary_col], dropna=True)[value_col]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        return [
+            {"primary": str(p), "secondary": str(s), "value": float(v)}
+            for (p, s), v in grouped.items()
+        ]
+
+    raise ValueError(f"Chart {chart_name!r} declares unsupported type={kind!r}")
+
+
 def load_booking_data(path: str | Path = DEFAULT_BOOKING_PATH) -> pd.DataFrame:
     """
     Read the booking sheet Excel file, keeping source column names as-is.
@@ -119,31 +221,32 @@ def prepare_booking_df(df: pd.DataFrame) -> pd.DataFrame:
 def get_total_hours(df: pd.DataFrame) -> float:
     """
     `Total Hours` — sum of `Employee Booked Hours` across all rows
-    (both Client Hours and Internal Hours types).
+    (both Client Hours and Internal Hours types). Declared as the
+    `total_hours` card in `configs/booking_metrics.yaml`.
     Reads: `Employee Booked Hours`.
     Edge cases: NaN hours are excluded from the sum by pandas default.
     """
-    return float(df["Employee Booked Hours"].sum())
+    return float(evaluate_booking_card(df, "total_hours"))
 
 
 def get_client_hours(df: pd.DataFrame) -> float:
     """
     `Client Hours` — sum of `Employee Booked Hours` where
-    `Booked Hours Type` == "Client Hours".
+    `Booked Hours Type` == "Client Hours". Declared as the `client_hours`
+    card in `configs/booking_metrics.yaml`.
     Reads: `Booked Hours Type`, `Employee Booked Hours`.
     """
-    mask = df["Booked Hours Type"] == CLIENT_HOURS_LABEL
-    return float(df.loc[mask, "Employee Booked Hours"].sum())
+    return float(evaluate_booking_card(df, "client_hours"))
 
 
 def get_internal_hours(df: pd.DataFrame) -> float:
     """
     `Internal Hours` — sum of `Employee Booked Hours` where
-    `Booked Hours Type` == "Internal Hours".
+    `Booked Hours Type` == "Internal Hours". Declared as the
+    `internal_hours` card in `configs/booking_metrics.yaml`.
     Reads: `Booked Hours Type`, `Employee Booked Hours`.
     """
-    mask = df["Booked Hours Type"] == INTERNAL_HOURS_LABEL
-    return float(df.loc[mask, "Employee Booked Hours"].sum())
+    return float(evaluate_booking_card(df, "internal_hours"))
 
 
 def get_client_hours_pct(df: pd.DataFrame) -> float:
@@ -201,8 +304,12 @@ def get_total_projects(df: pd.DataFrame) -> int:
     was not independently confirmed.
     Reads: `Project Name`.
     Edge cases: NaN/blank Project Name values excluded from the count.
+
+    Declared as the `total_projects` card in configs/booking_metrics.yaml,
+    which pins the physical column via the `project` column role — swap
+    that role's mapping if a real `Project` column ever appears.
     """
-    return int(df["Project Name"].nunique(dropna=True))
+    return int(evaluate_booking_card(df, "total_projects"))
 
 
 def get_total_regions(df: pd.DataFrame) -> int:
@@ -221,28 +328,39 @@ def get_total_employees(df: pd.DataFrame) -> int:
     measure name per data-model SKILL.md) = DISTINCTCOUNT('Sheet1'[Employee]).
     Reads: `Employee`.
     Edge cases: NaN/blank Employee values excluded from the count.
+
+    Declared as the `total_employees_booking` card in
+    `configs/booking_metrics.yaml`. This DIFFERS by construction from the
+    roster's `total_employees` card (distinct NEW_EMP_ID over the whole
+    workforce file): booking only sees employees who booked hours, so it
+    is a subset of the roster count. A booking-only Employee absent from
+    the roster surfaces as a cross-dataset upload WARNING
+    (`cross_dataset._unmatched_warning_check("Employee", "roster", ...)`)
+    but never blocks the upload — see METRICS.md Page 7.
     """
-    return int(df["Employee"].nunique(dropna=True))
+    return int(evaluate_booking_card(df, "total_employees_booking"))
 
 
 @cache_on_df
 def get_weekly_hours_trend(df: pd.DataFrame) -> list[dict]:
     """
     Client Hours vs Internal Hours, summed per `Monday of Week`. Powers
-    the Utilization Home page's "Weekly Hours Trend" bar chart.
+    the Utilization Home page's "Weekly Hours Trend" bar chart. Declared
+    as the `weekly_hours_trend` chart in `configs/booking_metrics.yaml`
+    (a `sum_by` with `split_column_role: hours_type`).
     Reads: `Monday of Week`, `Booked Hours Type`, `Employee Booked Hours`.
     Edge cases: rows with NaN `Monday of Week` are excluded (groupby
     default dropna=True) — this drops the one fully-blank row noted in
     `load_booking_data`.
     """
+    # `evaluate_booking_chart` returns the raw pivot table for a `sum_by`
+    # with a split; this function projects it into the {week_start,
+    # client_hours, internal_hours} shape the endpoint's response model
+    # expects. Date parsing happens up front so `groupby` sees real
+    # Timestamps regardless of what dtype the caller passes in.
     grouped = df.copy()
     grouped["Monday of Week"] = pd.to_datetime(grouped["Monday of Week"])
-    pivot = (
-        grouped.groupby(["Monday of Week", "Booked Hours Type"])["Employee Booked Hours"]
-        .sum()
-        .unstack(fill_value=0.0)
-        .sort_index()
-    )
+    pivot = evaluate_booking_chart(grouped, "weekly_hours_trend")
     if CLIENT_HOURS_LABEL not in pivot.columns:
         pivot[CLIENT_HOURS_LABEL] = 0.0
     if INTERNAL_HOURS_LABEL not in pivot.columns:
@@ -297,15 +415,16 @@ def get_hours_by_region_market(df: pd.DataFrame) -> list[dict]:
     Edge cases: rows with NaN/blank `Region (EC)` or `Market (EC)` are
     excluded (groupby default dropna=True), consistent with
     `get_hours_by_region`.
+
+    Declared as the `total_hours_by_region_market` chart in
+    `configs/booking_metrics.yaml` (type `sum_by_hierarchical`). The
+    dispatcher returns {primary, secondary, value} tuples; this function
+    just renames the keys into the response model's {region, market,
+    total_hours} shape.
     """
-    grouped = (
-        df.groupby(["Region (EC)", "Market (EC)"])["Employee Booked Hours"]
-        .sum()
-        .sort_values(ascending=False)
-    )
     return [
-        {"region": region, "market": market, "total_hours": float(hours)}
-        for (region, market), hours in grouped.items()
+        {"region": row["primary"], "market": row["secondary"], "total_hours": row["value"]}
+        for row in evaluate_booking_chart(df, "total_hours_by_region_market")
     ]
 
 
@@ -798,8 +917,4 @@ def get_hours_split(df: pd.DataFrame) -> dict[str, float]:
     data means a category the config has never seen still appears, instead
     of being silently dropped from the donut.
     """
-    spec = metric_config.booking_chart("internal_vs_client_hours")
-    group = metric_config.booking_column(spec["group_column_role"])
-    value = metric_config.booking_column(spec["value_column_role"])
-    grouped = df.groupby(group, dropna=True)[value].sum()
-    return {str(k): float(v) for k, v in grouped.items()}
+    return evaluate_booking_chart(df, "internal_vs_client_hours")

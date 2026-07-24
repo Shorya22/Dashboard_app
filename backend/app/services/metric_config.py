@@ -63,6 +63,28 @@ def booking_chart(name: str) -> dict:
     return load_metric_config("booking")["charts"][name]
 
 
+def booking_card(name: str) -> dict:
+    """A Utilization-side card's declarative definition — drives
+    `booking_metrics.evaluate_booking_card`. Same shape as the roster's
+    `card(name)`, keyed off `booking_metrics.yaml`."""
+    return load_metric_config("booking")["cards"][name]
+
+
+def booking_card_names() -> list[str]:
+    return list(load_metric_config("booking").get("cards", {}))
+
+
+def booking_chart_names() -> list[str]:
+    return list(load_metric_config("booking").get("charts", {}))
+
+
+def hours_label(key: str) -> str:
+    """Look up a named entry in the booking `hours:` block (client_label,
+    internal_label). Cards with a `filter_label_key` resolve their filter
+    literal here, so renaming a hours category is a one-line change."""
+    return load_metric_config("booking")["hours"][key]
+
+
 def hours_value_column() -> str:
     return load_metric_config("booking")["hours"]["value_column"]
 
@@ -198,10 +220,18 @@ SUPPORTED_CHART_TYPES = {
     "monthly_series",
     "crosstab",
     "sum_by",
+    # Two-level group-by: primary + secondary group column, summing a value
+    # column. Backs the Utilization Home "Total Hours by Region / Market"
+    # chart, which needs region+market pairs rather than a flat group-by.
+    "sum_by_hierarchical",
 }
 SUPPORTED_SCOPES = {"all", "present", "exited"}
 SUPPORTED_MEASURES = {"closing_headcount"}
 SUPPORTED_FILTER_TYPES = {"single", "multi", "hierarchical"}
+# Utilization-side card measures. Every booking card declares one of these,
+# so the compute is dispatched from the declaration rather than a bespoke
+# function per card (mirrors the roster's `counts: distinct` contract).
+SUPPORTED_BOOKING_CARD_MEASURES = {"distinct_count", "sum", "count_rows"}
 
 
 class MetricConfigError(ValueError):
@@ -234,6 +264,35 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
 
     for name, card in cfg.get("cards", {}).items():
         need_role(card.get("column_role"), f"cards.{name}")
+        # Booking cards declare a measure_type (distinct_count / sum /
+        # count_rows) and optionally a filter_column_role + filter_label_key
+        # (the label_key resolves through the `hours:` block, so the
+        # client/internal literals live in one place). Roster cards
+        # continue to declare `counts: distinct` — treated as the
+        # distinct_count default here so the roster YAML doesn't need to
+        # change.
+        if dataset == "booking":
+            measure_type = card.get("measure_type", "distinct_count")
+            if measure_type not in SUPPORTED_BOOKING_CARD_MEASURES:
+                problems.append(
+                    f"cards.{name}: measure_type {measure_type!r} is not implemented "
+                    f"(supported: {sorted(SUPPORTED_BOOKING_CARD_MEASURES)})"
+                )
+            filter_role = card.get("filter_column_role")
+            if filter_role is not None:
+                need_role(filter_role, f"cards.{name}")
+                key = card.get("filter_label_key")
+                hours_block = cfg.get("hours", {})
+                if key is None:
+                    problems.append(
+                        f"cards.{name}: filter_column_role is set but filter_label_key "
+                        "is missing — the card can't resolve which value to filter on"
+                    )
+                elif key not in hours_block:
+                    problems.append(
+                        f"cards.{name}: filter_label_key {key!r} is not declared in "
+                        f"the `hours:` block (known: {sorted(hours_block)})"
+                    )
         status_filter = card.get("status_filter", "none")
         if status_filter not in ("none", None, "present") and status_filter not in statuses:
             problems.append(
@@ -275,6 +334,16 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
                     )
         elif kind == "sum_by":
             need_role(chart.get("group_column_role"), f"charts.{name}")
+            need_role(chart.get("value_column_role"), f"charts.{name}")
+            # Optional second dimension: sum is pivoted across this
+            # column's values (e.g. Weekly Hours Trend groups by week and
+            # splits each week across Client / Internal hours types).
+            split = chart.get("split_column_role")
+            if split is not None:
+                need_role(split, f"charts.{name}")
+        elif kind == "sum_by_hierarchical":
+            need_role(chart.get("primary_group_role"), f"charts.{name}")
+            need_role(chart.get("secondary_group_role"), f"charts.{name}")
             need_role(chart.get("value_column_role"), f"charts.{name}")
         elif kind == "crosstab":
             need_role(chart.get("row_column_role"), f"charts.{name}")
