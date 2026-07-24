@@ -128,6 +128,21 @@ def directory_trim_keys() -> list[str]:
     return load_metric_config()["directory"].get("trim_whitespace", [])
 
 
+TIME_FILTER_MODES = {"active_during", "exit_in_period"}
+
+
+def time_filter_mode(name: str) -> str:
+    """Return the time-filter mode a metric uses when a time filter (e.g.
+    Month/Year) is active — `active_during` (default: who was on the
+    roster during the window) or `exit_in_period` (who LEFT inside the
+    window, LWD-in-M). Declared per-metric in
+    `configs/roster_metrics.yaml::time_filter_modes` — see that block
+    for why exit-shaped KPIs need a different row filter than
+    who-was-here KPIs."""
+    modes = load_metric_config().get("time_filter_modes", {}) or {}
+    return modes.get(name, "active_during")
+
+
 def filters(dataset: str = "roster") -> dict[str, dict]:
     """The declared page filters, keyed by filter name.
 
@@ -374,6 +389,13 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
         if key not in field_keys:
             problems.append(
                 f"directory.trim_whitespace: {key!r} is not a directory field"
+            )
+
+    for name, mode in (cfg.get("time_filter_modes") or {}).items():
+        if mode not in TIME_FILTER_MODES:
+            problems.append(
+                f"time_filter_modes.{name}: mode {mode!r} is not supported "
+                f"(supported: {sorted(TIME_FILTER_MODES)})"
             )
 
     for i, rule in enumerate(cfg.get("seniority", {}).get("categories", [])):

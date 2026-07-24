@@ -440,6 +440,38 @@ charts:
     column_role: leaving_reason
     scope: exited
 
+# ---------------------------------------------------------------------------
+# Which time-filter mode each metric uses when Month/Year is picked.
+# ---------------------------------------------------------------------------
+# HR Analytics' Month/Year filter has TWO valid interpretations depending on
+# what the metric answers:
+#
+#   active_during   (default) — "who was on the roster during any picked M":
+#                    DOJ ≤ end-of-M AND (LWD null OR LWD ≥ start-of-M).
+#                    Right for the who-is-here KPIs (Total, Active, Strategic
+#                    Pool) and for the Closing Headcount chart.
+#   exit_in_period  — "who LEFT inside the picked M": LWD ∈ [start-M, end-M].
+#                    Right for the who-left KPIs — otherwise an employee
+#                    whose LWD is Apr-26 gets counted as an exit for a
+#                    selection of 2025 (their status is Inactive today, but
+#                    their exit event is not in the picked window). This was
+#                    the reported bug: KPI `Exits = 4` while the Month-Wise
+#                    Resignation chart correctly showed 0 exits in 2025.
+#
+# Names here match the `get_*` function names in `roster_metrics.py` and the
+# per-metric keys the roster router dispatches on — so adding a new
+# exit-shaped KPI is one entry here, not a boolean threaded through Python.
+# Metrics NOT listed default to `active_during`.
+time_filter_modes:
+  exits: exit_in_period
+  inactive_employees: exit_in_period
+  voluntary_leavers: exit_in_period
+  involuntary_leavers: exit_in_period
+  attrition_pct: exit_in_period
+  voluntary_involuntary_split: exit_in_period
+  exits_table: exit_in_period
+  month_wise_resignation: exit_in_period       # already LWD-dated; kept for docs
+
 status:
   active: "Active"
   inactive: "Inactive"

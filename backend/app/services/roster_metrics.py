@@ -1694,8 +1694,8 @@ def _apply_month_year_filter(
     Mirrors the "person-month" definition the monthly-series charts
     already use (`_evaluate_monthly_series` counts an employee in month M
     iff DOJ ≤ end-of-M AND LWD is null-or-≥ start-of-M), so a Month/Year
-    pick narrows the KPI cards to exactly the same population the trend
-    charts draw for that month.
+    pick narrows the who-is-here KPI cards to exactly the same
+    population the Closing Headcount trend chart draws for that month.
     """
     months = _parse_month_labels(month_labels)
     if not months:
@@ -1716,10 +1716,51 @@ def _apply_month_year_filter(
     mask = pd.Series(False, index=df.index)
     for month_start in months:
         month_end = month_start + pd.offsets.MonthEnd(0)
+        # DAX BLANK() parity — an employee with an unrecorded joining
+        # date (e.g. the literal "TBD" in the current roster: Rahul
+        # Malhotra, DOJ "TBD", Status Strategic Pool) is still part of
+        # the workforce, matching `get_closing_headcount`'s
+        # `doj.isna() | (doj <= end)` rule. Without this, selecting
+        # every available month dropped one employee (and one Strategic
+        # Pool member) vs. the unfiltered response — breaking the
+        # "union of all option values equals no filter" invariant tested
+        # in test_filter_invariants.py.
         active_this_month = (
-            doj.notna() & (doj <= month_end) & (lwd.isna() | (lwd >= month_start))
+            (doj.isna() | (doj <= month_end)) & (lwd.isna() | (lwd >= month_start))
         )
         mask = mask | active_this_month
+    return df[mask]
+
+
+def _apply_month_year_exits_only(
+    df: pd.DataFrame, month_labels: list[str]
+) -> pd.DataFrame:
+    """Keep rows whose LWD is inside ANY of the "Mon YYYY" labels — the
+    "who LEFT in this window" filter used by exit-shaped KPIs (Exits,
+    Voluntary/Involuntary, Attrition %, exits table). Complementary to
+    `_apply_month_year_filter`, which keeps who was on the roster during
+    the window regardless of when they eventually left.
+
+    This is the same LWD-in-[start, end] rule the Month-Wise Resignation
+    trend chart already uses via `_evaluate_monthly_series` (see
+    `charts.month_wise_resignation` in the roster YAML: `date_role:
+    leaving_date`), reused so the KPI cards can never disagree with
+    that chart about who counts as an exit inside the window.
+    """
+    months = _parse_month_labels(month_labels)
+    if not months:
+        # Same "no valid values -> 0 rows" contract as
+        # `_apply_month_year_filter` and every other filter — a
+        # malformed value must not fall back to the full roster.
+        return df.iloc[0:0]
+
+    lwd = pd.to_datetime(
+        df[metric_config.column("leaving_date")], format=DATE_FORMAT, errors="coerce"
+    )
+    mask = pd.Series(False, index=df.index)
+    for month_start in months:
+        month_end = month_start + pd.offsets.MonthEnd(0)
+        mask = mask | (lwd.notna() & (lwd >= month_start) & (lwd <= month_end))
     return df[mask]
 
 
@@ -1737,7 +1778,9 @@ def filter_monthly_rows(
 
 
 def apply_filters(
-    df: pd.DataFrame, selected: dict[str, str | list[str]] | None
+    df: pd.DataFrame,
+    selected: dict[str, str | list[str]] | None,
+    time_filter_mode: str = "active_during",
 ) -> pd.DataFrame:
     """
     Narrow the roster by the page filters declared in
@@ -1755,6 +1798,16 @@ def apply_filters(
     A list means "match any of these" (OR within the field) — this is what
     the hierarchical Region/Market multi-select sends when several regions
     or markets are ticked. Across different filters the matches are AND-ed.
+
+    `time_filter_mode` controls how time filters (e.g. Month/Year) narrow
+    rows — `active_during` (default) for who-was-here KPIs, or
+    `exit_in_period` for exit-shaped KPIs (LWD ∈ selected months). The
+    two modes are declared per metric in
+    `configs/roster_metrics.yaml::time_filter_modes`; the roster router
+    dispatches metrics to whichever df matches their declared mode.
+    `ignore` skips time filters entirely, used when a downstream metric
+    (attrition %'s Closing-Headcount denominator) needs the
+    non-time-narrowed df.
 
     Unknown filter names and blank/"all" selections are ignored.
     """
@@ -1776,16 +1829,26 @@ def apply_filters(
             continue
         spec = declared[name]
 
-        # Time filters (e.g. HR Analytics' Month / Year) pick "Mon YYYY"
-        # labels: narrow the roster to employees active during ANY of the
-        # selected months, so the KPIs on top of a filtered page reflect
-        # the same population the trend charts are showing rather than the
-        # full roster. Semantics: DOJ ≤ end-of-M AND (LWD null OR LWD ≥
-        # start-of-M) for any picked M — chosen to match how the
-        # existing `_evaluate_monthly_series` charts already draw a
-        # person-month (Closing Headcount / Joiners vs Leavers).
+        # Time filters (Month/Year) route through one of two row-filter
+        # rules depending on `time_filter_mode`:
+        #   active_during  — DOJ ≤ end-of-M AND (LWD null OR LWD ≥ start-M)
+        #                    for any picked M. Same "person-month" rule
+        #                    the Closing Headcount trend uses.
+        #   exit_in_period — LWD ∈ [start-M, end-M] for any picked M.
+        #                    Same rule the Month-Wise Resignation trend
+        #                    uses via `date_role: leaving_date`.
+        #   ignore         — skip the time filter entirely; used for
+        #                    metrics whose window semantics are handled
+        #                    upstream (e.g. attrition_pct's
+        #                    Closing-Headcount denominator, which takes
+        #                    a `period_month` argument of its own).
         if spec.get("time_filter"):
-            out = _apply_month_year_filter(out, values)
+            if time_filter_mode == "ignore":
+                continue
+            if time_filter_mode == "exit_in_period":
+                out = _apply_month_year_exits_only(out, values)
+            else:
+                out = _apply_month_year_filter(out, values)
             continue
 
         # A filter can be a plain column, or a DERIVED bucket reusing a

@@ -247,12 +247,22 @@ def api():
         yield c
 
 
+# Cache the login token per test module: the /auth/login route is rate
+# limited to 5/min and this file now has enough tests to blow past that
+# if each one logs in fresh (was flaky under -q parallel runs). One
+# login per module reproduces the shared-token pattern used elsewhere.
+_TOKEN_CACHE: dict[int, str] = {}
+
+
 def _token(api) -> str:
-    resp = api.post(
-        "/api/auth/login", json={"email": SEED_EMAIL, "password": SEED_PASSWORD}
-    )
-    assert resp.status_code == 200, resp.text
-    return resp.json()["access_token"]
+    key = id(api)
+    if key not in _TOKEN_CACHE:
+        resp = api.post(
+            "/api/auth/login", json={"email": SEED_EMAIL, "password": SEED_PASSWORD}
+        )
+        assert resp.status_code == 200, resp.text
+        _TOKEN_CACHE[key] = resp.json()["access_token"]
+    return _TOKEN_CACHE[key]
 
 
 def test_api_applies_each_declared_filter(api, roster):
@@ -298,12 +308,15 @@ def test_month_year_time_filter_narrows_roster_rows(roster):
     a_month = dojs.dropna().sort_values().iloc[0].strftime("%b %Y")
     narrowed = roster_metrics.apply_filters(roster, {"month_year": a_month})
     assert 0 < len(narrowed) <= len(roster)
-    # Everyone in the narrowed frame joined by end-of-month at the latest.
+    # Everyone in the narrowed frame either has DOJ ≤ end-of-M, OR has
+    # a blank DOJ (DAX BLANK() parity — see `_apply_month_year_filter`
+    # and `get_closing_headcount`'s already-established rule that a
+    # blank DOJ is still part of the workforce).
     end_of_m = pd.to_datetime(a_month, format="%b %Y") + pd.offsets.MonthEnd(0)
     narrowed_dojs = pd.to_datetime(
         narrowed[doj_col], format="%d-%b-%y", errors="coerce"
     )
-    assert (narrowed_dojs.notna() & (narrowed_dojs <= end_of_m)).all()
+    assert (narrowed_dojs.isna() | (narrowed_dojs <= end_of_m)).all()
 
 
 def test_month_year_time_filter_empty_selection_returns_empty(roster):
@@ -366,6 +379,137 @@ def test_api_month_year_narrows_kpis_and_trends(api):
     # the trend by the underlying series, so the ticked month may or may
     # not appear. What must NEVER appear is any OTHER month.
     assert resig_months.issubset({month})
+
+
+def _lwd_months(roster) -> list[str]:
+    """"Mon YYYY" labels the roster actually has an LWD in — used to
+    exercise the exit-shaped KPI window. Empty when the fixture has no
+    exits at all (skip the test in that case)."""
+    lwd_col = metric_config.column("leaving_date")
+    lwds = pd.to_datetime(roster[lwd_col], format="%d-%b-%y", errors="coerce").dropna()
+    return sorted({d.strftime("%b %Y") for d in lwds})
+
+
+def test_month_year_exits_kpi_counts_lwd_in_window_not_currently_inactive(api, roster):
+    """The reported bug: picking a window that DOES NOT contain anyone's
+    LWD must return Exits = 0, even though some Inactive employees
+    (with LWD outside the window) are on the current roster. Previously
+    `Exits` counted "current Status == Inactive" over the active-during
+    frame and picked up exits that happened outside the picked window.
+    """
+    headers = {"Authorization": f"Bearer {_token(api)}"}
+    lwd_months = _lwd_months(roster)
+    if not lwd_months:
+        pytest.skip("roster has no LWDs — cannot exercise exit-window bug")
+
+    # A month clearly earlier than any real LWD: 24 years before the
+    # earliest one. Anyone active then may still be Inactive today, but
+    # nobody exited in that month — Exits must be 0.
+    earliest_lwd = pd.to_datetime(lwd_months[0], format="%b %Y")
+    empty_window = (earliest_lwd - pd.DateOffset(years=24)).strftime("%b %Y")
+
+    resp = api.get(
+        "/api/v1/roster/summary",
+        params={"month_year": empty_window},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["exits"] == 0, (
+        f"exits should be 0 when the picked window contains no LWD, "
+        f"got {body['exits']} — the KPI is silently counting currently-"
+        f"Inactive employees whose LWD is outside {empty_window}"
+    )
+    assert body["voluntary_leavers"] == 0
+    assert body["involuntary_leavers"] == 0
+    assert body["inactive_employees"] == 0
+    assert body["attrition_pct"] == 0.0
+
+
+def test_month_year_exits_kpi_matches_lwd_in_window_count(api, roster):
+    """Positive case: for a window that DOES contain LWDs, the Exits KPI
+    equals the count of roster rows with LWD in that window — the same
+    rule the Month-Wise Resignation chart uses (`date_role: leaving_date`
+    in the roster YAML)."""
+    headers = {"Authorization": f"Bearer {_token(api)}"}
+    lwd_months = _lwd_months(roster)
+    if not lwd_months:
+        pytest.skip("roster has no LWDs — cannot exercise the positive case")
+    month = lwd_months[0]
+    lwd_col = metric_config.column("leaving_date")
+    lwds = pd.to_datetime(roster[lwd_col], format="%d-%b-%y", errors="coerce")
+    month_start = pd.to_datetime(month, format="%b %Y")
+    month_end = month_start + pd.offsets.MonthEnd(0)
+    expected = int(((lwds >= month_start) & (lwds <= month_end)).sum())
+
+    body = api.get(
+        "/api/v1/roster/summary",
+        params={"month_year": month},
+        headers=headers,
+    ).json()
+    assert body["exits"] == expected, (
+        f"Exits KPI should equal LWD-in-window count for {month}: "
+        f"expected {expected}, got {body['exits']}"
+    )
+
+
+def test_month_year_voluntary_involuntary_donut_counts_only_in_window(api, roster):
+    """Donut = exit reason split over LWD-in-window rows. An out-of-window
+    exit must not contribute to either slice, otherwise a 2025 pick
+    would show 2026-Apr exits under "Voluntary" — the reported bug."""
+    headers = {"Authorization": f"Bearer {_token(api)}"}
+    lwd_months = _lwd_months(roster)
+    if not lwd_months:
+        pytest.skip("roster has no LWDs")
+    earliest_lwd = pd.to_datetime(lwd_months[0], format="%b %Y")
+    empty_window = (earliest_lwd - pd.DateOffset(years=24)).strftime("%b %Y")
+
+    body = api.get(
+        "/api/v1/roster/attrition-detail",
+        params={"month_year": empty_window},
+        headers=headers,
+    ).json()
+    # The donut is the `voluntary_involuntary_split` dict. Every value
+    # must be 0 for an empty window.
+    assert all(v == 0 for v in body["voluntary_involuntary_split"].values()), (
+        f"voluntary_involuntary_split should be all-zero for a window "
+        f"with no LWDs, got {body['voluntary_involuntary_split']}"
+    )
+    # Exits table likewise: rows in this list are LWD-in-window rows only.
+    assert body["exits_table"] == []
+
+
+def test_month_year_attrition_pct_reflects_in_window_exits(api, roster):
+    """Attrition % has to move with the LWD-in-window Exits count: a
+    window with zero exits is 0.0%, and a window WITH exits is > 0.
+    Guards the specific regression the coordinator flagged (KPI showed
+    21.1% for 2025 while the Month-Wise Resignation chart on the same
+    page said 0 exits happened in 2025)."""
+    headers = {"Authorization": f"Bearer {_token(api)}"}
+    lwd_months = _lwd_months(roster)
+    if not lwd_months:
+        pytest.skip("roster has no LWDs")
+
+    # An empty window: attrition_pct must be exactly 0.
+    earliest_lwd = pd.to_datetime(lwd_months[0], format="%b %Y")
+    empty_window = (earliest_lwd - pd.DateOffset(years=24)).strftime("%b %Y")
+    empty = api.get(
+        "/api/v1/roster/summary",
+        params={"month_year": empty_window},
+        headers=headers,
+    ).json()
+    assert empty["attrition_pct"] == 0.0, empty["attrition_pct"]
+
+    # A window that CONTAINS an LWD: attrition_pct must be > 0 and
+    # bounded to [0, 100]. Positive lower bound is the anti-regression
+    # (if the fix accidentally always returned 0, this catches it).
+    with_lwd = api.get(
+        "/api/v1/roster/summary",
+        params={"month_year": lwd_months[0]},
+        headers=headers,
+    ).json()
+    assert with_lwd["exits"] > 0
+    assert 0.0 < with_lwd["attrition_pct"] <= 100.0, with_lwd["attrition_pct"]
 
 
 def test_api_ignores_undeclared_query_param(api):

@@ -57,37 +57,102 @@ def _filter_params(request: Request) -> dict[str, str]:
     return out
 
 
+def _scoped_dfs(filters: dict) -> tuple:
+    """Compute the two frames every metric on a filtered roster page may
+    need:
+      * `active_df`  — filters applied with `time_filter_mode=active_during`
+                       (who-was-here-in-window rows).
+      * `exits_df`   — filters applied with `time_filter_mode=exit_in_period`
+                       (LWD-in-window rows), for exit-shaped KPIs.
+
+    A third helper `pick(name)` returns whichever df a named metric
+    declares via `time_filter_modes` in the roster YAML — the router
+    stays free of per-metric booleans, and adding a new exit-shaped KPI
+    is one YAML entry rather than a code change here.
+
+    When Month/Year isn't picked, `active_df` and `exits_df` are the
+    same frame (the time-filter branch inside `apply_filters` is a
+    no-op), so behavior is unchanged for the un-windowed case.
+    """
+    roster = get_roster_df()
+    active_df = roster_metrics.apply_filters(
+        roster, filters, time_filter_mode="active_during"
+    )
+    exits_df = roster_metrics.apply_filters(
+        roster, filters, time_filter_mode="exit_in_period"
+    )
+
+    def pick(name: str):
+        mode = metric_config.time_filter_mode(name)
+        return exits_df if mode == "exit_in_period" else active_df
+
+    return active_df, exits_df, pick
+
+
+def _month_year_end(filters: dict) -> "pd.Timestamp | None":  # type: ignore[name-defined]
+    """End-of-latest-selected-month, or None if Month/Year is not
+    active. Used as the `period_month` boundary for Closing Headcount
+    in the windowed Attrition % denominator so it lines up with the
+    Month-Wise Resignation chart's [start, end] rule."""
+    import pandas as pd  # local — router deliberately avoids pandas at top level
+
+    labels = _month_year_labels(filters)
+    if not labels:
+        return None
+    months = [pd.to_datetime(m, format="%b %Y", errors="coerce") for m in labels]
+    months = [m for m in months if pd.notna(m)]
+    if not months:
+        return None
+    return max(months)
+
+
 @router.get("/summary", response_model=RosterSummary)
 def roster_summary(
     user: User = Depends(get_current_user),
     filters: dict = Depends(_filter_params),
 ) -> RosterSummary:
     try:
-        df = roster_metrics.apply_filters(get_roster_df(), filters)
+        active_df, exits_df, pick = _scoped_dfs(filters)
+        month_end = _month_year_end(filters)
+        # Attrition % has TWO windows in one formula: the numerator (exits)
+        # is LWD-in-picked-M, matching the Month-Wise Resignation chart; the
+        # denominator (closing headcount + exits) uses Closing Headcount at
+        # end-of-latest-selected-month, matching the Month-Wise Headcount
+        # chart. Computing it here means we don't need a third definition
+        # of Attrition % — we reuse the existing get_exits / get_closing_headcount
+        # measures, only pointed at the right dfs and period.
+        exits_in_window = roster_metrics.get_exits(pick("exits"))
+        closing_at_window_end = roster_metrics.get_closing_headcount(
+            roster_metrics.apply_filters(
+                get_roster_df(), filters, time_filter_mode="ignore"
+            ),
+            period_month=month_end,
+        )
+        denom = closing_at_window_end + exits_in_window
+        attrition_pct = (exits_in_window / denom * 100) if denom else 0.0
+
         return RosterSummary(
-            active_employees=roster_metrics.get_active_employees(df),
-            inactive_employees=roster_metrics.get_inactive_employees(df),
-            total_employees=roster_metrics.get_total_employees(df),
-            active_pct=roster_metrics.get_active_pct(df),
-            attrition_pct=roster_metrics.get_attrition_pct(df),
-            voluntary_leavers=roster_metrics.get_voluntary_leavers(df),
-            involuntary_leavers=roster_metrics.get_involuntary_leavers(df),
-            gcc_employees=roster_metrics.get_gcc_employees(df),
-            non_gcc_employees=roster_metrics.get_non_gcc_employees(df),
-            average_experience_yrs=roster_metrics.get_average_experience_yrs(df),
-            average_hexaware_experience=roster_metrics.get_average_hexaware_experience(df),
-            pending_mapping_count=roster_metrics.get_pending_mapping_count(df),
-            # period_month left unset (full-range default); wiring a filter
-            # query param through to these is future filter-UI work (Phase 5).
-            closing_headcount=roster_metrics.get_closing_headcount(df),
-            opening_headcount=roster_metrics.get_opening_headcount(df),
-            joiners=roster_metrics.get_joiners(df),
-            exits=roster_metrics.get_exits(df),
-            clients_covered=roster_metrics.get_clients_covered(df),
-            projects=roster_metrics.get_projects(df),
-            senior_lead_employees=roster_metrics.get_senior_lead_employees(df),
-            departments=roster_metrics.get_departments(df),
-            skills_covered=roster_metrics.get_skills_covered(df),
+            active_employees=roster_metrics.get_active_employees(pick("active_employees")),
+            inactive_employees=roster_metrics.get_inactive_employees(pick("inactive_employees")),
+            total_employees=roster_metrics.get_total_employees(pick("total_employees")),
+            active_pct=roster_metrics.get_active_pct(pick("active_pct")),
+            attrition_pct=attrition_pct,
+            voluntary_leavers=roster_metrics.get_voluntary_leavers(pick("voluntary_leavers")),
+            involuntary_leavers=roster_metrics.get_involuntary_leavers(pick("involuntary_leavers")),
+            gcc_employees=roster_metrics.get_gcc_employees(pick("gcc_employees")),
+            non_gcc_employees=roster_metrics.get_non_gcc_employees(pick("non_gcc_employees")),
+            average_experience_yrs=roster_metrics.get_average_experience_yrs(pick("average_experience_yrs")),
+            average_hexaware_experience=roster_metrics.get_average_hexaware_experience(pick("average_hexaware_experience")),
+            pending_mapping_count=roster_metrics.get_pending_mapping_count(pick("pending_mapping_count")),
+            closing_headcount=roster_metrics.get_closing_headcount(pick("closing_headcount")),
+            opening_headcount=roster_metrics.get_opening_headcount(pick("opening_headcount")),
+            joiners=roster_metrics.get_joiners(pick("joiners")),
+            exits=exits_in_window,
+            clients_covered=roster_metrics.get_clients_covered(pick("clients_covered")),
+            projects=roster_metrics.get_projects(pick("projects")),
+            senior_lead_employees=roster_metrics.get_senior_lead_employees(pick("senior_lead_employees")),
+            departments=roster_metrics.get_departments(pick("departments")),
+            skills_covered=roster_metrics.get_skills_covered(pick("skills_covered")),
         )
     except Exception:
         logger.exception("roster_summary: failed to compute roster summary")
@@ -161,14 +226,23 @@ def roster_attrition_detail(
     filters: dict = Depends(_filter_params),
 ) -> RosterAttritionDetail:
     try:
-        df = roster_metrics.apply_filters(get_roster_df(), filters)
+        active_df, exits_df, pick = _scoped_dfs(filters)
         picked_months = _month_year_labels(filters)
+        # Voluntary/Involuntary donut and the exits table are exit-shaped
+        # (their numbers are "who left INSIDE the window"), so they read
+        # from `exits_df` via the YAML-driven `pick`. The Month-Wise
+        # Resignation chart's underlying data is already LWD-dated so
+        # `get_month_wise_resignation` works on either df; passing
+        # `exits_df` here avoids computing rows for months the user
+        # didn't pick anyway.
         return RosterAttritionDetail(
             month_wise_resignation=roster_metrics.filter_monthly_rows(
-                roster_metrics.get_month_wise_resignation(df), picked_months
+                roster_metrics.get_month_wise_resignation(active_df), picked_months
             ),
-            voluntary_involuntary_split=roster_metrics.get_voluntary_involuntary_split(df),
-            exits_table=roster_metrics.get_exits_table(df),
+            voluntary_involuntary_split=roster_metrics.get_voluntary_involuntary_split(
+                pick("voluntary_involuntary_split")
+            ),
+            exits_table=roster_metrics.get_exits_table(pick("exits_table")),
         )
     except Exception:
         logger.exception("roster_attrition_detail: failed to compute attrition detail")
