@@ -243,6 +243,9 @@ def test_get_filter_options(sample_bookings_full):
     assert opts["entities"] == ["T1", "T2"]
     assert opts["holdings"] == ["Acme Corp", "Beta Inc"]
     assert opts["hours_types"] == ["Client Hours", "Internal Hours"]
+    # Employee filter (added 2026-07-24 for the Utilization Search page's
+    # 8th filter) — booking-only, distinct sorted, blanks dropped.
+    assert opts["employees"] == ["Alice", "Bob", "Carol"]
     # Year > Month > Week hierarchy for the cascading date filter: one entry
     # per distinct week, each carrying its year (from the Monday) and its
     # booking-sheet Month label.
@@ -414,6 +417,12 @@ def test_get_filter_options_entities_holdings_hours_types_are_booking_only():
     assert without_roster["entities"] == with_roster["entities"] == ["T1", "T2"]
     assert without_roster["holdings"] == with_roster["holdings"] == ["Acme", "Beta"]
     assert without_roster["hours_types"] == with_roster["hours_types"] == ["Client Hours", "Internal Hours"]
+    # Employees is booking-only too — the roster's NAME/Employee columns
+    # (if present) must NOT bleed into the Employee filter dropdown.
+    booking["Employee"] = ["Alice", "Bob"]
+    without_roster2 = get_filter_options(booking)
+    with_roster2 = get_filter_options(booking, roster)
+    assert without_roster2["employees"] == with_roster2["employees"] == ["Alice", "Bob"]
 
 
 def test_get_filter_options_union_invariants(sample_bookings_full):
@@ -495,6 +504,12 @@ def test_get_filtered_records_single_filters(sample_bookings_full):
     assert len(get_filtered_records(sample_bookings_full, holding="Beta Inc")) == 3
     # hours_type alone -> Client Hours: Alice x1 + Bob x2 = 3
     assert len(get_filtered_records(sample_bookings_full, hours_type="Client Hours")) == 3
+    # employee alone -> Alice: 2 rows
+    assert len(get_filtered_records(sample_bookings_full, employee="Alice")) == 2
+    # employee IN (Alice, Bob) -> 4 rows, OR-within-field
+    assert len(get_filtered_records(sample_bookings_full, employee=["Alice", "Bob"])) == 4
+    # employee=Nobody -> 0 rows (unknown value narrows to empty)
+    assert len(get_filtered_records(sample_bookings_full, employee="Nobody")) == 0
 
 
 def test_get_filtered_records_combines_with_and(sample_bookings_full):
@@ -686,6 +701,9 @@ def test_real_bookings_filter_options(real_bookings):
     assert len(opts["entities"]) == 5
     assert len(opts["holdings"]) == 43
     assert opts["hours_types"] == ["Client Hours", "Internal Hours"]
+    # Employees filter (added 2026-07-24) — booking-only, matches
+    # get_total_employees's distinct-Employee count (46 in the real file).
+    assert len(opts["employees"]) == 46
     # Without roster, region_market_hierarchy contains only booking regions
     # (AMER, EMEA). See test_real_bookings_filter_options_with_roster for the
     # union-with-roster case.

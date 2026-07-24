@@ -588,11 +588,20 @@ def get_filter_options(df: pd.DataFrame, roster_df: pd.DataFrame | None = None) 
         "markets": markets,
         "region_market_hierarchy": region_market_hierarchy,
         "departments": departments,
-        # `entities`, `holdings`, `hours_types` are booking-only — no
-        # roster counterpart, no union.
+        # `entities`, `holdings`, `hours_types`, `employees` are booking-only —
+        # no roster counterpart, no union. `employees` powers the Utilization
+        # Search page's Employee filter (added 2026-07-24); same shape as the
+        # other flat lists, blanks dropped, sorted for stable dropdown order.
         "entities": _union_clean(df["Team (EC)"]),
         "holdings": _union_clean(df["Holding"]),
         "hours_types": _union_clean(df["Booked Hours Type"]),
+        # Guard the column access — some legacy test fixtures build a
+        # booking-shaped frame without an `Employee` column, and every
+        # other flat filter list here silently handles that shape via its
+        # column presence too.
+        "employees": (
+            _union_clean(df["Employee"]) if "Employee" in df.columns else []
+        ),
     }
 
 
@@ -617,6 +626,7 @@ def get_filtered_records(
     entity: str | list[str] | None = None,
     holding: str | list[str] | None = None,
     hours_type: str | list[str] | None = None,
+    employee: str | list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Apply the Search page's filter set to the booking sheet and return the
@@ -664,6 +674,7 @@ def get_filtered_records(
     out = out[_matches_any(out["Team (EC)"], _as_list(entity))]
     out = out[_matches_any(out["Holding"], _as_list(holding))]
     out = out[_matches_any(out["Booked Hours Type"], _as_list(hours_type))]
+    out = out[_matches_any(out["Employee"], _as_list(employee))]
     return out
 
 

@@ -209,6 +209,10 @@ export interface FilterOptions {
   entities: string[]
   holdings: string[]
   hours_types: string[]
+  /** Distinct Employee names — powers the Utilization Search page's
+   * Employee filter (added 2026-07-24). Optional for backward compat
+   * with older cached responses. */
+  employees?: string[]
 }
 
 export interface HoldingProjects {
@@ -259,6 +263,7 @@ export interface RecordsFilters {
   entity?: string | string[]
   holding?: string | string[]
   hours_type?: string | string[]
+  employee?: string | string[]
   limit?: number
   offset?: number
 }

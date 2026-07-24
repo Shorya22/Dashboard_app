@@ -32,8 +32,14 @@ def test_filters_roster_dataset_returns_expected_keys():
 def test_filters_booking_dataset_returns_expected_shape():
     defs = metric_config.filters("booking")
     for key in ("region", "market", "department", "entity", "holding",
-                "hours_type", "week"):
+                "hours_type", "week", "employee"):
         assert key in defs, key
+    # Employee filter (added 2026-07-24): booking-only, multi-select,
+    # applies to Search + Results only (NOT Utilization Home).
+    assert defs["employee"]["type"] == "multi"
+    assert defs["employee"]["column_role"] == "employee"
+    assert "utilization-search" in defs["employee"]["applies_to_pages"]
+    assert "utilization-home" not in defs["employee"]["applies_to_pages"]
     assert defs["region"]["column_role"] == "region"
     assert defs["region"]["nests"] == "market"
     assert defs["hours_type"]["type"] == "single"
@@ -119,9 +125,12 @@ def test_config_filters_booking_endpoint(client):  # noqa: F811
     assert body["dataset"] == "booking"
     keys = {f["key"] for f in body["filters"]}
     assert {"region", "market", "department", "entity", "holding",
-            "hours_type", "week"}.issubset(keys)
+            "hours_type", "week", "employee"}.issubset(keys)
     week = next(f for f in body["filters"] if f["key"] == "week")
     assert week["type"] == "hierarchical"
+    employee = next(f for f in body["filters"] if f["key"] == "employee")
+    assert employee["type"] == "multi"
+    assert employee["label"] == "Employee"
 
 
 def test_config_filters_unknown_dataset_returns_400(client):  # noqa: F811

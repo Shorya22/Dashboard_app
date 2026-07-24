@@ -721,14 +721,31 @@ missing LWD" pattern on HR Analytics: a data fix, not a code fix.
 
 ### Search / Results
 
-The Search page (`/utilization/search`) is a **form only** — 6 filter
+The Search page (`/utilization/search`) is a **form only** — 7 filter
 dropdowns (Month / Week, Region, Department, Entity, Holding, Hours
-Type), no KPIs and no charts. Submitting it navigates to
+Type, Employee), no KPIs and no charts. Submitting it navigates to
 `/utilization/results?...` with the selected values encoded as repeated
 query parameters. Every one of those dropdowns is a `filters:` entry
 in `configs/booking_metrics.yaml` (`applies_to_pages` includes
 `utilization-search`), so the form's field set cannot drift from the
 server's accepted parameter set.
+
+> Previously the Search page had 6 filters, missing an Employee picker —
+> users had to reach the Results page and scroll the paginated table to
+> narrow to one person. The `employee` filter (booking-only, multi-select,
+> options sourced from `booking.Employee` via
+> `booking_metrics.get_filter_options`) closes that gap. Backend filter
+> plumbing goes through the shared `_booking_filter_params` dep, so
+> `/records` and every other utilization endpoint accept `?employee=...`
+> without a per-route change.
+
+> Previously the Results page had a right-side collapsible FiltersPanel
+> duplicating the Search form's filters. Removed 2026-07-24 — the Search
+> page owns filter selection and the Results page is now read-only for
+> the current filter set (users click "Back to Search" to change it).
+> The `FiltersPanel` component itself is kept in the codebase because
+> Employee Utilization and Project Utilization drill-through pages still
+> use it.
 
 The Results page (`/utilization/results`) renders **5 KPI cards and a
 paginated records table** over the booking sheet narrowed by the same
@@ -772,13 +789,21 @@ always a plain float).
 > `records_summary_reuses_declared_cards`.
 
 #### Records table
-The paginated list of matching booking rows (Week Start, Date,
+The paginated list of matching booking rows (S.No., Week Start, Date,
 Employee, Project, Holding, Department, Team (EC), Region, Hours Type,
 Hours). Row shape lives in `booking_metrics.records_to_dicts`; the
 table's `total` field is the pre-pagination filtered row count, and
 its footer's "Total" hours cell reads `summary.total_hours` directly
 (no client-side aggregation), so the footer and the top-strip KPI
 cannot disagree.
+
+The leading `S.No.` column is a 1-based counter over the current
+sorted/paginated position (`row.index + 1`), mirroring the Employee
+Directory's `display: serial` convention. It has no backend field —
+serial is a rendering concern, not stored data. Not YAML-declared
+today because the Results table's column set isn't YAML-declared (unlike
+`directory.columns`); a follow-up could introduce a `records.columns:`
+block if the column set grows.
 
 Filter sidebar semantics match Utilization Home's filter row: URL-driven,
 propagates to every server request through the shared

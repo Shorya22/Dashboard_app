@@ -344,6 +344,20 @@ def test_search_results_reflect_new_booking_data(client):
     holdings = {h["holding"]: h["projects"] for h in hp["items"]}
     assert "SyntheticProject" in holdings.get("SyntheticHolding", [])
 
+    # (4) Employee filter (added 2026-07-24) — every synthetic employee
+    # from the newly-uploaded booking appears in the dropdown, and
+    # filtering /records by one narrows to that employee's rows.
+    employees = after["employees"]
+    assert "SYN_TEST_1" in employees
+    assert "SYN_TEST_3" in employees
+    filtered = client.get(
+        "/api/v1/utilization/records?employee=SYN_TEST_1",
+        headers=_auth(token),
+    ).json()
+    # SYN_TEST_1 booked 2 rows above; other synthetic employees excluded.
+    assert filtered["total"] == 2
+    assert all(item["employee"] == "SYN_TEST_1" for item in filtered["items"])
+
 
 # --------------------------------------------------------------------- #
 # Booking-only Employee — locking test for cross-dataset SOFT warning

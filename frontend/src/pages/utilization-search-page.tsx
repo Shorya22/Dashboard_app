@@ -16,11 +16,28 @@ import { HierarchicalMultiSelect, type HierarchicalItem } from '@/components/das
 import { FilterControl } from '@/components/dashboard/filter-control'
 import { marketDisplayLabel } from '@/lib/chart-colors'
 
-type FilterKey = 'week' | 'region' | 'department' | 'entity' | 'holding' | 'hours_type'
+type FilterKey =
+  | 'week'
+  | 'region'
+  | 'department'
+  | 'entity'
+  | 'holding'
+  | 'hours_type'
+  | 'employee'
 
 // Field ORDER lives here (a display concern the config doesn't own);
 // LABELS come from the booking YAML via `useFilterConfig('booking')`.
-const FIELD_KEYS: FilterKey[] = ['week', 'region', 'department', 'entity', 'holding', 'hours_type']
+// `employee` was added 2026-07-24 as the 8th filter — flat multi-select
+// (like Entity), backed by the new `employees` list on filter-options.
+const FIELD_KEYS: FilterKey[] = [
+  'week',
+  'region',
+  'department',
+  'entity',
+  'holding',
+  'hours_type',
+  'employee',
+]
 
 // Holding->Project child values are encoded as "<holding>::<project>" so
 // each project row has a unique key (the same project name can recur under
@@ -120,7 +137,15 @@ export function UtilizationSearchPage() {
   const hierarchies: Record<FilterKey, HierarchicalItem[]> = React.useMemo(() => {
     const data = filterOptions.data
     if (!data) {
-      return { week: [], region: [], department: [], entity: [], holding: [], hours_type: [] }
+      return {
+        week: [],
+        region: [],
+        department: [],
+        entity: [],
+        holding: [],
+        hours_type: [],
+        employee: [],
+      }
     }
 
     // Region -> Market hierarchy, derived from /utilization/by-region-market
@@ -165,6 +190,7 @@ export function UtilizationSearchPage() {
       entity: flatHierarchy(data.entities),
       holding: holdingHierarchy,
       hours_type: flatHierarchy(data.hours_types),
+      employee: flatHierarchy(data.employees ?? []),
     }
   }, [filterOptions.data, holdingsProjects.data, byRegionMarket.data])
 

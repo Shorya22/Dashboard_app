@@ -77,6 +77,17 @@ filters:
     label: "Hours Type"
     type: single
     applies_to_pages: [utilization-home, utilization-search, utilization-results]
+  # Employee filter for the Utilization Search / Results flow (added
+  # 2026-07-24). Booking-only — the roster's `NAME` column is a
+  # display-only header, not something users pick from a dropdown; the
+  # canonical set of "employees who booked hours" is the booking sheet's
+  # own `Employee` column. Values are data-derived at request time by
+  # `booking_metrics.get_filter_options` under the `employees` key.
+  employee:
+    column_role: employee
+    label: "Employee"
+    type: multi
+    applies_to_pages: [utilization-search, utilization-results]
   # Year > Month > Week is declared hierarchical; the Year/Month grouping
   # is derived on the frontend from the leaf `week_start` (Monday of Week)
   # via `weekHierarchyToItems`, so Year and Month are NOT separate filter

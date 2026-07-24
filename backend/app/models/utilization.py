@@ -90,6 +90,10 @@ class FilterOptions(BaseModel):
     entities: list[str]
     holdings: list[str]
     hours_types: list[str]
+    # Distinct Employee names from the booking sheet — powers the
+    # Utilization Search page's Employee filter. Default `[]` keeps older
+    # snapshots / older cached responses backward-compatible.
+    employees: list[str] = Field(default_factory=list)
 
 
 class HoldingProjects(BaseModel):

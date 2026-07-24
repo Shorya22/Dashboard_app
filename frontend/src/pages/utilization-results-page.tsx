@@ -10,19 +10,11 @@ import {
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FilterSelect } from '@/components/dashboard/filter-select'
-import { FiltersPanel } from '@/components/dashboard/filters-panel'
 import { TableScrollContainer } from '@/components/dashboard/table-scroll-container'
-import { marketDisplayLabel } from '@/lib/chart-colors'
 import {
-  weekHierarchyToItems,
   useUtilizationRecords,
-  useUtilizationFilterOptions,
   type UtilizationRecord,
 } from '@/lib/utilization-api'
-import { filterLabel, useFilterConfig } from '@/lib/filter-config'
-import { HierarchicalMultiSelect } from '@/components/dashboard/hierarchical-multi-select'
-import { FilterControl } from '@/components/dashboard/filter-control'
 
 /** Formats a KPI number, falling back to a dash instead of "NaN"/"undefined"
  * when the backend returns a null/undefined value (e.g. Internal Hours can
@@ -36,7 +28,24 @@ function formatHours(value: number | null | undefined) {
 
 const PAGE_SIZE = 25
 
+// Column set for the Results records table. Kept as a small
+// frontend-local config-style array — Results columns are not YAML-declared
+// today (unlike Employee Directory's `directory.columns` block), so this
+// is the analogous rendering-hint spot for now. If a `records.columns:`
+// YAML block ever gets introduced, migrate this array into it (see the
+// coordinator note on Task 3 in the change log).
+//
+// The `S.No.` column uses the same `display: 'serial'` convention the
+// Employee Directory (`employee-directory-page.tsx`) uses — a 1-based
+// counter over the current sorted/paginated position (`row.index + 1`).
+// No accessor, no sort — pure rendering.
 const columns: ColumnDef<UtilizationRecord>[] = [
+  {
+    id: 'serial_no',
+    header: 'S.No.',
+    enableSorting: false,
+    cell: (info) => info.row.index + 1,
+  },
   { accessorKey: 'week_start', header: 'Week Start' },
   { accessorKey: 'date', header: 'Date' },
   {
@@ -116,6 +125,7 @@ export function UtilizationResultsPage() {
       entity: getAllOrUndefined('entity'),
       holding: getAllOrUndefined('holding'),
       hours_type: getAllOrUndefined('hours_type'),
+      employee: getAllOrUndefined('employee'),
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
     }),
@@ -124,41 +134,12 @@ export function UtilizationResultsPage() {
   )
 
   const records = useUtilizationRecords(filters)
-  const filterOptions = useUtilizationFilterOptions()
-  const filterConfig = useFilterConfig('booking')
-  const labelOf = (key: string, fallback: string) =>
-    filterLabel(filterConfig.data?.filters, key, fallback)
-
-  // The sidebar's per-field dropdowns are single-select (unlike the
-  // Search page's multi-select). Picking a value here replaces ALL
-  // previously selected values for that field with the single new one.
-  const setFilter = (key: string, value: string | undefined) => {
-    const next = new URLSearchParams(searchParams)
-    next.delete(key)
-    if (value) next.set(key, value)
-    next.delete('page')
-    setSearchParams(next)
-  }
-
-  // Date is one hierarchical Month > Week multi-select (like the Search
-  // page). Selecting weeks replaces the `week` URL params with the exact
-  // week-start dates ticked.
-  const dateItems = weekHierarchyToItems(filterOptions.data?.week_hierarchy)
-  const setWeeks = (values: string[]) => {
-    const next = new URLSearchParams(searchParams)
-    next.delete('week')
-    for (const v of values) next.append('week', v)
-    next.delete('page')
-    setSearchParams(next)
-  }
 
   const table = useReactTable({
     data: records.data?.items ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
-
-  
 
   const total = records.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -169,8 +150,6 @@ export function UtilizationResultsPage() {
     setSearchParams(next)
   }
 
-  
-
   // Preserve the active filters when going back to the search page.
   const backToSearchParams = new URLSearchParams(searchParams)
   backToSearchParams.delete('page')
@@ -178,8 +157,7 @@ export function UtilizationResultsPage() {
   const searchHref = `/utilization/search${backToSearchParams.toString() ? `?${backToSearchParams.toString()}` : ''}`
 
   return (
-    <div className="flex items-start gap-4">
-      <div className="min-w-0 flex-1 space-y-5">
+    <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label="Total Hours"
@@ -315,55 +293,6 @@ export function UtilizationResultsPage() {
           </Link>
         </Button>
       </div>
-      </div>
-
-      <FiltersPanel>
-        <FilterControl label={labelOf('week', 'Month / Week')}>
-          <HierarchicalMultiSelect
-            items={dateItems}
-            selected={filters.week ?? []}
-            onChange={setWeeks}
-            placeholder="All Weeks"
-          />
-        </FilterControl>
-        <FilterSelect
-          label={labelOf('region', 'Region')}
-          value={filters.region?.[0]}
-          options={filterOptions.data?.regions ?? []}
-          onChange={(v) => setFilter('region', v)}
-        />
-        <FilterSelect
-          label={labelOf('market', 'Market')}
-          value={filters.market?.[0]}
-          options={filterOptions.data?.markets ?? []}
-          getOptionLabel={marketDisplayLabel}
-          onChange={(v) => setFilter('market', v)}
-        />
-        <FilterSelect
-          label={labelOf('department', 'Department')}
-          value={filters.department?.[0]}
-          options={filterOptions.data?.departments ?? []}
-          onChange={(v) => setFilter('department', v)}
-        />
-        <FilterSelect
-          label={labelOf('entity', 'Entity')}
-          value={filters.entity?.[0]}
-          options={filterOptions.data?.entities ?? []}
-          onChange={(v) => setFilter('entity', v)}
-        />
-        <FilterSelect
-          label={labelOf('holding', 'Holding')}
-          value={filters.holding?.[0]}
-          options={filterOptions.data?.holdings ?? []}
-          onChange={(v) => setFilter('holding', v)}
-        />
-        <FilterSelect
-          label={labelOf('hours_type', 'Hours Type')}
-          value={filters.hours_type?.[0]}
-          options={filterOptions.data?.hours_types ?? []}
-          onChange={(v) => setFilter('hours_type', v)}
-        />
-      </FiltersPanel>
     </div>
   )
 }

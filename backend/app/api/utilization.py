@@ -63,6 +63,7 @@ def _booking_filter_params(
     entity: list[str] | None = Query(None),
     holding: list[str] | None = Query(None),
     hours_type: list[str] | None = Query(None),
+    employee: list[str] | None = Query(None),
 ) -> dict[str, list[str] | None]:
     return {
         "week": week,
@@ -72,6 +73,7 @@ def _booking_filter_params(
         "entity": entity,
         "holding": holding,
         "hours_type": hours_type,
+        "employee": employee,
     }
 
 
@@ -175,6 +177,7 @@ def utilization_records(
     entity: list[str] | None = Query(None),
     holding: list[str] | None = Query(None),
     hours_type: list[str] | None = Query(None),
+    employee: list[str] | None = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -195,6 +198,7 @@ def utilization_records(
             entity=entity,
             holding=holding,
             hours_type=hours_type,
+            employee=employee,
         )
         summary = RecordsSummary(**booking_metrics.get_records_summary(filtered))
         page = filtered.iloc[offset : offset + limit]
