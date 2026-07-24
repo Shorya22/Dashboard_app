@@ -1732,38 +1732,6 @@ def _apply_month_year_filter(
     return df[mask]
 
 
-def _apply_month_year_exits_only(
-    df: pd.DataFrame, month_labels: list[str]
-) -> pd.DataFrame:
-    """Keep rows whose LWD is inside ANY of the "Mon YYYY" labels — the
-    "who LEFT in this window" filter used by exit-shaped KPIs (Exits,
-    Voluntary/Involuntary, Attrition %, exits table). Complementary to
-    `_apply_month_year_filter`, which keeps who was on the roster during
-    the window regardless of when they eventually left.
-
-    This is the same LWD-in-[start, end] rule the Month-Wise Resignation
-    trend chart already uses via `_evaluate_monthly_series` (see
-    `charts.month_wise_resignation` in the roster YAML: `date_role:
-    leaving_date`), reused so the KPI cards can never disagree with
-    that chart about who counts as an exit inside the window.
-    """
-    months = _parse_month_labels(month_labels)
-    if not months:
-        # Same "no valid values -> 0 rows" contract as
-        # `_apply_month_year_filter` and every other filter — a
-        # malformed value must not fall back to the full roster.
-        return df.iloc[0:0]
-
-    lwd = pd.to_datetime(
-        df[metric_config.column("leaving_date")], format=DATE_FORMAT, errors="coerce"
-    )
-    mask = pd.Series(False, index=df.index)
-    for month_start in months:
-        month_end = month_start + pd.offsets.MonthEnd(0)
-        mask = mask | (lwd.notna() & (lwd >= month_start) & (lwd <= month_end))
-    return df[mask]
-
-
 def filter_monthly_rows(
     rows: list[dict], month_labels: list[str] | None
 ) -> list[dict]:
@@ -1799,15 +1767,18 @@ def apply_filters(
     the hierarchical Region/Market multi-select sends when several regions
     or markets are ticked. Across different filters the matches are AND-ed.
 
-    `time_filter_mode` controls how time filters (e.g. Month/Year) narrow
-    rows — `active_during` (default) for who-was-here KPIs, or
-    `exit_in_period` for exit-shaped KPIs (LWD ∈ selected months). The
-    two modes are declared per metric in
-    `configs/roster_metrics.yaml::time_filter_modes`; the roster router
-    dispatches metrics to whichever df matches their declared mode.
-    `ignore` skips time filters entirely, used when a downstream metric
-    (attrition %'s Closing-Headcount denominator) needs the
-    non-time-narrowed df.
+    `time_filter_mode` controls what a time filter (e.g. Month/Year) does:
+      * `active_during` (default) — narrow to rows on the roster during
+                    any picked month (DOJ ≤ end-of-M AND (LWD null OR LWD
+                    ≥ start-of-M)). Every Status-based KPI reads from
+                    this narrowed df so `Active + Strategic Pool + Exits
+                    = Total` holds by construction (see the note above
+                    `time_filter_modes` in the roster YAML for why the
+                    once-tried `exit_in_period` mode was retracted).
+      * `ignore` — skip the time filter entirely. Used when a downstream
+                    metric supplies its own window (attrition %'s
+                    Closing-Headcount denominator takes a `period_month`
+                    kwarg of its own).
 
     Unknown filter names and blank/"all" selections are ignored.
     """
@@ -1829,26 +1800,10 @@ def apply_filters(
             continue
         spec = declared[name]
 
-        # Time filters (Month/Year) route through one of two row-filter
-        # rules depending on `time_filter_mode`:
-        #   active_during  — DOJ ≤ end-of-M AND (LWD null OR LWD ≥ start-M)
-        #                    for any picked M. Same "person-month" rule
-        #                    the Closing Headcount trend uses.
-        #   exit_in_period — LWD ∈ [start-M, end-M] for any picked M.
-        #                    Same rule the Month-Wise Resignation trend
-        #                    uses via `date_role: leaving_date`.
-        #   ignore         — skip the time filter entirely; used for
-        #                    metrics whose window semantics are handled
-        #                    upstream (e.g. attrition_pct's
-        #                    Closing-Headcount denominator, which takes
-        #                    a `period_month` argument of its own).
         if spec.get("time_filter"):
             if time_filter_mode == "ignore":
                 continue
-            if time_filter_mode == "exit_in_period":
-                out = _apply_month_year_exits_only(out, values)
-            else:
-                out = _apply_month_year_filter(out, values)
+            out = _apply_month_year_filter(out, values)
             continue
 
         # A filter can be a plain column, or a DERIVED bucket reusing a

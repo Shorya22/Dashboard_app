@@ -381,135 +381,74 @@ def test_api_month_year_narrows_kpis_and_trends(api):
     assert resig_months.issubset({month})
 
 
-def _lwd_months(roster) -> list[str]:
-    """"Mon YYYY" labels the roster actually has an LWD in — used to
-    exercise the exit-shaped KPI window. Empty when the fixture has no
-    exits at all (skip the test in that case)."""
-    lwd_col = metric_config.column("leaving_date")
-    lwds = pd.to_datetime(roster[lwd_col], format="%d-%b-%y", errors="coerce").dropna()
-    return sorted({d.strftime("%b %Y") for d in lwds})
+def test_month_year_status_partition_holds_under_filter(api, roster):
+    """The user-visible invariant this whole file exists to protect:
 
+        Active + Strategic Pool + Exits = Total Employees
 
-def test_month_year_exits_kpi_counts_lwd_in_window_not_currently_inactive(api, roster):
-    """The reported bug: picking a window that DOES NOT contain anyone's
-    LWD must return Exits = 0, even though some Inactive employees
-    (with LWD outside the window) are on the current roster. Previously
-    `Exits` counted "current Status == Inactive" over the active-during
-    frame and picked up exits that happened outside the picked window.
+    for ANY Month/Year selection, not just "no filter". Regression for
+    the reported 2025-selection bug where Active+SP+Exits = 16 but
+    Total = 20 (four Inactive rows: LODAGALA/AMIT with no LWD,
+    ANCHAL/SIRAJ with LWD outside the window fell through the gap when
+    Exits was scoped to LWD-in-window). Uses METRICS.md's definitions:
+    `Exits = Inactive. Same people, same number.` — under a filter,
+    Exits is the count of Status = Inactive rows within the active_during
+    scope, which by construction closes the partition.
+
+    Iterates every "Mon YYYY" the roster's DOJ range exposes so any
+    filter selection lands on this check, not just the one that
+    triggered the bug.
     """
     headers = {"Authorization": f"Bearer {_token(api)}"}
-    lwd_months = _lwd_months(roster)
-    if not lwd_months:
-        pytest.skip("roster has no LWDs — cannot exercise exit-window bug")
+    doj_col = metric_config.column("joining_date")
+    dojs = pd.to_datetime(roster[doj_col], format="%d-%b-%y", errors="coerce").dropna()
+    months = sorted({d.strftime("%b %Y") for d in dojs})
 
-    # A month clearly earlier than any real LWD: 24 years before the
-    # earliest one. Anyone active then may still be Inactive today, but
-    # nobody exited in that month — Exits must be 0.
-    earliest_lwd = pd.to_datetime(lwd_months[0], format="%b %Y")
-    empty_window = (earliest_lwd - pd.DateOffset(years=24)).strftime("%b %Y")
+    def _summary_for(month_labels: list[str]) -> dict:
+        params = [("month_year", m) for m in month_labels] if month_labels else {}
+        return api.get(
+            "/api/v1/roster/summary", params=params, headers=headers
+        ).json()
 
-    resp = api.get(
-        "/api/v1/roster/summary",
-        params={"month_year": empty_window},
+    # (i) Single-month picks: partition holds for each month individually.
+    for month in months:
+        body = _summary_for([month])
+        total = body["total_employees"]
+        summed = (
+            body["active_employees"] + body["inactive_employees"] + int(body.get("strategic_pool") or 0)
+        )
+        # Read strategic_pool from breakdowns since summary doesn't expose it.
+        sp = api.get(
+            "/api/v1/roster/breakdowns", params={"month_year": month}, headers=headers
+        ).json()["strategic_pool"]
+        summed = body["active_employees"] + body["inactive_employees"] + sp
+        assert summed == total, (
+            f"partition invariant broken for month_year={month!r}: "
+            f"active={body['active_employees']} + inactive={body['inactive_employees']} "
+            f"+ strategic_pool={sp} = {summed}, total={total}"
+        )
+        # METRICS.md: Exits and Inactive are the same people, same number
+        # (locked by `exits_equals_inactive` invariant). Verify per-filter.
+        assert body["exits"] == body["inactive_employees"], (
+            f"Exits != Inactive under month_year={month!r}: "
+            f"exits={body['exits']}, inactive={body['inactive_employees']}"
+        )
+
+    # (ii) All-months pick: partition still holds and matches the
+    # baseline no-filter case (the same invariant `filter_invariants`
+    # locks in via the "all options selected == no filter" rule).
+    all_body = _summary_for(months)
+    baseline = _summary_for([])
+    all_sp = api.get(
+        "/api/v1/roster/breakdowns",
+        params=[("month_year", m) for m in months],
         headers=headers,
+    ).json()["strategic_pool"]
+    assert (
+        all_body["active_employees"] + all_body["inactive_employees"] + all_sp
+        == all_body["total_employees"]
     )
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["exits"] == 0, (
-        f"exits should be 0 when the picked window contains no LWD, "
-        f"got {body['exits']} — the KPI is silently counting currently-"
-        f"Inactive employees whose LWD is outside {empty_window}"
-    )
-    assert body["voluntary_leavers"] == 0
-    assert body["involuntary_leavers"] == 0
-    assert body["inactive_employees"] == 0
-    assert body["attrition_pct"] == 0.0
-
-
-def test_month_year_exits_kpi_matches_lwd_in_window_count(api, roster):
-    """Positive case: for a window that DOES contain LWDs, the Exits KPI
-    equals the count of roster rows with LWD in that window — the same
-    rule the Month-Wise Resignation chart uses (`date_role: leaving_date`
-    in the roster YAML)."""
-    headers = {"Authorization": f"Bearer {_token(api)}"}
-    lwd_months = _lwd_months(roster)
-    if not lwd_months:
-        pytest.skip("roster has no LWDs — cannot exercise the positive case")
-    month = lwd_months[0]
-    lwd_col = metric_config.column("leaving_date")
-    lwds = pd.to_datetime(roster[lwd_col], format="%d-%b-%y", errors="coerce")
-    month_start = pd.to_datetime(month, format="%b %Y")
-    month_end = month_start + pd.offsets.MonthEnd(0)
-    expected = int(((lwds >= month_start) & (lwds <= month_end)).sum())
-
-    body = api.get(
-        "/api/v1/roster/summary",
-        params={"month_year": month},
-        headers=headers,
-    ).json()
-    assert body["exits"] == expected, (
-        f"Exits KPI should equal LWD-in-window count for {month}: "
-        f"expected {expected}, got {body['exits']}"
-    )
-
-
-def test_month_year_voluntary_involuntary_donut_counts_only_in_window(api, roster):
-    """Donut = exit reason split over LWD-in-window rows. An out-of-window
-    exit must not contribute to either slice, otherwise a 2025 pick
-    would show 2026-Apr exits under "Voluntary" — the reported bug."""
-    headers = {"Authorization": f"Bearer {_token(api)}"}
-    lwd_months = _lwd_months(roster)
-    if not lwd_months:
-        pytest.skip("roster has no LWDs")
-    earliest_lwd = pd.to_datetime(lwd_months[0], format="%b %Y")
-    empty_window = (earliest_lwd - pd.DateOffset(years=24)).strftime("%b %Y")
-
-    body = api.get(
-        "/api/v1/roster/attrition-detail",
-        params={"month_year": empty_window},
-        headers=headers,
-    ).json()
-    # The donut is the `voluntary_involuntary_split` dict. Every value
-    # must be 0 for an empty window.
-    assert all(v == 0 for v in body["voluntary_involuntary_split"].values()), (
-        f"voluntary_involuntary_split should be all-zero for a window "
-        f"with no LWDs, got {body['voluntary_involuntary_split']}"
-    )
-    # Exits table likewise: rows in this list are LWD-in-window rows only.
-    assert body["exits_table"] == []
-
-
-def test_month_year_attrition_pct_reflects_in_window_exits(api, roster):
-    """Attrition % has to move with the LWD-in-window Exits count: a
-    window with zero exits is 0.0%, and a window WITH exits is > 0.
-    Guards the specific regression the coordinator flagged (KPI showed
-    21.1% for 2025 while the Month-Wise Resignation chart on the same
-    page said 0 exits happened in 2025)."""
-    headers = {"Authorization": f"Bearer {_token(api)}"}
-    lwd_months = _lwd_months(roster)
-    if not lwd_months:
-        pytest.skip("roster has no LWDs")
-
-    # An empty window: attrition_pct must be exactly 0.
-    earliest_lwd = pd.to_datetime(lwd_months[0], format="%b %Y")
-    empty_window = (earliest_lwd - pd.DateOffset(years=24)).strftime("%b %Y")
-    empty = api.get(
-        "/api/v1/roster/summary",
-        params={"month_year": empty_window},
-        headers=headers,
-    ).json()
-    assert empty["attrition_pct"] == 0.0, empty["attrition_pct"]
-
-    # A window that CONTAINS an LWD: attrition_pct must be > 0 and
-    # bounded to [0, 100]. Positive lower bound is the anti-regression
-    # (if the fix accidentally always returned 0, this catches it).
-    with_lwd = api.get(
-        "/api/v1/roster/summary",
-        params={"month_year": lwd_months[0]},
-        headers=headers,
-    ).json()
-    assert with_lwd["exits"] > 0
-    assert 0.0 < with_lwd["attrition_pct"] <= 100.0, with_lwd["attrition_pct"]
+    assert all_body["total_employees"] == baseline["total_employees"]
 
 
 def test_api_ignores_undeclared_query_param(api):
