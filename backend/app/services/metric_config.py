@@ -224,6 +224,28 @@ SUPPORTED_CHART_TYPES = {
     # column. Backs the Utilization Home "Total Hours by Region / Market"
     # chart, which needs region+market pairs rather than a flat group-by.
     "sum_by_hierarchical",
+    # `sum_by` variant that returns a projected `list[{group, split_1: v,
+    # split_2: v, ...}]` shape rather than a raw pivot table. Powers the
+    # Employee/Project drill-through charts so the endpoint doesn't need a
+    # per-chart Python reshape. Added 2026-07-26.
+    "sum_by_split",
+    # Per-group aggregate-then-ratio: sum(numerator)/sum(denominator) within
+    # each group. Backs the Overview page's Weekly Utilization Trend and
+    # Employee Period Utilization ranking (Formula A) — both booking-derived
+    # after Overview stopped consuming the ground-truth file at runtime.
+    "ratio_by",
+    # First-match-wins bands over the values of a `ratio_by` chart — same
+    # `below` semantics as `numeric_bands`; catch-all last band. Powers the
+    # Overview page's Utilization Split donut (high/moderate/low bins over
+    # per-employee Formula A ratios).
+    "ratio_bands",
+    # `avg_of_group_ratios`: for each outer_group value, compute a
+    # `ratio_by(inner_group)` on that subframe and return the mean of the
+    # per-inner-group ratios. Backs the Overview page's Weekly Utilization
+    # Trend under D1a semantics (mean of per-employee-ratios per week),
+    # which differs from `ratio_by(week_start)` (aggregate-then-ratio at
+    # the whole-week level).
+    "avg_of_group_ratios",
 }
 SUPPORTED_SCOPES = {"all", "present", "exited"}
 SUPPORTED_MEASURES = {"closing_headcount"}
@@ -231,7 +253,28 @@ SUPPORTED_FILTER_TYPES = {"single", "multi", "hierarchical"}
 # Utilization-side card measures. Every booking card declares one of these,
 # so the compute is dispatched from the declaration rather than a bespoke
 # function per card (mirrors the roster's `counts: distinct` contract).
-SUPPORTED_BOOKING_CARD_MEASURES = {"distinct_count", "sum", "count_rows", "mean"}
+# `ratio` and `avg_of_chart` were added 2026-07-26 for the Overview page's
+# booking-derived KPIs (see METRICS.md Page 8):
+#   * ratio          — generic (numerator / denominator), optionally filtered
+#                      per side. Scalar output.
+#   * avg_of_chart   — mean over the values of a declared chart's output.
+#                      Composes with `ratio_by` for "avg of per-employee
+#                      ratios" without a bespoke Python function.
+SUPPORTED_BOOKING_CARD_MEASURES = {
+    "distinct_count",
+    "sum",
+    "count_rows",
+    "mean",
+    "ratio",
+    "avg_of_chart",
+}
+# `filter_scope` is documentary only — the dispatcher never filters on this.
+# It records which slice the caller must pass in: `filtered` = the endpoint
+# already narrowed the frame by the page's filter row; `whole_scope` = the
+# endpoint hands in the full drill-through scope (an Employee's or a
+# Holding's rows) and page-local filters (Hours Type, Project, Week,
+# Employee-on-project) narrow only the charts, not the KPI.
+SUPPORTED_FILTER_SCOPES = {"filtered", "whole_scope"}
 
 
 class MetricConfigError(ValueError):
@@ -263,7 +306,13 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
             )
 
     for name, card in cfg.get("cards", {}).items():
-        need_role(card.get("column_role"), f"cards.{name}")
+        # `column_role` is required for the column-based measure types
+        # (distinct_count / sum / count_rows / mean); `ratio` uses
+        # numerator_column_role + denominator_column_role, and `avg_of_chart`
+        # uses `from_chart` — both check their own roles below.
+        measure_type_precheck = card.get("measure_type", "distinct_count")
+        if measure_type_precheck not in ("ratio", "avg_of_chart"):
+            need_role(card.get("column_role"), f"cards.{name}")
         # Booking cards declare a measure_type (distinct_count / sum /
         # count_rows) and optionally a filter_column_role + filter_label_key
         # (the label_key resolves through the `hours:` block, so the
@@ -272,17 +321,63 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
         # distinct_count default here so the roster YAML doesn't need to
         # change.
         if dataset == "booking":
-            measure_type = card.get("measure_type", "distinct_count")
+            measure_type = measure_type_precheck
             if measure_type not in SUPPORTED_BOOKING_CARD_MEASURES:
                 problems.append(
                     f"cards.{name}: measure_type {measure_type!r} is not implemented "
                     f"(supported: {sorted(SUPPORTED_BOOKING_CARD_MEASURES)})"
                 )
+            # `filter_scope` is documentary — every booking card should state
+            # which slice the caller passes in so the declaration explains
+            # itself. Not required (default = filtered) so existing declarations
+            # don't have to be touched, but if present it must be a known value.
+            fscope = card.get("filter_scope")
+            if fscope is not None and fscope not in SUPPORTED_FILTER_SCOPES:
+                problems.append(
+                    f"cards.{name}: filter_scope {fscope!r} is not supported "
+                    f"(supported: {sorted(SUPPORTED_FILTER_SCOPES)})"
+                )
+            hours_block = cfg.get("hours", {})
+            # `ratio` needs a numerator+denominator role, each optionally
+            # filtered against an hours-block label key. `avg_of_chart` needs
+            # a from_chart declaring which chart's values to mean.
+            if measure_type == "ratio":
+                for side in ("numerator_column_role", "denominator_column_role"):
+                    need_role(card.get(side), f"cards.{name}")
+                for side, label_key in (
+                    ("numerator_filter_column_role", "numerator_filter_label_key"),
+                    ("denominator_filter_column_role", "denominator_filter_label_key"),
+                ):
+                    if side in card:
+                        need_role(card.get(side), f"cards.{name}")
+                        key = card.get(label_key)
+                        if key is None:
+                            problems.append(
+                                f"cards.{name}: {side} is set but {label_key} is missing"
+                            )
+                        elif key not in hours_block:
+                            problems.append(
+                                f"cards.{name}: {label_key} {key!r} is not in `hours:` "
+                                f"(known: {sorted(hours_block)})"
+                            )
+            elif measure_type == "avg_of_chart":
+                from_chart = card.get("from_chart")
+                if from_chart is None:
+                    problems.append(
+                        f"cards.{name}: avg_of_chart needs `from_chart`"
+                    )
+                elif from_chart not in cfg.get("charts", {}):
+                    problems.append(
+                        f"cards.{name}: from_chart {from_chart!r} is not a declared chart "
+                        f"(known: {sorted(cfg.get('charts', {}))})"
+                    )
+                scope_role = card.get("scope_to_latest_of_role")
+                if scope_role is not None:
+                    need_role(scope_role, f"cards.{name}")
             filter_role = card.get("filter_column_role")
             if filter_role is not None:
                 need_role(filter_role, f"cards.{name}")
                 key = card.get("filter_label_key")
-                hours_block = cfg.get("hours", {})
                 if key is None:
                     problems.append(
                         f"cards.{name}: filter_column_role is set but filter_label_key "
@@ -345,6 +440,88 @@ def validate_metric_config(cfg: dict, dataset: str = "roster") -> None:
             need_role(chart.get("primary_group_role"), f"charts.{name}")
             need_role(chart.get("secondary_group_role"), f"charts.{name}")
             need_role(chart.get("value_column_role"), f"charts.{name}")
+        elif kind == "sum_by_split":
+            # Same three roles as `sum_by` with a split, but the dispatcher
+            # returns the projected list-of-dicts shape rather than the raw
+            # pivot table so the endpoint doesn't need a per-chart reshape.
+            need_role(chart.get("group_column_role"), f"charts.{name}")
+            need_role(chart.get("value_column_role"), f"charts.{name}")
+            need_role(chart.get("split_column_role"), f"charts.{name}")
+        elif kind == "ratio_by":
+            need_role(chart.get("group_column_role"), f"charts.{name}")
+            for side in ("numerator_column_role", "denominator_column_role"):
+                need_role(chart.get(side), f"charts.{name}")
+            hours_block = cfg.get("hours", {})
+            for side, label_key in (
+                ("numerator_filter_column_role", "numerator_filter_label_key"),
+                ("denominator_filter_column_role", "denominator_filter_label_key"),
+            ):
+                if side in chart:
+                    need_role(chart.get(side), f"charts.{name}")
+                    key = chart.get(label_key)
+                    if key is None:
+                        problems.append(
+                            f"charts.{name}: {side} is set but {label_key} is missing"
+                        )
+                    elif key not in hours_block:
+                        problems.append(
+                            f"charts.{name}: {label_key} {key!r} is not in `hours:` "
+                            f"(known: {sorted(hours_block)})"
+                        )
+            aggregate = chart.get("aggregate", "per_group")
+            if aggregate not in {"per_group"}:
+                problems.append(
+                    f"charts.{name}: ratio_by aggregate {aggregate!r} is not supported "
+                    "(supported: ['per_group'])"
+                )
+        elif kind == "avg_of_group_ratios":
+            for role in ("outer_group_role", "inner_group_role",
+                         "numerator_column_role", "denominator_column_role"):
+                need_role(chart.get(role), f"charts.{name}")
+            hours_block = cfg.get("hours", {})
+            for side, label_key in (
+                ("numerator_filter_column_role", "numerator_filter_label_key"),
+                ("denominator_filter_column_role", "denominator_filter_label_key"),
+            ):
+                if side in chart:
+                    need_role(chart.get(side), f"charts.{name}")
+                    key = chart.get(label_key)
+                    if key is None:
+                        problems.append(
+                            f"charts.{name}: {side} is set but {label_key} is missing"
+                        )
+                    elif key not in hours_block:
+                        problems.append(
+                            f"charts.{name}: {label_key} {key!r} is not in `hours:` "
+                            f"(known: {sorted(hours_block)})"
+                        )
+        elif kind == "ratio_bands":
+            ratio_ref = chart.get("ratio_from_chart")
+            if ratio_ref not in charts:
+                problems.append(
+                    f"charts.{name}: ratio_from_chart {ratio_ref!r} is not a declared chart "
+                    f"(known: {sorted(charts)})"
+                )
+            elif charts[ratio_ref].get("type") != "ratio_by":
+                problems.append(
+                    f"charts.{name}: ratio_from_chart {ratio_ref!r} must be type `ratio_by` "
+                    f"(got {charts[ratio_ref].get('type')!r})"
+                )
+            bands = chart.get("bands", [])
+            if not bands:
+                problems.append(f"charts.{name}: ratio_bands needs `bands`")
+            for i, band in enumerate(bands[:-1]):
+                if "below" not in band:
+                    problems.append(
+                        f"charts.{name}.bands[{i}]: only the LAST band may omit `below` "
+                        "(catch-all); an earlier one without it would swallow every "
+                        "remaining value"
+                    )
+            if bands and "below" in bands[-1]:
+                problems.append(
+                    f"charts.{name}: the last band must omit `below` so values "
+                    "above the final threshold still land somewhere"
+                )
         elif kind == "crosstab":
             need_role(chart.get("row_column_role"), f"charts.{name}")
             dim = chart.get("dimension_from_chart")

@@ -66,35 +66,53 @@ def test_get_weekly_utilization_pct_zero_total_is_none():
 
 
 @pytest.fixture
-def sample_ground_truth_long() -> pd.DataFrame:
+def sample_bookings_overview() -> pd.DataFrame:
     """
-    Hand-built ground-truth long table: Gina (0.9, 0.7 -> Period 0.8),
-    Hank (0.6, 0.6 -> Period 0.6), 2 weeks each.
+    Booking-shaped fixture for the Overview page's new booking-derived
+    (Formula A, D1a) computation. Two employees x 2 weeks:
+      Gina — week 1: 8 client / 2 internal (0.8); week 2: 8 client / 2 internal (0.8);
+             period aggregate: 16/20 = 0.80.
+      Hank — week 1: 6 client / 4 internal (0.6); week 2: 6 client / 4 internal (0.6);
+             period aggregate: 12/20 = 0.60.
+    Average Period Utilization = mean(0.80, 0.60) = 0.70.
     """
     return pd.DataFrame(
         [
-            {"Employee": "Gina", "Week Start": "2026-05-04", "Weekly Utilization %": 0.9, "Period Total Utilization %": 0.8},
-            {"Employee": "Gina", "Week Start": "2026-05-11", "Weekly Utilization %": 0.7, "Period Total Utilization %": 0.8},
-            {"Employee": "Hank", "Week Start": "2026-05-04", "Weekly Utilization %": 0.6, "Period Total Utilization %": 0.6},
-            {"Employee": "Hank", "Week Start": "2026-05-11", "Weekly Utilization %": 0.6, "Period Total Utilization %": 0.6},
+            {"Employee": "Gina", "Monday of Week": pd.Timestamp("2026-05-04"), "Booked Hours Type": "Client Hours", "Employee Booked Hours": 8.0},
+            {"Employee": "Gina", "Monday of Week": pd.Timestamp("2026-05-04"), "Booked Hours Type": "Internal Hours", "Employee Booked Hours": 2.0},
+            {"Employee": "Gina", "Monday of Week": pd.Timestamp("2026-05-11"), "Booked Hours Type": "Client Hours", "Employee Booked Hours": 8.0},
+            {"Employee": "Gina", "Monday of Week": pd.Timestamp("2026-05-11"), "Booked Hours Type": "Internal Hours", "Employee Booked Hours": 2.0},
+            {"Employee": "Hank", "Monday of Week": pd.Timestamp("2026-05-04"), "Booked Hours Type": "Client Hours", "Employee Booked Hours": 6.0},
+            {"Employee": "Hank", "Monday of Week": pd.Timestamp("2026-05-04"), "Booked Hours Type": "Internal Hours", "Employee Booked Hours": 4.0},
+            {"Employee": "Hank", "Monday of Week": pd.Timestamp("2026-05-11"), "Booked Hours Type": "Client Hours", "Employee Booked Hours": 6.0},
+            {"Employee": "Hank", "Monday of Week": pd.Timestamp("2026-05-11"), "Booked Hours Type": "Internal Hours", "Employee Booked Hours": 4.0},
         ]
     )
 
 
-def test_get_utilization_overview(sample_ground_truth_long):
-    overview = get_utilization_overview(sample_ground_truth_long)
-    # average_period_pct = mean of per-employee Period Total: (0.8 + 0.6) / 2 = 0.7
-    assert overview["average_period_utilization_pct"] == pytest.approx(0.7)
+def test_get_utilization_overview(sample_bookings_overview):
+    """
+    Overview switched from ground-truth-sourced to booking-derived
+    Formula A (D1a) on 2026-07-26 — see METRICS.md Page 8. Response
+    shape unchanged; values now trace back to per-employee aggregate
+    ratios of Client Hours over total logged hours.
+    """
+    overview = get_utilization_overview(sample_bookings_overview)
+    # Per-employee period ratios: Gina 16/20=0.80, Hank 12/20=0.60; mean = 0.70.
+    assert overview["average_period_utilization_pct"] == pytest.approx(0.70)
     assert overview["total_employees"] == 2
-    # latest week is 2026-05-11: avg(Gina 0.7, Hank 0.6) = 0.65
-    assert overview["latest_week_utilization_pct"] == pytest.approx(0.65)
+    # Latest week is 2026-05-11 — same per-employee ratios in that week
+    # (Gina 8/10=0.80, Hank 6/10=0.60); mean = 0.70.
+    assert overview["latest_week_utilization_pct"] == pytest.approx(0.70)
     trend = {row["week_start"]: row["avg_weekly_utilization_pct"] for row in overview["weekly_trend"]}
-    # 2026-05-04: avg(0.9, 0.6) = 0.75; 2026-05-11: avg(0.7, 0.6) = 0.65
-    assert trend["2026-05-04"] == pytest.approx(0.75)
-    assert trend["2026-05-11"] == pytest.approx(0.65)
-    # bands: Gina 0.8 -> moderate (0.80 <= x < 0.90), Hank 0.6 -> low
+    # Weekly trend is aggregate-then-ratio at the WEEK level: sum(client
+    # in week) / sum(total in week) across all employees. 2026-05-04:
+    # 14/20 = 0.70; 2026-05-11: 14/20 = 0.70.
+    assert trend["2026-05-04"] == pytest.approx(0.70)
+    assert trend["2026-05-11"] == pytest.approx(0.70)
+    # Bands: Gina 0.80 -> moderate, Hank 0.60 -> low.
     assert overview["utilization_split"] == {"high": 0, "moderate": 1, "low": 1}
-    # ranking descending by Period Total Utilization %: Gina then Hank
+    # Ranking desc by period ratio: Gina (0.80) then Hank (0.60).
     assert [row["employee"] for row in overview["employee_ranking"]] == ["Gina", "Hank"]
 
 
@@ -165,18 +183,34 @@ def test_known_weekly_utilization_regression(real_bookings, employee, week_start
     assert value == pytest.approx(expected_pct, abs=1e-4)
 
 
-def test_get_utilization_overview_real_file(real_ground_truth_long):
+def test_get_utilization_overview_real_file_shape(real_bookings):
     """
-    Pins the reference values already confirmed in a prior validation pass
-    (data-model SKILL.md / prior reconciliation work): ~71.43% average
-    period utilization, ~69.09% latest week utilization. Independently
-    recomputed here via `Utilization_Long.drop_duplicates('Employee')
-    ['Period Total Utilization %'].mean()` == 0.7143170731707317, and
-    `Utilization_Long[Week Start == max]['Weekly Utilization %'].mean()`
-    == 0.690925 (latest week is 2026-05-25).
+    Shape regression against the real booking file — Overview is now
+    booking-derived (Formula A, D1a) as of 2026-07-26 so the exact
+    values move with each data refresh (rather than pinning to the
+    ground-truth's 41 employees / 0.7143 average). This asserts
+    structural invariants that must hold on any real booking snapshot:
+
+    - Overview reports the same number of distinct booking employees as
+      `booking_metrics.get_total_employees`.
+    - `average_period_utilization_pct` is a valid ratio in [0, 1].
+    - The Utilization Split covers exactly the total employees
+      (`high + moderate + low == total_employees`) — matches the
+      `charts_account_for_everyone` design contract on the roster side.
+    - Employee ranking is sorted descending.
+    - The 10/152 residual mismatch versus the ground truth (see module
+      docstring) is no longer surfaced by Overview and must be observed
+      via `reconcile_weekly_utilization` (exercised by
+      `test_reconciliation_confirms_formula_a` above).
     """
-    overview = get_utilization_overview(real_ground_truth_long)
-    assert overview["average_period_utilization_pct"] == pytest.approx(0.714317, abs=1e-4)
-    assert overview["latest_week_utilization_pct"] == pytest.approx(0.690925, abs=1e-4)
-    assert overview["total_employees"] == 41
-    assert overview["utilization_split"] == {"high": 15, "moderate": 8, "low": 18}
+    from app.services import booking_metrics
+
+    overview = get_utilization_overview(real_bookings)
+    total = booking_metrics.get_total_employees(real_bookings)
+    assert overview["total_employees"] == total
+    assert 0.0 <= overview["average_period_utilization_pct"] <= 1.0
+    assert 0.0 <= overview["latest_week_utilization_pct"] <= 1.0
+    split = overview["utilization_split"]
+    assert split["high"] + split["moderate"] + split["low"] == total
+    ranking = [row["period_utilization_pct"] for row in overview["employee_ranking"]]
+    assert ranking == sorted(ranking, reverse=True)

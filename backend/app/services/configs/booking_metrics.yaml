@@ -56,7 +56,7 @@ filters:
     column_role: employee
     label: "Employee"
     type: multi
-    applies_to_pages: [utilization-search, utilization-results]
+    applies_to_pages: [utilization-search, utilization-results, utilization-overview]
     order: 1
     searchable: true
   week:
@@ -65,10 +65,13 @@ filters:
     # via `weekHierarchyToItems`, so Year and Month are NOT separate filter
     # entries — the tree comes out of `/utilization/filter-options`'s
     # `week_hierarchy` shape. See `docs/FILTERS.md`.
+    # `utilization-overview` was added 2026-07-26 so the Overview page's
+    # KPIs + charts react to the selected week(s), same server-side filter
+    # semantics as Utilization Home / Search / Results / Employee drill-through.
     column_role: week_start
     label: "Month / Week"
     type: hierarchical
-    applies_to_pages: [utilization-home, utilization-search, utilization-results, employee-utilization]
+    applies_to_pages: [utilization-home, utilization-search, utilization-results, employee-utilization, utilization-overview]
     order: 2
     searchable: true
   region:
@@ -76,21 +79,21 @@ filters:
     label: "Region"
     type: multi
     nests: market
-    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+    applies_to_pages: [utilization-home, utilization-search, utilization-results, utilization-overview]
     order: 3
     searchable: true
   market:
     column_role: market
     label: "Market"
     type: multi
-    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+    applies_to_pages: [utilization-home, utilization-search, utilization-results, utilization-overview]
     order: 4
     searchable: true
   department:
     column_role: department
     label: "Department"
     type: multi
-    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+    applies_to_pages: [utilization-home, utilization-search, utilization-results, utilization-overview]
     order: 5
     searchable: true
   entity:
@@ -111,7 +114,7 @@ filters:
     column_role: hours_type
     label: "Hours Type"
     type: single
-    applies_to_pages: [utilization-home, utilization-search, utilization-results]
+    applies_to_pages: [utilization-home, utilization-search, utilization-results, utilization-overview]
     order: 8
     # searchable omitted — only two values (Client / Internal); a search
     # input would be noise, not signal.
@@ -152,11 +155,13 @@ cards:
     label: "Total Employees"
     measure_type: distinct_count
     column_role: employee
+    filter_scope: filtered
 
   total_hours:
     label: "Total Hours"
     measure_type: sum
     column_role: hours_value
+    filter_scope: filtered
     # Real DAX: SUM('Sheet1'[Employee Booked Hours]).
 
   # Client / Internal split — same value column, different filter values.
@@ -168,12 +173,14 @@ cards:
     column_role: hours_value
     filter_column_role: hours_type
     filter_label_key: client_label
+    filter_scope: filtered
   internal_hours:
     label: "Internal Hours"
     measure_type: sum
     column_role: hours_value
     filter_column_role: hours_type
     filter_label_key: internal_label
+    filter_scope: filtered
 
   # PROVISIONAL COLUMN RESOLUTION — the real DAX references
   # `Sheet1[Project]`, but the source file has no `Project` column, only
@@ -183,6 +190,7 @@ cards:
     label: "Total Projects"
     measure_type: distinct_count
     column_role: project
+    filter_scope: filtered
 
   # Utilization Search / Results — Average Hours KPI (the 5th tile on the
   # Results page's summary strip). `measure_type: mean` was introduced for
@@ -195,6 +203,46 @@ cards:
     label: "Average Hours"
     measure_type: mean
     column_role: hours_value
+    filter_scope: filtered
+
+  # ---------------------------------------------------------------------------
+  # Utilization Overview page — 3 KPIs, all booking-derived (Formula A).
+  # ---------------------------------------------------------------------------
+  # `filter_scope` is documentary: it names WHICH slice the dispatcher receives
+  # from the caller. The dispatcher itself never filters — the endpoint decides
+  # what df to hand in. `whole_scope` = ignore the page's Hours Type / Project /
+  # Employee filters (drill-through KPIs describe the entire employee /
+  # holding). `filtered` = the endpoint pre-narrowed the frame (Utilization
+  # Home / Search / Results). Neither value changes runtime behaviour today;
+  # both are here so the CARD DECLARATION itself explains its scope choice
+  # rather than only the endpoint's Python explaining it.
+  #
+  # `measure_type: ratio` — generic (num, denom) primitive with an optional
+  # per-side filter. Introduced for Overview's booking-derived utilization
+  # KPIs. Both the numerator's and the denominator's filter are optional so a
+  # ratio can also expose things like "% of X where X is a subset over total",
+  # not only client/total.
+  #
+  # `measure_type: avg_of_chart` — mean over the values of a declared chart's
+  # output. Used by the Overview headline "Average Period Utilization %" so
+  # the KPI and the Employee Ranking chart cannot compute the same per-
+  # employee ratio two different ways (they route through the same chart
+  # declaration). Follows the same "one declaration, no drift" contract as
+  # the roster's `dimension_from_chart` reuse pattern (Skill Bifurcation charts).
+  # `scope_to_latest_of_role` (optional) narrows the frame to rows whose
+  # role-column value equals its max — used by Latest Week Utilization %.
+  average_period_utilization_pct:
+    label: "Average Period Utilization %"
+    measure_type: avg_of_chart
+    from_chart: employee_period_utilization
+    filter_scope: whole_scope
+
+  latest_week_utilization_pct:
+    label: "Latest Week Utilization %"
+    measure_type: avg_of_chart
+    from_chart: employee_period_utilization
+    scope_to_latest_of_role: week_start
+    filter_scope: whole_scope
 
 # ---------------------------------------------------------------------------
 # Chart definitions — same idea as the roster's `charts:` block.
@@ -242,3 +290,99 @@ charts:
     primary_group_role: region
     secondary_group_role: market
     value_column_role: hours_value
+
+  # ---------------------------------------------------------------------------
+  # Utilization Overview page — booking-derived (Formula A) as of 2026-07-26.
+  # ---------------------------------------------------------------------------
+  # Every chart below is a Formula A projection off the booking sheet:
+  # `Client Hours / (Client Hours + Internal Hours)`, computed per group
+  # (aggregate-then-ratio: sum(client) / sum(total) within each group). The
+  # ground-truth `Utilization_Long` sheet is NO LONGER a runtime dependency —
+  # it survives only as a QA reconciliation input (see `/api/v1/qa/reconcile`
+  # and METRICS.md Page 8's "Ground truth is QA-only" note).
+  #
+  # `ratio_by`: per-group aggregate-then-ratio. `aggregate: per_group` means
+  # sum(num)/sum(denom) within each group (as opposed to averaging per-row
+  # ratios) — matches Formula A's own construction applied at the group level.
+  # A group with denominator=0 yields NaN in the raw computation and is
+  # dropped from the returned dict (undefined utilization, not "0%").
+  #
+  # `avg_of_group_ratios`: for each `outer_group_role` value, restrict to
+  # that subframe and compute a `ratio_by(inner_group_role)` on it, then
+  # return the MEAN of those per-inner-group ratios. Used by the Weekly
+  # Utilization Trend so each week's value is the mean of per-employee
+  # ratios in that week — matching D1a's per-employee-first semantics
+  # spread across each week rather than aggregating client/total at the
+  # whole-week level (which would weight a heavy logger the same as a
+  # light logger). Groups whose inner ratio is undefined (denom=0) are
+  # excluded from the mean, not counted as 0.
+  weekly_utilization_trend:
+    label: "Weekly Utilization Trend"
+    type: avg_of_group_ratios
+    outer_group_role: week_start
+    inner_group_role: employee
+    numerator_column_role: hours_value
+    denominator_column_role: hours_value
+    numerator_filter_column_role: hours_type
+    numerator_filter_label_key: client_label
+
+  employee_period_utilization:
+    label: "Employee Period Utilization %"
+    type: ratio_by
+    group_column_role: employee
+    numerator_column_role: hours_value
+    denominator_column_role: hours_value
+    numerator_filter_column_role: hours_type
+    numerator_filter_label_key: client_label
+    aggregate: per_group
+
+  # `ratio_bands`: bin the values of a `ratio_by` chart into declared bands.
+  # Same first-match-wins `below` semantics as `numeric_bands`, and the last
+  # band must omit `below` (catch-all). PROVISIONAL thresholds — see Page 8
+  # of METRICS.md.
+  utilization_split:
+    label: "Utilization Split"
+    type: ratio_bands
+    ratio_from_chart: employee_period_utilization
+    bands:
+      - {label: "low", below: 0.80}
+      - {label: "moderate", below: 0.90}
+      - {label: "high"}   # >= 0.90 catch-all
+
+  # ---------------------------------------------------------------------------
+  # Employee drill-through page — same booking sheet, narrowed to one Employee.
+  # ---------------------------------------------------------------------------
+  # `sum_by_split` returns a projected `list[{group, split_1: v, split_2: v}]`
+  # rather than a raw pivot table — so the endpoint can hand it straight to
+  # the response model without a per-chart reshape. `sum_by` retains its raw
+  # pivot return for callers that already project it (Utilization Home's
+  # Weekly Hours Trend). See booking_metrics.evaluate_booking_chart.
+  employee_hours_by_project:
+    label: "Total Hours by Project"
+    type: sum_by
+    group_column_role: project
+    value_column_role: hours_value
+
+  employee_hours_by_week:
+    label: "Total Hours by Week Start"
+    type: sum_by_split
+    group_column_role: week_start
+    value_column_role: hours_value
+    split_column_role: hours_type
+
+  # ---------------------------------------------------------------------------
+  # Project (Holding) drill-through page — narrowed to one Holding.
+  # ---------------------------------------------------------------------------
+  project_hours_by_employee:
+    label: "Total Hours by Employee and Hours Type"
+    type: sum_by_split
+    group_column_role: employee
+    value_column_role: hours_value
+    split_column_role: hours_type
+
+  project_hours_by_week:
+    label: "Total Hours by Week Start and Hours Type"
+    type: sum_by_split
+    group_column_role: week_start
+    value_column_role: hours_value
+    split_column_role: hours_type

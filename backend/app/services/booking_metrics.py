@@ -70,7 +70,17 @@ def evaluate_booking_card(df: pd.DataFrame, card_name: str) -> float | int:
     different column role changes the number on screen — no Python edit.
     """
     spec = metric_config.booking_card(card_name)
-    column = metric_config.booking_column(spec["column_role"])
+    measure_type = spec.get("measure_type", "distinct_count")
+    # `column_role` is required for the column-based primitives
+    # (distinct_count / sum / count_rows / mean); `ratio` and
+    # `avg_of_chart` declare their own role set (numerator/denominator, or
+    # from_chart) so this resolution is skipped for them and each branch
+    # below reads the specific fields it needs. Same guard shape as
+    # `validate_metric_config`'s column_role precheck.
+    if measure_type in ("ratio", "avg_of_chart"):
+        column = None  # unused for these branches
+    else:
+        column = metric_config.booking_column(spec["column_role"])
 
     scope = df
     filter_role = spec.get("filter_column_role")
@@ -78,8 +88,6 @@ def evaluate_booking_card(df: pd.DataFrame, card_name: str) -> float | int:
         filter_col = metric_config.booking_column(filter_role)
         filter_value = metric_config.hours_label(spec["filter_label_key"])
         scope = scope[scope[filter_col] == filter_value]
-
-    measure_type = spec.get("measure_type", "distinct_count")
     if measure_type == "distinct_count":
         return int(scope[column].nunique(dropna=True))
     if measure_type == "sum":
@@ -96,6 +104,53 @@ def evaluate_booking_card(df: pd.DataFrame, card_name: str) -> float | int:
             return 0.0
         value = float(scope[column].mean())
         return 0.0 if pd.isna(value) else value
+    if measure_type == "ratio":
+        # Generic Formula-A-shaped primitive: sum(numerator) / sum(denominator),
+        # each side optionally narrowed by a Booked-Hours-Type-style filter.
+        # Introduced for the Overview page's booking-derived KPIs — the
+        # ground-truth file is no longer consulted at runtime.
+        num_col = metric_config.booking_column(spec["numerator_column_role"])
+        den_col = metric_config.booking_column(spec["denominator_column_role"])
+        num_scope = scope
+        if spec.get("numerator_filter_column_role"):
+            fcol = metric_config.booking_column(spec["numerator_filter_column_role"])
+            fval = metric_config.hours_label(spec["numerator_filter_label_key"])
+            num_scope = num_scope[num_scope[fcol] == fval]
+        den_scope = scope
+        if spec.get("denominator_filter_column_role"):
+            fcol = metric_config.booking_column(spec["denominator_filter_column_role"])
+            fval = metric_config.hours_label(spec["denominator_filter_label_key"])
+            den_scope = den_scope[den_scope[fcol] == fval]
+        denom = float(den_scope[den_col].sum())
+        if denom == 0:
+            return 0.0
+        return float(num_scope[num_col].sum()) / denom
+    if measure_type == "avg_of_chart":
+        # Mean over the values of a declared chart's output — used for the
+        # Overview "Average Period Utilization %" KPI so the headline can't
+        # drift from the Employee Ranking chart it summarizes (both go
+        # through the SAME chart declaration). Optional
+        # `scope_to_latest_of_role` narrows the frame to rows whose role
+        # column equals its max first — used by "Latest Week Utilization %".
+        from_chart_name = spec["from_chart"]
+        chart_scope = scope
+        latest_role = spec.get("scope_to_latest_of_role")
+        if latest_role is not None:
+            latest_col = metric_config.booking_column(latest_role)
+            if chart_scope[latest_col].notna().any():
+                latest_value = chart_scope[latest_col].max()
+                chart_scope = chart_scope[chart_scope[latest_col] == latest_value]
+        values = evaluate_booking_chart(chart_scope, from_chart_name)
+        if isinstance(values, dict):
+            nums = [float(v) for v in values.values() if pd.notna(v)]
+        else:
+            # ratio_bands returns a dict-of-counts, list, or DataFrame; we
+            # only compose avg_of_chart with a ratio_by (validator enforces
+            # via from_chart -> chart type indirection is upstream).
+            nums = []
+        if not nums:
+            return 0.0
+        return float(sum(nums) / len(nums))
     # Guarded by the config validator — reaching this means the validator
     # missed a case, which is a developer error, not user data.
     raise ValueError(
@@ -120,7 +175,14 @@ def evaluate_booking_chart(df: pd.DataFrame, chart_name: str):
     """
     spec = metric_config.booking_chart(chart_name)
     kind = spec["type"]
-    value_col = metric_config.booking_column(spec["value_column_role"])
+    # `value_column_role` is required for the sum-based chart types
+    # (`sum_by`, `sum_by_hierarchical`, `sum_by_split`); `ratio_by` and
+    # `ratio_bands` read their own role set (numerator/denominator or
+    # ratio_from_chart) so this is not resolved for them.
+    if kind in ("ratio_by", "ratio_bands", "avg_of_group_ratios"):
+        value_col = None  # unused for these branches
+    else:
+        value_col = metric_config.booking_column(spec["value_column_role"])
 
     if kind == "sum_by":
         group_col = metric_config.booking_column(spec["group_column_role"])
@@ -151,6 +213,110 @@ def evaluate_booking_chart(df: pd.DataFrame, chart_name: str):
             {"primary": str(p), "secondary": str(s), "value": float(v)}
             for (p, s), v in grouped.items()
         ]
+
+    if kind == "sum_by_split":
+        # Same math as `sum_by` with a `split_column_role`, but returns the
+        # projected `list[{group, <split_value_1>: v, <split_value_2>: v, ...}]`
+        # shape rather than the raw pivot table — so the endpoint hands it
+        # straight to the response model. `sum_by` deliberately keeps its
+        # raw pivot return because the Utilization Home Weekly Hours Trend
+        # already projects it into a bespoke shape.
+        group_col = metric_config.booking_column(spec["group_column_role"])
+        split_col = metric_config.booking_column(spec["split_column_role"])
+        pivot = (
+            df.groupby([group_col, split_col], dropna=True)[value_col]
+            .sum()
+            .unstack(fill_value=0.0)
+            .sort_index()
+        )
+        return [
+            {"group": str(idx), **{str(c): float(v) for c, v in row.items()}}
+            for idx, row in pivot.iterrows()
+        ]
+
+    if kind == "ratio_by":
+        # Aggregate-then-ratio per group: sum(num)/sum(denom) within each
+        # group. Backs the Overview page's Weekly Utilization Trend and
+        # Employee Period Utilization ranking (Formula A). A group whose
+        # denominator sums to 0 is DROPPED (undefined utilization) rather
+        # than reported as 0% — same convention as
+        # `utilization_metrics.compute_weekly_utilization_formula_a`.
+        group_col = metric_config.booking_column(spec["group_column_role"])
+        num_col = metric_config.booking_column(spec["numerator_column_role"])
+        den_col = metric_config.booking_column(spec["denominator_column_role"])
+        num_scope = df
+        if spec.get("numerator_filter_column_role"):
+            fcol = metric_config.booking_column(spec["numerator_filter_column_role"])
+            fval = metric_config.hours_label(spec["numerator_filter_label_key"])
+            num_scope = num_scope[num_scope[fcol] == fval]
+        den_scope = df
+        if spec.get("denominator_filter_column_role"):
+            fcol = metric_config.booking_column(spec["denominator_filter_column_role"])
+            fval = metric_config.hours_label(spec["denominator_filter_label_key"])
+            den_scope = den_scope[den_scope[fcol] == fval]
+        num_by = num_scope.groupby(group_col, dropna=True)[num_col].sum()
+        den_by = den_scope.groupby(group_col, dropna=True)[den_col].sum()
+        out: dict[str, float] = {}
+        for key in den_by.index:
+            denom = float(den_by.loc[key])
+            if denom == 0:
+                continue  # undefined utilization
+            numer = float(num_by.get(key, 0.0))
+            out[str(key)] = numer / denom
+        return out
+
+    if kind == "avg_of_group_ratios":
+        # For each outer_group value, compute a ratio_by(inner_group) on
+        # that subframe and return the MEAN of those per-inner-group
+        # ratios. D1a semantics for the Weekly Utilization Trend chart:
+        # mean of per-employee-in-week ratios, per week. A subframe with
+        # no defined ratios (every employee has denom=0) is dropped from
+        # the output rather than reported as 0 (undefined utilization).
+        outer_col = metric_config.booking_column(spec["outer_group_role"])
+        inner_col = metric_config.booking_column(spec["inner_group_role"])
+        num_col = metric_config.booking_column(spec["numerator_column_role"])
+        den_col = metric_config.booking_column(spec["denominator_column_role"])
+        num_filter_col = num_filter_val = None
+        if spec.get("numerator_filter_column_role"):
+            num_filter_col = metric_config.booking_column(spec["numerator_filter_column_role"])
+            num_filter_val = metric_config.hours_label(spec["numerator_filter_label_key"])
+        den_filter_col = den_filter_val = None
+        if spec.get("denominator_filter_column_role"):
+            den_filter_col = metric_config.booking_column(spec["denominator_filter_column_role"])
+            den_filter_val = metric_config.hours_label(spec["denominator_filter_label_key"])
+
+        out: dict[str, float] = {}
+        for outer_val, subframe in df.groupby(outer_col, dropna=True):
+            num_scope = subframe
+            if num_filter_col is not None:
+                num_scope = num_scope[num_scope[num_filter_col] == num_filter_val]
+            den_scope = subframe
+            if den_filter_col is not None:
+                den_scope = den_scope[den_scope[den_filter_col] == den_filter_val]
+            num_by = num_scope.groupby(inner_col, dropna=True)[num_col].sum()
+            den_by = den_scope.groupby(inner_col, dropna=True)[den_col].sum()
+            per_inner = []
+            for inner_key in den_by.index:
+                denom = float(den_by.loc[inner_key])
+                if denom == 0:
+                    continue
+                per_inner.append(float(num_by.get(inner_key, 0.0)) / denom)
+            if per_inner:
+                out[str(outer_val)] = sum(per_inner) / len(per_inner)
+        return out
+
+    if kind == "ratio_bands":
+        ratio_values = evaluate_booking_chart(df, spec["ratio_from_chart"])
+        # `ratio_values` is a {group: ratio} dict from the underlying
+        # `ratio_by`. Bin each ratio into the first matching band (`below`
+        # wins first, catch-all last band has no `below`).
+        counts: dict[str, int] = {b["label"]: 0 for b in spec["bands"]}
+        for value in ratio_values.values():
+            for band in spec["bands"]:
+                if "below" not in band or value < band["below"]:
+                    counts[band["label"]] += 1
+                    break
+        return counts
 
     raise ValueError(f"Chart {chart_name!r} declares unsupported type={kind!r}")
 
@@ -800,8 +966,17 @@ def records_to_dicts(df: pd.DataFrame) -> list[dict]:
 def get_employee_detail(df: pd.DataFrame, employee: str) -> dict | None:
     """
     Per-employee drill-through for the Employee Utilization page: Total/
-    Client/Internal Hours, Total Projects, Total Hours by Project, Total
-    Hours by Week Start + Hours Type.
+    Client/Internal Hours, Total Projects (all four KPIs `filter_scope:
+    whole_scope` — the endpoint hands the WHOLE employee's rows to
+    `evaluate_booking_card`; page-local filters narrow only the charts,
+    which live client-side today), Total Hours by Project
+    (`employee_hours_by_project` chart, `sum_by`), Total Hours by Week
+    Start + Hours Type (`employee_hours_by_week` chart, `sum_by_split`).
+
+    Both charts are declared in `configs/booking_metrics.yaml` and
+    computed by `evaluate_booking_chart`, so a shape change is a config
+    edit (mirrors the roster's `evaluate_chart` contract).
+
     Reads: `Employee`, `Booked Hours Type`, `Employee Booked Hours`,
     `Project Name`, `Monday of Week`.
     Edge cases: returns None if `employee` has no rows at all (e.g. the
@@ -812,33 +987,29 @@ def get_employee_detail(df: pd.DataFrame, employee: str) -> dict | None:
     if rows.empty:
         return None
 
-    by_project = (
-        rows.groupby("Project Name")["Employee Booked Hours"].sum().sort_values(ascending=False)
-    )
+    # Hours by Project — declared `sum_by`. Sort desc so the frontend can
+    # render straight from the array (mirrors the old inline behaviour).
+    by_project = evaluate_booking_chart(rows, "employee_hours_by_project")
     hours_by_project = [
         {"project": project, "total_hours": float(hours)}
-        for project, hours in by_project.items()
+        for project, hours in sorted(by_project.items(), key=lambda kv: kv[1], reverse=True)
     ]
 
+    # Hours by Week — declared `sum_by_split` (group=Monday of Week,
+    # split=Booked Hours Type). The dispatcher returns
+    # {"group": "<week>", "Client Hours": v, "Internal Hours": v} rows;
+    # this reshapes to the response model's {week_start, client_hours,
+    # internal_hours} contract and normalises Timestamps to ISO date.
     weekly = rows.copy()
     weekly["Monday of Week"] = pd.to_datetime(weekly["Monday of Week"])
-    pivot = (
-        weekly.groupby(["Monday of Week", "Booked Hours Type"])["Employee Booked Hours"]
-        .sum()
-        .unstack(fill_value=0.0)
-        .sort_index()
-    )
-    if CLIENT_HOURS_LABEL not in pivot.columns:
-        pivot[CLIENT_HOURS_LABEL] = 0.0
-    if INTERNAL_HOURS_LABEL not in pivot.columns:
-        pivot[INTERNAL_HOURS_LABEL] = 0.0
+    week_rows = evaluate_booking_chart(weekly, "employee_hours_by_week")
     hours_by_week = [
         {
-            "week_start": week.strftime("%Y-%m-%d"),
-            "client_hours": float(row[CLIENT_HOURS_LABEL]),
-            "internal_hours": float(row[INTERNAL_HOURS_LABEL]),
+            "week_start": pd.Timestamp(row["group"]).strftime("%Y-%m-%d"),
+            "client_hours": float(row.get(CLIENT_HOURS_LABEL, 0.0)),
+            "internal_hours": float(row.get(INTERNAL_HOURS_LABEL, 0.0)),
         }
-        for week, row in pivot.iterrows()
+        for row in week_rows
     ]
 
     return {
@@ -856,9 +1027,14 @@ def get_employee_detail(df: pd.DataFrame, employee: str) -> dict | None:
 def get_project_detail(df: pd.DataFrame, holding: str) -> dict | None:
     """
     Per-project/holding drill-through for the Project Utilization page:
-    Total Hours by Employee + Hours Type, Total Hours by Week Start +
-    Hours Type, plus a detail table (Employee, Project, Region,
-    Department).
+    Total/Client/Internal Hours KPIs (`filter_scope: whole_scope` — see
+    `get_employee_detail`), Total Hours by Employee + Hours Type
+    (`project_hours_by_employee`, `sum_by_split`), Total Hours by Week
+    Start + Hours Type (`project_hours_by_week`, `sum_by_split`), plus a
+    detail-table projection (Employee, Project, Region, Department) that
+    stays as a code helper per METRICS.md Page 10's "the detail table is
+    a projection, not an aggregation" note.
+
     Reads: `Holding`, `Employee`, `Booked Hours Type`,
     `Employee Booked Hours`, `Monday of Week`, `Project Name`,
     `Region (EC)`, `Department`.
@@ -870,41 +1046,31 @@ def get_project_detail(df: pd.DataFrame, holding: str) -> dict | None:
 
     by_employee = rows.copy()
     by_employee["Monday of Week"] = pd.to_datetime(by_employee["Monday of Week"])
-    emp_pivot = (
-        by_employee.groupby(["Employee", "Booked Hours Type"])["Employee Booked Hours"]
-        .sum()
-        .unstack(fill_value=0.0)
-    )
-    if CLIENT_HOURS_LABEL not in emp_pivot.columns:
-        emp_pivot[CLIENT_HOURS_LABEL] = 0.0
-    if INTERNAL_HOURS_LABEL not in emp_pivot.columns:
-        emp_pivot[INTERNAL_HOURS_LABEL] = 0.0
+
+    # Hours by Employee — declared `sum_by_split` (group=Employee,
+    # split=Booked Hours Type). The dispatcher returns
+    # {"group": "<name>", "Client Hours": v, "Internal Hours": v} rows;
+    # this reshapes to the response model's {employee, client_hours,
+    # internal_hours} contract.
+    emp_rows = evaluate_booking_chart(by_employee, "project_hours_by_employee")
     hours_by_employee = [
         {
-            "employee": employee,
-            "client_hours": float(row[CLIENT_HOURS_LABEL]),
-            "internal_hours": float(row[INTERNAL_HOURS_LABEL]),
+            "employee": row["group"],
+            "client_hours": float(row.get(CLIENT_HOURS_LABEL, 0.0)),
+            "internal_hours": float(row.get(INTERNAL_HOURS_LABEL, 0.0)),
         }
-        for employee, row in emp_pivot.iterrows()
+        for row in emp_rows
     ]
 
-    week_pivot = (
-        by_employee.groupby(["Monday of Week", "Booked Hours Type"])["Employee Booked Hours"]
-        .sum()
-        .unstack(fill_value=0.0)
-        .sort_index()
-    )
-    if CLIENT_HOURS_LABEL not in week_pivot.columns:
-        week_pivot[CLIENT_HOURS_LABEL] = 0.0
-    if INTERNAL_HOURS_LABEL not in week_pivot.columns:
-        week_pivot[INTERNAL_HOURS_LABEL] = 0.0
+    # Hours by Week — same shape as Employee page's week chart.
+    week_rows = evaluate_booking_chart(by_employee, "project_hours_by_week")
     hours_by_week = [
         {
-            "week_start": week.strftime("%Y-%m-%d"),
-            "client_hours": float(row[CLIENT_HOURS_LABEL]),
-            "internal_hours": float(row[INTERNAL_HOURS_LABEL]),
+            "week_start": pd.Timestamp(row["group"]).strftime("%Y-%m-%d"),
+            "client_hours": float(row.get(CLIENT_HOURS_LABEL, 0.0)),
+            "internal_hours": float(row.get(INTERNAL_HOURS_LABEL, 0.0)),
         }
-        for week, row in week_pivot.iterrows()
+        for row in week_rows
     ]
 
     detail_rows = rows[["Employee", "Project Name", "Region (EC)", "Department"]].drop_duplicates()

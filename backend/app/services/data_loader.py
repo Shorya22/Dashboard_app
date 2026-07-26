@@ -85,13 +85,27 @@ def get_booking_df_prepared() -> pd.DataFrame:
     return _booking_prepared_cache
 
 
-def get_utilization_ground_truth_df() -> pd.DataFrame:
-    """Return the cached `Utilization_Long` ground-truth DataFrame, loading it on first use."""
+def get_utilization_ground_truth_df() -> pd.DataFrame | None:
+    """
+    Return the cached `Utilization_Long` ground-truth DataFrame, loading it
+    on first use, or `None` if the file is not present under
+    `backend/data/`.
+
+    As of 2026-07-26 the ground-truth file is OPTIONAL — Overview computes
+    from the booking sheet using Formula A (see
+    `utilization_metrics.get_utilization_overview`), so a missing
+    ground-truth file no longer blocks any runtime endpoint. The QA
+    reconcile endpoint (`/api/v1/qa/reconcile`) uses this loader lazily on
+    demand and returns 404 if the file is absent.
+    """
     global _utilization_ground_truth_cache
     if _utilization_ground_truth_cache is None:
         with _load_lock:
             if _utilization_ground_truth_cache is None:
-                _utilization_ground_truth_cache = apply_dataset_defaults(load_ground_truth_long(storage.resolved_path("ground_truth")), "ground_truth")
+                raw = load_ground_truth_long(storage.resolved_path("ground_truth"))
+                if raw is None:
+                    return None
+                _utilization_ground_truth_cache = apply_dataset_defaults(raw, "ground_truth")
     return _utilization_ground_truth_cache
 
 
@@ -114,10 +128,17 @@ def reload_booking_data() -> pd.DataFrame:
     return _booking_cache
 
 
-def reload_utilization_ground_truth() -> pd.DataFrame:
-    """Force a re-read of the utilization ground-truth Excel file, refreshing the cache."""
+def reload_utilization_ground_truth() -> pd.DataFrame | None:
+    """
+    Force a re-read of the utilization ground-truth Excel file, refreshing
+    the cache. Returns `None` if the file is absent — the QA reconcile
+    endpoint handles that as 404. Runtime endpoints do not call this.
+    """
     global _utilization_ground_truth_cache
     with _load_lock:
-        _utilization_ground_truth_cache = apply_dataset_defaults(load_ground_truth_long(storage.resolved_path("ground_truth")), "ground_truth")
-    logger.info("reload_utilization_ground_truth: cache refreshed")
+        raw = load_ground_truth_long(storage.resolved_path("ground_truth"))
+        _utilization_ground_truth_cache = (
+            apply_dataset_defaults(raw, "ground_truth") if raw is not None else None
+        )
+    logger.info("reload_utilization_ground_truth: cache refreshed (file %s)", "present" if _utilization_ground_truth_cache is not None else "absent")
     return _utilization_ground_truth_cache

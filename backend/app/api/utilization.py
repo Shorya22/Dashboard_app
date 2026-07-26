@@ -36,7 +36,6 @@ from app.services.data_loader import (
     get_booking_df,
     get_booking_df_prepared,
     get_roster_df,
-    get_utilization_ground_truth_df,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,9 +265,27 @@ def utilization_holdings_projects(user: User = Depends(get_current_user)) -> Hol
 
 
 @router.get("/overview", response_model=UtilizationOverview)
-def utilization_overview(user: User = Depends(get_current_user)) -> UtilizationOverview:
+def utilization_overview(
+    user: User = Depends(get_current_user),
+    filters: dict = Depends(_booking_filter_params),
+) -> UtilizationOverview:
+    """
+    Utilization Overview page. Booking-derived (Formula A) as of
+    2026-07-26 — the ground-truth `Utilization_Long` file is no longer a
+    runtime dependency, only a QA reconciliation input (see
+    `/api/v1/qa/reconcile`). Response shape unchanged; the numbers move
+    per METRICS.md Page 8 (46 booking employees vs 41 ground-truth, 7
+    weeks vs 4).
+
+    Accepts the same repeated `?week=`/`?region=`/... query-param set as
+    every other utilization endpoint (via `_booking_filter_params`) so
+    the Overview page's Year/Month/Week filter row narrows the KPIs +
+    charts server-side. `utilization-overview` is now in the
+    `applies_to_pages` list for every filter the page renders — no
+    per-page filter definitions.
+    """
     try:
-        df = get_utilization_ground_truth_df()
+        df = _apply_booking_filters(filters)
         return UtilizationOverview(**utilization_metrics.get_utilization_overview(df))
     except Exception:
         logger.exception("utilization_overview: failed to compute utilization overview")

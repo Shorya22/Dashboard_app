@@ -103,7 +103,9 @@ BOOKING_TO_GROUND_TRUTH_NAME_MAP: dict[str, str] = {
 }
 
 
-def load_ground_truth_long(path: str | Path = DEFAULT_GROUND_TRUTH_PATH) -> pd.DataFrame:
+def load_ground_truth_long(
+    path: str | Path = DEFAULT_GROUND_TRUTH_PATH,
+) -> pd.DataFrame | None:
     """
     Read the `Utilization_Long` sheet of the ground-truth utilization
     workbook (one row per employee per week). The workbook's FIRST sheet
@@ -115,9 +117,25 @@ def load_ground_truth_long(path: str | Path = DEFAULT_GROUND_TRUTH_PATH) -> pd.D
     on `README`), so plain `header=0` is correct here.
 
     Returns the raw DataFrame (164 rows / 41 distinct employees / 4 weeks
-    -- 2026-05-04 through 2026-05-25 -- in the file confirmed 2026-07-15).
+    -- 2026-05-04 through 2026-05-25 -- in the file confirmed 2026-07-15),
+    or `None` if the file is absent.
+
+    As of 2026-07-26 the ground-truth file is OPTIONAL: Overview no longer
+    reads it at runtime (see `get_utilization_overview` — booking-derived
+    Formula A). This loader survives only for the QA reconcile path
+    (`/api/v1/qa/reconcile`) and is called lazily on demand there. Callers
+    must handle `None` (404 with a helpful body on the QA endpoint;
+    disable / no-op elsewhere).
     """
-    df = pd.read_excel(path, sheet_name=GROUND_TRUTH_LONG_SHEET, header=0)
+    path_obj = Path(path)
+    if not path_obj.exists():
+        logger.info(
+            "load_ground_truth_long: file %s not found — returning None "
+            "(runtime path no longer requires this file; only QA reconcile does)",
+            path_obj,
+        )
+        return None
+    df = pd.read_excel(path_obj, sheet_name=GROUND_TRUTH_LONG_SHEET, header=0)
     df["Week Start"] = pd.to_datetime(df["Week Start"])
     logger.info(
         "load_ground_truth_long: read %d rows (%d distinct employees) from %s [%s]",
@@ -298,75 +316,122 @@ def reconcile_weekly_utilization(
 
 
 @cache_on_df
-def get_utilization_overview(ground_truth_long_df: pd.DataFrame) -> dict:
+def get_utilization_overview(booking_df: pd.DataFrame) -> dict:
     """
-    KPIs/trend/split/ranking for the Utilization Overview page, sourced
-    from the ground-truth `Utilization_Long` sheet (NOT re-derived from
-    the booking sheet's Formula A) since that sheet already carries the
-    precomputed `Period Total Utilization %` per employee that
-    `Average Period Utilization %`'s DAX averages over
-    (`AVERAGEX(VALUES(Employee), MAX(Period Total Utilization %))`) --
-    reusing it here avoids re-deriving a "period" definition that isn't
-    specified anywhere else in this codebase.
+    KPIs / trend / split / ranking for the Utilization Overview page,
+    computed ENTIRELY from the booking sheet using Formula A (see this
+    module's top-of-file docstring for the empirical confirmation).
 
-    Returns:
+    As of 2026-07-26 the ground-truth `Utilization_Long` sheet is NO
+    LONGER consulted at runtime — it survives only as a QA reconciliation
+    input via `reconcile_weekly_utilization` and the `/api/v1/qa/reconcile`
+    admin endpoint. See METRICS.md Page 8 for the rationale and for the
+    numbers-will-change note (booking has 46 employees vs the ground
+    truth's 41, and covers 7 weeks vs 4). The response SHAPE is unchanged
+    so the frontend needs no changes; the VALUES move by construction.
+
+    Per-employee "period" ratio (D1a — aggregate-then-ratio):
+
+        period_util_pct[e] = sum(client_hours over period, for e)
+                           / sum(all logged hours over period, for e)
+
+    then the headline "Average Period Utilization %" is the mean of that
+    per-employee vector. Rationale: the ground-truth column is literally
+    called "Period Total Utilization %" — "period total" reads as
+    aggregate-then-ratio, and it also gives every logged hour equal weight
+    rather than weighting a partial week the same as a full one.
+
+    The two headline KPIs and the two per-group charts all route through
+    the config-driven dispatcher on `configs/booking_metrics.yaml`:
+
+      cards.average_period_utilization_pct  (avg_of_chart on
+        employee_period_utilization)
+      cards.latest_week_utilization_pct     (avg_of_chart on the same
+        chart, restricted to the latest Monday of Week)
+      charts.employee_period_utilization    (ratio_by employee)
+      charts.weekly_utilization_trend       (ratio_by week_start)
+      charts.utilization_split              (ratio_bands over the
+        employee ratios, thresholds still PROVISIONAL — see Page 8)
+
+    Returns the same dict shape as before (frontend contract):
       {
-        "average_period_utilization_pct": float,  # 0-1, matches DAX Average Period Utilization %
-        "total_employees": int,                   # distinct employees in Utilization_Long
-        "latest_week_utilization_pct": float,      # DAX Latest Week Utilization % (avg of latest week's rows)
+        "average_period_utilization_pct": float,  # 0-1
+        "total_employees": int,                   # distinct booking employees
+        "latest_week_utilization_pct": float,     # 0-1, latest Monday of Week
         "weekly_trend": [{"week_start": str, "avg_weekly_utilization_pct": float}, ...],
-        "utilization_split": {"high": int, "moderate": int, "low": int},  # band counts, one row per employee via Period Total Utilization %
+        "utilization_split": {"high": int, "moderate": int, "low": int},
         "employee_ranking": [{"employee": str, "period_utilization_pct": float}, ...],  # desc
       }
 
-    Band thresholds (High >= 0.90, Moderate 0.80-0.90, Low < 0.80) are a
-    provisional guess matching the ground-truth sheet's documented
-    green/amber color cues (data-model SKILL.md: "green >= ~90%, amber
-    ~80%") -- UNCONFIRMED against a real `Utilization Band` DAX formula
-    (still missing per that skill's "Flagged discrepancies" section).
+    The 10/152 residual mismatches between Formula A and the ground
+    truth's shipped `Weekly Utilization %` (see this module's top
+    docstring) no longer surface on the runtime Overview — they can only
+    be observed by hitting `/api/v1/qa/reconcile` with the ground-truth
+    file present. Not a data-quality regression: the runtime always used
+    Formula A's shape, the ground truth only agreed on 142/152 rows.
     """
-    df = ground_truth_long_df.copy()
-    df["Week Start"] = pd.to_datetime(df["Week Start"])
+    # Deliberately not importing at module top: `booking_metrics` imports
+    # `utilization_metrics.load_ground_truth_long` via `data_loader`, so
+    # a top-level import here would be a cycle. Local import keeps the
+    # module-load DAG one-way.
+    from app.services import booking_metrics
 
-    per_employee = df.drop_duplicates("Employee")[["Employee", "Period Total Utilization %"]]
-    average_period_pct = float(per_employee["Period Total Utilization %"].mean())
+    df = booking_df
 
-    latest_week = df["Week Start"].max()
-    latest_week_pct = float(df.loc[df["Week Start"] == latest_week, "Weekly Utilization %"].mean())
-
-    trend = (
-        df.groupby("Week Start")["Weekly Utilization %"]
-        .mean()
-        .sort_index()
+    # Route KPIs through the declared cards so the values in the KPI strip
+    # cannot drift from the chart values they summarise (same design
+    # contract as records_summary_reuses_declared_cards on the roster side).
+    average_period_pct = float(
+        booking_metrics.evaluate_booking_card(df, "average_period_utilization_pct")
     )
-    weekly_trend = [
-        {"week_start": week.strftime("%Y-%m-%d"), "avg_weekly_utilization_pct": float(pct)}
-        for week, pct in trend.items()
-    ]
+    latest_week_pct = float(
+        booking_metrics.evaluate_booking_card(df, "latest_week_utilization_pct")
+    )
 
-    def band(pct: float) -> str:
-        if pct >= 0.90:
-            return "high"
-        if pct >= 0.80:
-            return "moderate"
-        return "low"
+    # Weekly trend — Formula A per Monday of Week, one point per week.
+    weekly_ratios = booking_metrics.evaluate_booking_chart(df, "weekly_utilization_trend")
+    # `evaluate_booking_chart` returns {week_iso_string: ratio}; the input
+    # keys come out of pandas as `str(Timestamp)` (e.g. "2026-05-04 00:00:00")
+    # — normalise to date-only YYYY-MM-DD to match the frontend's
+    # `WeeklyUtilizationTrendPoint.week_start` contract.
+    def _to_iso_date(key: str) -> str:
+        try:
+            return pd.Timestamp(key).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            return str(key)
 
-    bands = per_employee["Period Total Utilization %"].apply(band).value_counts()
+    weekly_trend = sorted(
+        (
+            {"week_start": _to_iso_date(k), "avg_weekly_utilization_pct": float(v)}
+            for k, v in weekly_ratios.items()
+        ),
+        key=lambda item: item["week_start"],
+    )
+
+    # Utilization split — band counts over per-employee ratios.
+    utilization_split_raw = booking_metrics.evaluate_booking_chart(df, "utilization_split")
     utilization_split = {
-        "high": int(bands.get("high", 0)),
-        "moderate": int(bands.get("moderate", 0)),
-        "low": int(bands.get("low", 0)),
+        "high": int(utilization_split_raw.get("high", 0)),
+        "moderate": int(utilization_split_raw.get("moderate", 0)),
+        "low": int(utilization_split_raw.get("low", 0)),
     }
 
-    ranking = per_employee.sort_values("Period Total Utilization %", ascending=False)
-    employee_ranking = [
-        {"employee": row["Employee"], "period_utilization_pct": float(row["Period Total Utilization %"])}
-        for _, row in ranking.iterrows()
-    ]
+    # Employee ranking — per-employee Formula A, sorted desc.
+    employee_ratios = booking_metrics.evaluate_booking_chart(df, "employee_period_utilization")
+    employee_ranking = sorted(
+        (
+            {"employee": str(emp), "period_utilization_pct": float(pct)}
+            for emp, pct in employee_ratios.items()
+        ),
+        key=lambda item: item["period_utilization_pct"],
+        reverse=True,
+    )
 
     return {
         "average_period_utilization_pct": average_period_pct,
-        "total_employees": int(df["Employee"].nunique()),
+        "total_employees": int(
+            booking_metrics.evaluate_booking_card(df, "total_employees_booking")
+        ),
         "latest_week_utilization_pct": latest_week_pct,
         "weekly_trend": weekly_trend,
         "utilization_split": utilization_split,
