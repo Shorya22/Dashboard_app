@@ -515,10 +515,21 @@ export function useProjectUtilization(holding: string | undefined) {
   })
 }
 
-export function useUtilizationOverview() {
+export function useUtilizationOverview(filters: BookingChartFilters = {}) {
+  // Overview accepts the same repeated-query-param filter set as every
+  // other utilization aggregation endpoint (via the shared
+  // `_booking_filter_params` FastAPI dep on the backend). Added
+  // 2026-07-26 so the page's Year/Month/Week + Region/Market/Department/
+  // Hours Type filter row narrows the KPIs + charts server-side.
   return useQuery({
-    queryKey: ['utilization', 'overview'],
+    queryKey: ['utilization', 'overview', filters],
     queryFn: async () =>
-      (await apiClient.get<UtilizationOverview>('/v1/utilization/overview')).data,
+      (
+        await apiClient.get<UtilizationOverview>('/v1/utilization/overview', {
+          params: filters,
+          paramsSerializer: { indexes: null },
+        })
+      ).data,
+    placeholderData: (prev) => prev,
   })
 }
