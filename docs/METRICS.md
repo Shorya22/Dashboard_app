@@ -151,10 +151,23 @@ server-side for traceability. Contrast with a defaulted blank, which
 |---|---|---|
 | Roster | `DEPT - Master Data(Sheet1).xlsx` | Headcount, status, seniority, experience |
 | Booking | `UTILIZATION DATA SHEET.xlsx` | Hours, client vs internal utilization |
-| Ground truth | `PowerBI_Ready_Utilization_May_2026.xlsx` | Utilization Overview page |
+| Ground truth | `PowerBI_Ready_Utilization_May_2026.xlsx` | **QA-only** (see below) — NOT a runtime input to any dashboard page |
 
 The dashboard always reads the **latest promoted upload**; if nothing has
 been uploaded it falls back to the bundled file.
+
+**Ground truth is QA-only, not a dashboard data source.** As of
+2026-07-26 no dashboard page reads `PowerBI_Ready_Utilization_May_2026.xlsx`
+at runtime — Utilization Overview computes from the booking sheet using
+Formula A instead (see Page 8 below). The file is only consulted by the
+admin-only `GET /api/v1/qa/reconcile?dataset=utilization` diagnostic
+endpoint, which checks Formula A against this file's shipped ratios. Its
+upload card on the Data Management page is labelled accordingly
+(`display_name`/`description` in
+`backend/app/services/validation/configs/ground_truth.yaml`, rendered
+verbatim by the frontend — config-driven, not hardcoded in the React
+component) so uploading it never reads as required for the dashboard to
+work.
 
 ---
 
@@ -609,21 +622,25 @@ plus two breakdown charts. Every card and chart on this page is
 declared in `configs/booking_metrics.yaml` (under `cards:` / `charts:`)
 and computed by the generic dispatcher (`evaluate_booking_card` /
 `evaluate_booking_chart`) — the same pattern the roster side already
-follows. Current values below are from the booking snapshot of 1,522
-rows (2026-07-24) and are shown only to make the rules concrete.
+follows. Current values below are from the currently active booking
+upload (`backend/data/uploads/booking/v4.xlsx`, 2,961 rows, promoted
+2026-07-26) and are shown only to make the rules concrete — see
+"Data freshness" near the end of this document for the guarantee that
+these numbers always reflect whichever version is active, on the very
+next request after an upload or rollback.
 
 All four filters on the page (Hours Type, Region/Market, Month/Week,
 Department) narrow the same booking DataFrame via
 `booking_metrics.get_filtered_records`, before any card or chart
 computes — so every widget on this page reacts to every filter.
 
-### Card: Total Employees — `46`
+### Card: Total Employees — `49`
 Distinct values of the **`Employee`** column on the booking sheet.
 
 > Same label as the Total Employees card on HR Home, DIFFERENT
 > definition: HR Home counts distinct `NEW_EMP_ID` over the whole
 > roster (52), Utilization Home only sees employees who booked hours
-> (46). The booking sheet is a subset of the roster by construction,
+> (49). The booking sheet is a subset of the roster by construction,
 > so booking's Total Employees ≤ roster's Total Employees always.
 > Declared as `total_employees_booking` in `cards:` so a diff between
 > the two definitions is intentional and named, not accidental.
@@ -639,13 +656,13 @@ Distinct values of the **`Employee`** column on the booking sheet.
 Real DAX measure name is `Total Employeess` (sic — typo preserved
 verbatim from the exported Power BI model per the data-model skill).
 
-### Card: Total Hours — `8,928.6`
+### Card: Total Hours — `17,148.6`
 Sum of the **`Employee Booked Hours`** column across every booking
 row. Real DAX: `SUM('Sheet1'[Employee Booked Hours])`. Declared as
 `total_hours` in `cards:` (`measure_type: sum`, `column_role:
 hours_value`).
 
-### Card: Client Hours — `6,467.7`
+### Card: Client Hours — `11,431.0`
 Sum of `Employee Booked Hours` narrowed to rows where
 `Booked Hours Type` = "Client Hours". Declared as `client_hours`,
 with `filter_column_role: hours_type` and `filter_label_key:
@@ -653,7 +670,7 @@ client_label` — the literal `"Client Hours"` lives in the `hours:`
 block, so renaming it (e.g. "Billable Hours") is a one-line config
 change.
 
-### Card: Internal Hours — `2,460.9`
+### Card: Internal Hours — `5,717.6`
 Mirror of Client Hours, narrowed to `Booked Hours Type` = "Internal
 Hours". Guaranteed to satisfy `Client + Internal = Total` by the
 `hours_split_covers_all_hours` invariant, which fires at upload time
@@ -664,7 +681,7 @@ matching the exact shape of the roster's
 `status_measures_partition_roster` (Active + Inactive + Strategic
 Pool = Total).
 
-### Card: Total Projects — `66`
+### Card: Total Projects — `81`
 Distinct values of the **`Project Name`** column, excluding blanks.
 
 > **PROVISIONAL COLUMN RESOLUTION.** The real DAX measure targets
@@ -962,6 +979,27 @@ Two things Formula A DOES NOT do, both deliberately:
   fact from "worked 0 client hours out of some logged total". Preserved
   through the pipeline (dropped from ranking, excluded from means).
 
+#### Worked example (real employee, v4 active data, 2026-07-26)
+
+`Kartik Dhiwar` across the full booking period: `Client Hours = 319.0`,
+`Internal Hours = 59.0` (from `/api/v1/utilization/employees/Kartik Dhiwar`).
+
+```
+period_util_pct[Kartik Dhiwar] = 319.0 / (319.0 + 59.0)
+                                = 319.0 / 378.0
+                                = 0.843915...  (84.39%)
+```
+
+This exact figure — `0.843915343915344` — is what the Overview
+`employee_ranking` array reports for this employee, and is exactly
+reproduced by `test_overview_formula_a_reconciles` in
+`backend/tests/test_utilization_manual_reconciliation.py`, which
+independently recomputes every employee's `period_util_pct` with plain
+pandas groupby/sum and asserts it against the live endpoint. For the
+per-week form (Weekly Utilization Trend), the same employee's week of
+`2026-05-04` is `40.0 / (40.0 + 5.0) = 0.8888...` (88.9%) — a single
+row of the `hours_by_week` breakdown, not aggregated with any other week.
+
 ### Aggregate-then-ratio: what "period" means
 
 The Overview headline KPI is `Average Period Utilization %`, defined as:
@@ -1236,3 +1274,79 @@ counted as **Exits**, so Exits (5) is lower than Inactive (14) and
 attrition is understated. Filling in `LWD` for those rows would resolve
 it — a data fix, not a code change. *(Exits/attrition appear on HR
 Analytics, not Home — to be reviewed when we get to that page.)*
+
+---
+
+## Data freshness — how uploads take effect
+
+Uploading a new file OR rolling back to a prior version must make
+**every** dashboard consumer of that dataset (every card, chart, filter
+dropdown, and drill-through) reflect the newly active version on the
+very next request — no stale reads, for both `roster` and `booking`
+(and, for completeness, `ground_truth`, even though it is QA-only —
+see above).
+
+**Backend guarantee.** `backend/app/services/data_loader.py` holds one
+module-level in-memory cache per dataset:
+
+| Cache variable | Populated by | Invalidated by |
+|---|---|---|
+| `_roster_cache` | `get_roster_df()` | `reload_roster()` |
+| `_booking_cache` | `get_booking_df()` | `reload_booking_data()` |
+| `_booking_prepared_cache` | `get_booking_df_prepared()` | `reload_booking_data()` (sets it to `None`; recomputed lazily from the fresh `_booking_cache` on next read — see `data_loader.py` line ~76) |
+| `_utilization_ground_truth_cache` | `get_utilization_ground_truth_df()` | `reload_utilization_ground_truth()` |
+
+Both `process_upload()` and `rollback()` in
+`backend/app/services/validation/service.py` call a single shared
+`_reload_active(file_type)` helper (lines ~41-49) immediately after the
+new version is promoted or the active pointer is moved back, mapping
+`file_type` to the correct `reload_*` function:
+
+```python
+{
+    "roster": data_loader.reload_roster,
+    "booking": data_loader.reload_booking_data,
+    "ground_truth": data_loader.reload_utilization_ground_truth,
+}[file_type]()
+```
+
+Because upload and rollback share this one call site, there is no way
+for one code path to refresh the cache while the other forgets to —
+a class of bug (rollback endpoint missing a reload call, or reloading
+only part of a cache set) that this design rules out structurally
+rather than by convention. `reload_booking_data()` refreshes both
+`_booking_cache` and `_booking_prepared_cache` together (clearing the
+latter) specifically because the prepared frame is derived from the
+raw one; refreshing only the raw cache would leave every utilization
+page — which reads the prepared frame — on stale prepared data even
+though `_booking_cache` itself was current.
+
+Locked in by `backend/tests/test_upload_filter_reflection.py`: upload
+version A, assert `/utilization/filter-options` and
+`/utilization/overview` (plus roster equivalents) reflect A; upload
+version B, assert both endpoints now reflect B and not A; roll back to
+A, assert immediate reflection of A again — for both `roster` and
+`booking`.
+
+**Frontend guarantee.** `frontend/src/lib/data-admin-api.ts`'s
+`useUploadDataset()` / `useRollbackDataset()` mutations call
+`invalidateDashboardCachesFor(qc, fileType)` on success, which
+invalidates every TanStack Query cache key that reads the affected
+dataset — not just the admin page's own `['data-admin', ...]` status
+queries (which is all the mutations invalidated previously, leaving
+every other page's cached response stale until an unrelated refetch or
+a manual reload happened to occur):
+
+| `file_type` | Query keys invalidated |
+|---|---|
+| `roster` | `['roster']`, `['booking']` (Home's utilization donut also reads booking-derived summary), `['config', 'filters', 'roster']` |
+| `booking` | `['booking']`, `['utilization']` (every Utilization page), `['config', 'filters', 'booking']` |
+| `ground_truth` | none — only consumed by the admin-only `/qa/reconcile` endpoint, which is not cached via TanStack Query |
+
+**Net guarantee:** after any successful upload or rollback response,
+the next request to any endpoint or any page re-reads the active
+version — verified end-to-end (backend cache + live HTTP response) by
+`test_upload_filter_reflection.py`, and the specific "stale picker
+showing an old version's project/holding counts" symptom this section
+exists to prevent is exactly what that test's filter-options assertions
+guard.
