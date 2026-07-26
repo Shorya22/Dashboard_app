@@ -96,6 +96,9 @@ export interface DatasetSchema {
 export interface DatasetStatus {
   file_type: FileType
   display_name: string
+  /** YAML-declared summary of what this dataset is used for (required vs
+   * optional/QA-only) — config-driven, not hardcoded in the component. */
+  description: string | null
   schema_version: number
   active_version: number | null
   source: 'uploaded' | 'default'
@@ -172,6 +175,7 @@ export function useUploadDataset() {
     onSuccess: (_data, { fileType }) => {
       qc.invalidateQueries({ queryKey: ['data-admin', 'status'] })
       qc.invalidateQueries({ queryKey: ['data-admin', 'history', fileType] })
+      invalidateDashboardCachesFor(qc, fileType)
     },
   })
 }
@@ -186,8 +190,44 @@ export function useRollbackDataset() {
     onSuccess: (_data, fileType) => {
       qc.invalidateQueries({ queryKey: ['data-admin', 'status'] })
       qc.invalidateQueries({ queryKey: ['data-admin', 'history', fileType] })
+      invalidateDashboardCachesFor(qc, fileType)
     },
   })
+}
+
+/**
+ * Every dashboard surface that reads a given dataset must reflect the new
+ * active version on the very next request after an upload OR a rollback —
+ * no stale reads. `useUploadDataset`/`useRollbackDataset` only ever
+ * invalidated their own `data-admin` status/history queries, so every other
+ * page (Utilization Home/Search/Results/Overview/Employee/Project pickers,
+ * HR/Roster pages, the config-driven filter-option dropdowns) kept serving
+ * whatever TanStack Query had cached from before the upload — the backend
+ * (`data_loader.reload_*`) was already correct on the very next HTTP
+ * request, but the frontend cache never asked for it again until an
+ * unrelated refetch or a full page reload happened to occur.
+ *
+ * `roster` feeds `['roster', ...]` and `['booking', ...]` (Home's donut
+ * reads booking summary too); `booking` feeds `['booking', ...]` and every
+ * `['utilization', ...]` query (Home/Search/Results/Overview/Employee/
+ * Project — all read the booking sheet); `ground_truth` only feeds the
+ * admin-only `/qa/reconcile` diagnostic, which isn't cached via
+ * TanStack Query today, so no dashboard invalidation is needed for it.
+ * Filter-option dropdowns (`['config', 'filters', dataset]`) are also
+ * dataset-scoped and invalidated alongside their data.
+ */
+function invalidateDashboardCachesFor(qc: ReturnType<typeof useQueryClient>, fileType: FileType) {
+  if (fileType === 'roster') {
+    qc.invalidateQueries({ queryKey: ['roster'] })
+    qc.invalidateQueries({ queryKey: ['booking'] })
+    qc.invalidateQueries({ queryKey: ['config', 'filters', 'roster'] })
+  } else if (fileType === 'booking') {
+    qc.invalidateQueries({ queryKey: ['booking'] })
+    qc.invalidateQueries({ queryKey: ['utilization'] })
+    qc.invalidateQueries({ queryKey: ['config', 'filters', 'booking'] })
+  }
+  // ground_truth: only consumed by the admin-only /qa/reconcile endpoint,
+  // which is not cached via TanStack Query — nothing to invalidate.
 }
 
 // --- authenticated file downloads ----------------------------------------- //

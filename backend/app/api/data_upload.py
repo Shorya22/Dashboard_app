@@ -234,6 +234,7 @@ def dataset_schema(
         file_type=file_type,
         schema_version=config["schema_version"],
         display_name=config.get("display_name", file_type),
+        description=config.get("description"),
         source_file=config.get("source_file"),
         allow_unknown_columns=config.get("allow_unknown_columns", False),
         columns=columns,
@@ -259,6 +260,7 @@ def datasets_status(
             DatasetStatusModel(
                 file_type=file_type,
                 display_name=config.get("display_name", file_type),
+                description=config.get("description"),
                 schema_version=config["schema_version"],
                 active_version=active,
                 source="uploaded" if active is not None else "default",

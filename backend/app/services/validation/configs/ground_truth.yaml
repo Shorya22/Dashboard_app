@@ -18,6 +18,13 @@
 file_type: ground_truth
 schema_version: 2
 display_name: Utilization Ground Truth
+description: >-
+  Optional — QA / diagnostic only. As of 2026-07-26 no dashboard page reads
+  this file: Utilization Overview computes from the booking sheet using
+  Formula A instead (see docs/METRICS.md). This upload only feeds the
+  admin-only GET /api/v1/qa/reconcile endpoint, which checks Formula A
+  against this file's shipped ratios. Uploading it is not required for the
+  dashboard to work.
 source_file: "PowerBI_Ready_Utilization_May_2026.xlsx"
 read:
   sheet: "Utilization_Long"

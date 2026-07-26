@@ -17,6 +17,10 @@
 file_type: booking
 schema_version: 3
 display_name: Time-Booking Data
+description: >-
+  Required. Powers every Utilization page (Home, Search, Results, Overview,
+  Employee drill-through, Project drill-through) — hours, client vs
+  internal utilization, and every project/holding breakdown.
 source_file: "UTILIZATION DATA SHEET.xlsx"
 read:
   sheet: 0

@@ -24,6 +24,10 @@
 file_type: roster
 schema_version: 7
 display_name: Employee Roster
+description: >-
+  Required. Powers headcount, status, seniority, experience and every HR
+  page (HR Home, HR Analytics, Workforce, Skills & Experience, Employee
+  Directory).
 source_file: "DEPT - Master Data(Sheet1).xlsx"
 read:
   sheet: 0

@@ -572,6 +572,11 @@ function DatasetCard({ dataset }: { dataset: DatasetStatus }) {
           </span>
           <div>
             <CardTitle className="text-base">{dataset.display_name}</CardTitle>
+            {dataset.description && (
+              <p className="mt-0.5 max-w-md text-xs text-muted-foreground">
+                {dataset.description}
+              </p>
+            )}
             <p className="mt-0.5 text-xs text-muted-foreground">
               {dataset.source === 'uploaded' ? (
                 <>

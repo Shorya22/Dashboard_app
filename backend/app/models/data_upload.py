@@ -97,6 +97,13 @@ class SchemaModel(BaseModel):
     file_type: str
     schema_version: int
     display_name: str
+    description: str | None = Field(
+        None,
+        description=(
+            "YAML-declared human-readable summary of what this dataset is "
+            "used for — e.g. required-for-dashboard vs optional/QA-only."
+        ),
+    )
     source_file: str | None = None
     allow_unknown_columns: bool = False
     columns: list[SchemaColumnModel]
@@ -106,6 +113,7 @@ class SchemaModel(BaseModel):
 class DatasetStatusModel(BaseModel):
     file_type: str
     display_name: str
+    description: str | None = None
     schema_version: int
     active_version: int | None = None
     source: str = Field(..., description="'uploaded' or 'default' (bundled file)")
