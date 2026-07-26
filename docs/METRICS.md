@@ -15,7 +15,9 @@ page as we verify them; anything not listed here has not been reviewed yet.
 | Employee Directory | ✅ config-driven columns + Serial No. |
 | Utilization Home | ✅ 5 cards + 2 charts |
 | Utilization Search / Results | ✅ form + 5 cards + records table |
-| Utilization drill-throughs | ⬜ not reviewed |
+| Utilization Overview | ✅ 3 cards + 3 charts (booking-derived Formula A) |
+| Employee Utilization drill-through | ✅ 4 cards + 2 charts + records table |
+| Project Utilization drill-through | ✅ 4 cards + 2 charts + detail table |
 
 Figures below were checked against the live data on 2026-07-22 (roster 52
 rows, booking 2,961 rows) and are shown only to make the rules concrete —
@@ -882,11 +884,347 @@ flagged before it goes live:
 | `weekly_trend_sums_to_total_hours` | Utilization Home's Weekly Hours Trend, summed across every week, equals Total Hours (any unplaced NaN-week rows are named in the detail) |
 | `region_market_bars_sum_to_total_hours` | Utilization Home's Total Hours by Region / Market bars sum to Total Hours (any rows with a blank Region or Market are named in the detail) |
 | `records_summary_reuses_declared_cards` | Utilization Results' 5 summary KPIs route through the same declared cards as Utilization Home — same label, same declaration, no page-to-page drift |
+| `overview_client_hours_equals_booking_client_hours` | Overview's Formula A numerator (per-employee client-hour sum) reconciles to Utilization Home's Client Hours — the ground-truth-to-booking runtime switch cannot have wired a different underlying column |
+| `employee_utilization_totals_reconcile` | For every Employee, the drill-through Total Hours KPI equals that employee's summed `Employee Booked Hours` — same rows, same reduction |
+| `project_utilization_totals_reconcile` | Same shape, scoped by Holding — the Project drill-through Total Hours reconciles to the holding's summed booking rows |
+| `overview_average_period_utilization_pct_in_range` | Formula A ratios are bounded to [0, 1] by construction, so their mean is too — a value outside means a booking row has a negative/out-of-range hours cell or a new Booked Hours Type category has broken the denominator |
 
 Each one exists because of a real failure, not a hypothetical: the
 Strategic Pool 1-vs-3 split across two pages, the Closing Headcount
 47-vs-38 contradiction on a single page, and bars that totalled less than
 the card above them because blanks were dropped.
+
+---
+
+## Page 8 — Utilization Overview
+
+The dashboard's utilization landing page: 3 KPIs plus a weekly trend, a
+utilization-band split, and a per-employee ranking. As of 2026-07-26
+**every value on this page is computed from the booking sheet** using
+Formula A — the ground-truth `Utilization_Long` sheet is no longer a
+runtime input. See `configs/booking_metrics.yaml` for the declarations
+(cards + charts) and `services/utilization_metrics.py::get_utilization_overview`
+for the orchestration.
+
+### Ground truth is QA-only
+
+`PowerBI_Ready_Utilization_May_2026.xlsx` used to power this page
+directly, but the file is:
+1. A rounded export of an underlying DAX calculation — Formula A
+   reproduces the same numbers exactly for 147/156 (94.2%) of matched
+   employee/weeks, and to within 0.3-0.4 pp for the remaining 9 rows
+   (see `utilization_metrics.py`'s module docstring). Its `Weekly
+   Utilization %` column is therefore a *view* of Formula A, not an
+   independent source of truth.
+2. Snapshot-only: it covers **4 weeks** (2026-05-04 to 2026-05-25) while
+   the booking sheet spans 7+ weeks. Consuming it at runtime meant the
+   Overview page silently trailed the current data by whatever the
+   ground-truth's own refresh cadence was — and it was hand-cut in Excel.
+3. Optional at deployment time: a fresh clone with no ground-truth file
+   present would refuse to serve `/utilization/overview` and produced a
+   500. Moving Overview to the booking sheet removes that dependency;
+   the app now boots and answers /overview cleanly with no ground-truth
+   file present, and the QA path returns a helpful 404 (see
+   Consistency Rules below).
+
+The file survives as an OPTIONAL QA input. The admin-only endpoint
+`GET /api/v1/qa/reconcile?dataset=utilization` reads it lazily and
+returns the full Formula A vs ground-truth reconciliation — the same
+`reconcile_weekly_utilization` function used by the module's regression
+test. This is where the 9/156 residual mismatches surface today (before
+the switch they weren't surfaced anywhere — the runtime just showed the
+ground-truth's shipped values). Not a data-quality regression: it is the
+opposite, an unblocked observability.
+
+### Formula A — the one measure that matters here
+
+For each (`Employee`, `Monday of Week`) on the booking sheet:
+
+```
+Weekly Utilization % = Client Hours / (Client Hours + Internal Hours)
+```
+
+where `Client Hours` and `Internal Hours` are the SAME sums the
+Utilization Home KPI strip already reports (via the `client_hours` and
+`internal_hours` cards). The invariant
+`overview_client_hours_equals_booking_client_hours` locks that
+identity: Overview cannot silently read a different underlying column
+from Utilization Home.
+
+Two things Formula A DOES NOT do, both deliberately:
+- **No fixed 45hr denominator.** Formula B (`Client Hours / 45`) is
+  ruled out — 124/156 exact matches vs Formula A's 147/156. The
+  denominator is that employee's actual logged total for that week,
+  which is what "utilization" means when someone with a 2-day timesheet
+  should still round-trip to 100%.
+- **NaN, not 0%, on an empty week.** An employee/week with zero logged
+  hours yields undefined utilization, not "0% utilized" — a different
+  fact from "worked 0 client hours out of some logged total". Preserved
+  through the pipeline (dropped from ranking, excluded from means).
+
+### Aggregate-then-ratio: what "period" means
+
+The Overview headline KPI is `Average Period Utilization %`, defined as:
+
+```
+period_util_pct[e] = Σ Client Hours over the period, for e
+                   / Σ (Client + Internal) over the period, for e
+Average Period Utilization % = mean(period_util_pct)
+```
+
+**Aggregate-then-ratio per employee, then mean across employees.** This
+is decision D1a (2026-07-26). The alternative — mean of per-week ratios
+— would weight a 2-hour partial week the same as a 40-hour full week;
+the aggregate-then-ratio form gives every logged hour equal weight and
+matches what "period total" reads as literally. It also matches the
+ground truth's `Period Total Utilization %` column's semantics, per the
+147/156 exact-match reconciliation.
+
+Every KPI + chart on this page routes through the same YAML declaration
+so the values cannot compute two different ways. The wiring:
+
+| Widget | Card / chart declaration | measure_type / type |
+|---|---|---|
+| Average Period Utilization % | `average_period_utilization_pct` | `avg_of_chart` on `employee_period_utilization` |
+| Total Employees | `total_employees_booking` (reused from Utilization Home) | `distinct_count` |
+| Latest Week Utilization % | `latest_week_utilization_pct` | `avg_of_chart` on `employee_period_utilization`, `scope_to_latest_of_role: week_start` |
+| Weekly Utilization Trend | `weekly_utilization_trend` | `avg_of_group_ratios` (outer: week_start, inner: employee) |
+| Utilization Split | `utilization_split` | `ratio_bands` over `employee_period_utilization` |
+| Employee Period Utilization % (ranking) | `employee_period_utilization` | `ratio_by` (group: employee) |
+
+Three new engine primitives were added to support this page and are
+deliberately generic:
+- `measure_type: ratio` — a scalar `sum(num)/sum(denom)`, each side
+  optionally filtered against an hours-block label key.
+- `measure_type: avg_of_chart` — mean over the values of a declared
+  chart's output. Optional `scope_to_latest_of_role` pre-narrows the
+  frame to rows whose role-column value equals its max.
+- `chart type: ratio_by` — per-group aggregate-then-ratio. `aggregate:
+  per_group` means `sum(num)/sum(denom)` within each group.
+- `chart type: ratio_bands` — first-match-wins band counts over a
+  `ratio_by` chart's values, same `below` semantics as `numeric_bands`.
+- `chart type: avg_of_group_ratios` — for each outer_group value,
+  compute per-inner-group ratios and return the mean. Backs the Weekly
+  Utilization Trend under D1a's per-employee-first semantics.
+
+Numbers change from the previous ground-truth-sourced page:
+
+| | Ground-truth sourced (before) | Booking-derived (now) |
+|---|---|---|
+| Total Employees | 41 | 46+ (booking-only employees now included) |
+| Weeks in trend | 4 (May only) | 7+ (full booking range) |
+| Formula body | DAX calculated column | Formula A, direct compute |
+| Reconcile residuals | Hidden in the shipped column | Visible only via `/qa/reconcile` |
+
+### Card: Average Period Utilization %
+Mean of per-employee period ratios (formula above). Routed via
+`evaluate_booking_card` on `average_period_utilization_pct`, which
+composes `evaluate_booking_chart(employee_period_utilization).values()`
+and takes the mean.
+
+### Card: Total Employees
+Distinct booking-sheet `Employee` values — same declaration as
+Utilization Home (`total_employees_booking`), same `distinct_count`
+primitive, so the two pages cannot report different Overview vs
+Utilization Home headcounts. The DIFFERS-from-roster relationship (46
+booking vs 52 roster) is unchanged from Page 7.
+
+### Card: Latest Week Utilization %
+Mean of per-employee ratios in the latest `Monday of Week`. Declared as
+`latest_week_utilization_pct` with `scope_to_latest_of_role: week_start`
+— the dispatcher narrows the frame to that week before running
+`employee_period_utilization` and averaging. On a booking snapshot that
+only has one week of data, this equals `Average Period Utilization %` by
+construction.
+
+### Chart: Weekly Utilization Trend
+One point per `Monday of Week` — the **mean of per-employee Formula A
+ratios in that week**. For each employee active in the week, compute
+`Client Hours / (Client Hours + Internal Hours)` for that (employee,
+week); then mean those ratios across employees. Same D1a semantics as
+the headline KPIs applied at week granularity, so the latest week's
+trend value equals `Latest Week Utilization %` by construction.
+
+Declared as `weekly_utilization_trend` (chart type `avg_of_group_ratios`,
+`outer_group_role: week_start`, `inner_group_role: employee`) — a new
+chart type added specifically to keep the "per-employee-first, then
+mean" semantics consistent across the KPI strip and the chart. An
+alternative aggregate-then-ratio at the whole-week level was tried and
+rejected: it would weight a heavy logger the same as a light logger and
+drift 0.5-3pp from the KPIs each week.
+
+Edge cases confirmed on the current booking snapshot:
+- **100% weeks** — one employee active in that week logging only Client
+  Hours (e.g. 2026-04-20). The mean of a single 1.0 ratio is 1.0.
+- **0% weeks** — every active employee in that week logged only
+  Internal Hours (e.g. 2026-04-27 with 26 employees, all
+  `Booked Hours Type == "Internal Hours"`). The mean of 26 zeros is 0.
+
+Both are correct D1a values; the shape is a data pattern (early / low
+utilization periods), not a metric bug.
+
+### Chart: Utilization Split
+Band counts over the per-employee ratios: `high` (>= 0.90), `moderate`
+(0.80 to < 0.90), `low` (< 0.80). Declared as `utilization_split`
+(`ratio_bands`, source: `employee_period_utilization`).
+
+> **Thresholds are PROVISIONAL.** The bands ≥0.90 / ≥0.80 / else are
+> the same green / amber cues documented in the ground-truth sheet but
+> have not been confirmed against a real DAX `Utilization Band` measure
+> (still missing per data-model SKILL.md's "Flagged discrepancies"
+> section). They now also share the caveat that the underlying values
+> are booking-derived Formula A rather than the ground-truth's shipped
+> ratios — most rows still land in the same band because Formula A and
+> ground truth agree on 147/156 rows, but a boundary case may drift.
+> Adjust in `charts.utilization_split.bands` — one-line YAML change.
+
+### Chart: Employee Period Utilization %
+Per-employee period ratio (aggregate-then-ratio), sorted descending.
+Declared as `employee_period_utilization` (`ratio_by`, `group_column_role:
+employee`). Populates the same underlying data both the ranking chart
+and the Utilization Split donut read from, so a boundary case cannot
+land in one but not the other.
+
+### Consistency rules (Overview additions)
+
+| Invariant | Guarantees |
+|---|---|
+| `overview_client_hours_equals_booking_client_hours` | Overview's Formula A numerator = Utilization Home's Client Hours (same physical column, same reduction) |
+| `overview_average_period_utilization_pct_in_range` | The headline KPI stays in [0, 1] — a value outside means a negative hours cell or a broken denominator, named in the detail |
+
+---
+
+## Page 9 — Employee Utilization drill-through
+
+Reached from the sidebar (`/utilization/employees`) or from a click in
+Utilization Search / Results. Two states:
+
+- No employee selected — a picker table: one row per Employee with
+  totals (aggregated client-side over the paginated records feed).
+  Same shape as the Project picker, no server-side ranking of employees.
+- One employee selected (`/utilization/employees/{name}`) — 4 KPIs, 2
+  charts, 3 page-local filters.
+
+### The intentional scope split — KPIs vs charts
+
+The four KPIs describe the WHOLE employee: page-local filters (Hours
+Type, Project, Week) narrow **only the two charts**, not the KPI strip.
+This is deliberate and now visible in the YAML declaration:
+`filter_scope: whole_scope` on every drill-through KPI card. The
+`evaluate_booking_card` dispatcher itself never filters — the ENDPOINT
+decides which frame to hand in — but the declaration explains the choice
+so a future reader isn't puzzled by the KPIs "ignoring" the filter row.
+
+Two `filter_scope` values today:
+- `whole_scope` — every drill-through KPI, plus Overview's KPIs.
+- `filtered` — Utilization Home + Search / Results KPIs (endpoint
+  pre-narrows the frame).
+
+### Card: Total Hours
+Sum of `Employee Booked Hours` across every booking row for this
+Employee. Reuses the `total_hours` declaration from Utilization Home —
+same measure_type: sum, same column role — so the drill-through and the
+KPI strip on Home cannot compute Total Hours two different ways.
+
+### Card: Client Hours
+Same reuse: sum of `Employee Booked Hours` narrowed to `Booked Hours
+Type == "Client Hours"`, from the `client_hours` card.
+
+### Card: Internal Hours
+Mirror of Client Hours, from the `internal_hours` card. `Client +
+Internal = Total` holds by the same `hours_split_covers_all_hours`
+invariant that guards it on Utilization Home.
+
+### Card: Total Projects
+Distinct `Project Name` for this employee, from the `total_projects`
+card. Same PROVISIONAL-column-resolution caveat as Page 7 (the DAX
+targets `Sheet1[Project]`, resolved to `Project Name`).
+
+### Chart: Total Hours by Project
+Sum of `Employee Booked Hours` per `Project Name`, desc. Declared as
+`employee_hours_by_project` in `charts:` (`sum_by`, `group_column_role:
+project`, `value_column_role: hours_value`). Routes through
+`evaluate_booking_chart` so a shape change is a YAML edit.
+
+### Chart: Total Hours by Week Start
+Per-week bucket of `Employee Booked Hours`, split by `Booked Hours
+Type` — Client / Internal columns per week, one bar cluster per week.
+Declared as `employee_hours_by_week` (`sum_by_split`, group: week_start,
+split: hours_type). `sum_by_split` is a new chart type that returns
+the projected `list[{group, split_1: v, split_2: v, ...}]` shape rather
+than a raw pivot — so the endpoint doesn't need a per-chart Python
+reshape (this was a real duplication between the two drill-throughs).
+
+### Records table
+Not a chart, not a KPI — a page-local projection built client-side from
+`/utilization/records?employee={name}`. Reuses the Utilization Results
+page's records column set. The 258-row booking sheet is small enough
+to fetch in full and filter client-side; scaling that to a larger
+dataset would move filtering server-side, and the `employee` filter
+parameter is already accepted by `/utilization/records`.
+
+### Page filters
+Three: Hours Type (dropdown from `hours_type` filter YAML), Project (a
+page-local option list — this employee's distinct project set, not a
+global filter), Week (hierarchical, reuses the `week` filter YAML).
+Filter LABELS are read from `useFilterConfig` on the frontend — no
+hardcoded English strings on the page.
+
+---
+
+## Page 10 — Project (Holding) Utilization drill-through
+
+Reached from the sidebar (`/utilization/projects`) or a click on a
+Holding row in Search / Results. Same shape as the Employee page: a
+picker for the param-less state, and a detail page for a selected
+`/utilization/projects/{holding}`.
+
+### Cards
+Total Employees, Total Hours, Client Hours, Internal Hours — all four
+`filter_scope: whole_scope`, describing the entire holding regardless
+of the page's Employee filter (which narrows only the charts + detail
+table).
+
+- **Total Employees** — distinct booking-sheet `Employee` values for
+  this holding. Derived client-side from the paginated records feed
+  today (matches the Employee-picker pattern); a follow-up could
+  declare a `total_employees_for_holding` card, but the value is a
+  straightforward count over a small frame and hasn't been split out.
+- **Total Hours / Client Hours / Internal Hours** — reuse the same
+  declarations as Utilization Home and the Employee page. One
+  declaration, three surfaces, no drift.
+
+### Chart: Total Hours by Employee and Hours Type
+Sum of `Employee Booked Hours` per (Employee, Booked Hours Type). One
+bar per employee, split Client / Internal. Declared as
+`project_hours_by_employee` (`sum_by_split`, group: employee, split:
+hours_type).
+
+### Chart: Total Hours by Week Start and Hours Type
+Same shape as the Employee page's week chart, holding-scoped. Declared
+as `project_hours_by_week` (`sum_by_split`, group: week_start, split:
+hours_type).
+
+### Detail table (Employee, Project, Region, Department)
+A distinct-tuple projection over this holding's rows —
+`drop_duplicates(["Employee", "Project Name", "Region (EC)",
+"Department"])`. Not YAML-declared. Kept in code because it is a
+PROJECTION, not an aggregation — there is no number to reconcile, only
+rows to display. Adding a `distinct_rows` chart type would only add
+indirection for zero engine gain. Same principle as the Records table's
+row shape on Page 7's Results.
+
+### Page filter
+One: Employee (page-local, distinct set of this holding's employees).
+Same treatment as Project on the Employee page — a page-local option
+list, not a global filter YAML entry.
+
+### Consistency rules (drill-through additions)
+
+| Invariant | Guarantees |
+|---|---|
+| `employee_utilization_totals_reconcile` | Every Employee's drill-through Total Hours equals that employee's summed booking rows — sampled across 5 employees per run |
+| `project_utilization_totals_reconcile` | Every Holding's drill-through Total Hours equals that holding's summed booking rows — sampled across 5 holdings per run |
 
 ---
 

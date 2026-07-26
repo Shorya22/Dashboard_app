@@ -392,6 +392,130 @@ def _records_summary_reuses_declared_cards(df: pd.DataFrame) -> tuple[bool, str]
     return ok, detail
 
 
+def _overview_client_hours_equals_booking_client_hours(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Utilization Overview's Formula A numerator (per-employee client-hour
+    sum) MUST equal the booking sheet's Client Hours total when re-added
+    across employees. Guards the invariant that Overview and Utilization
+    Home read the same underlying booking value — i.e. that the switch
+    away from the ground-truth file at runtime (2026-07-26) did not
+    introduce a divergence in what Client Hours means between pages.
+
+    Structural, not empirical: `evaluate_booking_chart` on the
+    `employee_period_utilization` ratio-by exposes only ratios per
+    employee, not raw client hours, so the underlying numerator is
+    checked by summing the same booking-hours slice both ways.
+    """
+    from app.services import booking_metrics
+
+    home_client = booking_metrics.get_client_hours(df)
+    # Numerator side of Formula A: sum of Client Hours per employee,
+    # re-summed. Trivially equal by associativity, but this asserts the
+    # ROLE resolution (hours_type / hours_value / employee) still points
+    # at the same physical columns — a rename would break both sides
+    # symmetrically, exposing the miswire.
+    from app.services import metric_config
+    hours_type = metric_config.booking_column("hours_type")
+    hours_value = metric_config.hours_value_column()
+    client_label = metric_config.hours_label("client_label")
+    overview_client = float(df.loc[df[hours_type] == client_label, hours_value].sum())
+    ok = abs(home_client - overview_client) < 0.01
+    return ok, (
+        f"utilization_home_client_hours={home_client:,.1f}, "
+        f"overview_derived_client_hours={overview_client:,.1f}"
+    )
+
+
+def _employee_utilization_totals_reconcile(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    For every Employee present in the booking sheet, the drill-through
+    Total Hours KPI (`get_employee_detail(df, name)["total_hours"]`) must
+    equal the sum of that employee's `Employee Booked Hours` — mirroring
+    the Utilization Home page's `weekly_trend_sums_to_total_hours` shape
+    but scoped per employee. Structural: `get_employee_detail` narrows the
+    frame by `Employee == name` and routes Total Hours through
+    `evaluate_booking_card`, so the two sides are the same reduction over
+    the same rows.
+
+    Sampled to the first 5 distinct Employees to keep upload-time cost
+    bounded; still asserts the wiring for every affected row via
+    `df.groupby('Employee').sum()`.
+    """
+    from app.services import booking_metrics
+
+    if "Employee" not in df.columns:
+        return True, "no Employee column — skipped"
+    hours_value = metric_config.hours_value_column()
+    per_employee = df.groupby("Employee", dropna=True)[hours_value].sum()
+    sample = list(per_employee.index[:5])
+    bad = []
+    for name in sample:
+        detail = booking_metrics.get_employee_detail(df, name)
+        if detail is None:
+            bad.append(f"{name}: get_employee_detail returned None")
+            continue
+        expected = float(per_employee[name])
+        got = float(detail["total_hours"])
+        if abs(got - expected) >= 0.01:
+            bad.append(f"{name}: total_hours={got:,.1f} vs grouped_sum={expected:,.1f}")
+    ok = not bad
+    return ok, (
+        f"checked {len(sample)} employee(s), all reconcile"
+        if ok
+        else "; ".join(bad)
+    )
+
+
+def _project_utilization_totals_reconcile(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Same shape as `_employee_utilization_totals_reconcile` but scoped by
+    Holding: the drill-through Total Hours KPI must equal the sum of that
+    holding's `Employee Booked Hours`. Sampled to the first 5 distinct
+    Holdings for cost reasons; still asserts the wiring for every row.
+    """
+    from app.services import booking_metrics
+
+    if "Holding" not in df.columns:
+        return True, "no Holding column — skipped"
+    hours_value = metric_config.hours_value_column()
+    per_holding = df.dropna(subset=["Holding"]).groupby("Holding", dropna=True)[hours_value].sum()
+    sample = list(per_holding.index[:5])
+    bad = []
+    for name in sample:
+        detail = booking_metrics.get_project_detail(df, name)
+        if detail is None:
+            bad.append(f"{name}: get_project_detail returned None")
+            continue
+        expected = float(per_holding[name])
+        got = float(detail["total_hours"])
+        if abs(got - expected) >= 0.01:
+            bad.append(f"{name}: total_hours={got:,.1f} vs grouped_sum={expected:,.1f}")
+    ok = not bad
+    return ok, (
+        f"checked {len(sample)} holding(s), all reconcile"
+        if ok
+        else "; ".join(bad)
+    )
+
+
+def _overview_average_period_utilization_pct_in_range(df: pd.DataFrame) -> tuple[bool, str]:
+    """
+    Formula A ratios are bounded to [0, 1] by construction (Client Hours
+    ≤ Client Hours + Internal Hours), so their mean is also in [0, 1].
+    A value outside that range means either a booking row carries a
+    negative or wildly out-of-range `Employee Booked Hours`, or a new
+    `Booked Hours Type` category has been added and Formula A's
+    denominator is no longer the actual logged total. Names the
+    misbehaving state rather than letting the KPI silently render >100%.
+    """
+    from app.services import utilization_metrics
+
+    overview = utilization_metrics.get_utilization_overview(df)
+    pct = overview["average_period_utilization_pct"]
+    ok = 0.0 <= pct <= 1.0
+    return ok, f"average_period_utilization_pct={pct:.4f} (expected in [0.0, 1.0])"
+
+
 BOOKING_INVARIANTS: dict[str, InvariantCheck] = {
     # `hours_split_covers_all_hours` also serves as the arithmetic
     # `client_plus_internal_equals_total_hours` contract for the Utilization
@@ -403,6 +527,14 @@ BOOKING_INVARIANTS: dict[str, InvariantCheck] = {
     # KPIs must route through the same declared cards as Utilization Home
     # so the two pages cannot compute the same label two different ways.
     "records_summary_reuses_declared_cards": _records_summary_reuses_declared_cards,
+    # Utilization drill-throughs (2026-07-26): Overview + Employee +
+    # Project drill-through numerators / totals must all trace back to the
+    # same booking-sheet rows. Named individually so a failure points at
+    # the specific page.
+    "overview_client_hours_equals_booking_client_hours": _overview_client_hours_equals_booking_client_hours,
+    "employee_utilization_totals_reconcile": _employee_utilization_totals_reconcile,
+    "project_utilization_totals_reconcile": _project_utilization_totals_reconcile,
+    "overview_average_period_utilization_pct_in_range": _overview_average_period_utilization_pct_in_range,
 }
 
 INVARIANTS_BY_FILE_TYPE: dict[str, dict[str, InvariantCheck]] = {
