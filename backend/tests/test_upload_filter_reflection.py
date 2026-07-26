@@ -415,3 +415,163 @@ def test_booking_only_employee_warns_but_does_not_block_upload(client):
         and i.get("value") == "Zzzghostemployee Xyzzy"
     ]
     assert len(ghost_warnings) == 1, ghost_warnings
+
+
+# --------------------------------------------------------------------- #
+# Drill-through pages — end-to-end upload-reflection regression
+# --------------------------------------------------------------------- #
+# Locks that uploading a booking file with a new Employee + Holding makes
+# their drill-through endpoints (`/utilization/employees/{name}` and
+# `/utilization/projects/{holding}`) respond with the correct booking-
+# derived numbers immediately, with no code or YAML change — mirrors the
+# Search/Results reflection test above but for the drill-through KPIs +
+# chart shapes (2026-07-26 config-driven migration).
+def test_drill_throughs_reflect_new_booking_data(client):
+    token = _admin_token(client)
+
+    # Upload the modified booking sheet (adds 5 rows tied to a synthetic
+    # holding + 3 employees, all 8h Client Hours).
+    r_df = _append_roster_rows(pd.read_excel(REAL_ROSTER))
+    b_df = _append_booking_rows(pd.read_excel(REAL_BOOKING))
+    assert (
+        client.post(
+            "/api/v1/data/upload/roster",
+            files=_files(_xlsx_bytes(r_df)),
+            headers=_auth(token),
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/data/upload/booking",
+            files=_files(_xlsx_bytes(b_df)),
+            headers=_auth(token),
+        ).status_code
+        == 200
+    )
+
+    # (1) Employee drill-through — SYN_TEST_1 has 2 rows, 8h Client each.
+    emp = client.get(
+        "/api/v1/utilization/employees/SYN_TEST_1", headers=_auth(token)
+    )
+    assert emp.status_code == 200, emp.text
+    body = emp.json()
+    assert body["employee"] == "SYN_TEST_1"
+    assert body["total_hours"] == pytest.approx(16.0)
+    assert body["client_hours"] == pytest.approx(16.0)
+    assert body["internal_hours"] == pytest.approx(0.0)
+    assert body["total_projects"] == 1
+    # Hours-by-project chart (declared `employee_hours_by_project`) —
+    # exactly SyntheticProject with 16h.
+    projects = {p["project"]: p["total_hours"] for p in body["hours_by_project"]}
+    assert projects == {"SyntheticProject": pytest.approx(16.0)}
+    # Hours-by-week (declared `employee_hours_by_week`, sum_by_split) —
+    # one week bucket with all 16h under Client Hours.
+    weeks = {w["week_start"]: (w["client_hours"], w["internal_hours"]) for w in body["hours_by_week"]}
+    assert weeks == {"2027-01-04": (pytest.approx(16.0), pytest.approx(0.0))}
+
+    # (2) Project (Holding) drill-through — SyntheticHolding has 5 rows,
+    # 40h Client total, three distinct employees.
+    proj = client.get(
+        "/api/v1/utilization/projects/SyntheticHolding", headers=_auth(token)
+    )
+    assert proj.status_code == 200, proj.text
+    body = proj.json()
+    assert body["holding"] == "SyntheticHolding"
+    assert body["total_hours"] == pytest.approx(40.0)
+    assert body["client_hours"] == pytest.approx(40.0)
+    assert body["internal_hours"] == pytest.approx(0.0)
+    by_emp = {e["employee"]: (e["client_hours"], e["internal_hours"]) for e in body["hours_by_employee"]}
+    assert by_emp == {
+        "SYN_TEST_1": (pytest.approx(16.0), pytest.approx(0.0)),
+        "SYN_TEST_2": (pytest.approx(8.0), pytest.approx(0.0)),
+        "SYN_TEST_3": (pytest.approx(16.0), pytest.approx(0.0)),
+    }
+    # The rollback contract itself is already exhaustively verified by
+    # `test_rollback_removes_new_values_from_filter_options` above (which
+    # uploads a baseline v1, then a v2, then rolls both back). This test's
+    # scope is the drill-through reflection — new booking data ↦ new
+    # drill-through responses, no code / YAML change.
+
+
+# --------------------------------------------------------------------- #
+# Ground-truth-absent smoke test
+# --------------------------------------------------------------------- #
+# As of 2026-07-26 the Overview page is booking-derived (Formula A, D1a)
+# and the `PowerBI_Ready_Utilization_May_2026.xlsx` file is only needed
+# by the admin `/qa/reconcile` endpoint. This locks the contract that
+# the runtime dashboard starts and answers /overview cleanly even when
+# the ground-truth file is absent, and that /qa/reconcile 404s with a
+# helpful body naming the missing file. When the file IS present the
+# same reconcile path still returns 200.
+def test_overview_works_and_reconcile_404s_when_ground_truth_absent(
+    client, tmp_path, monkeypatch
+):
+    """
+    Fake the ground-truth path to a nonexistent file via monkeypatch so
+    the storage layer's `resolved_path("ground_truth")` returns a path
+    that does not exist. `load_ground_truth_long` now returns None when
+    the file is missing and the loader chain propagates that as None.
+    """
+    from app.services import utilization_metrics, data_loader
+
+    missing = tmp_path / "ground_truth.absent.xlsx"
+    assert not missing.exists()
+
+    monkeypatch.setattr(utilization_metrics, "DEFAULT_GROUND_TRUTH_PATH", missing)
+    # Also point storage.resolved_path at the missing file so upload-storage
+    # doesn't fall through to the bundled default.
+    from app.services.validation import storage as _storage
+    monkeypatch.setitem(_storage._DEFAULT_PATHS, "ground_truth", missing)
+    data_loader._utilization_ground_truth_cache = None
+
+    token = _admin_token(client)
+
+    # /utilization/overview must still return 200 with the booking-derived
+    # response shape — the endpoint doesn't consult the ground-truth file
+    # anymore (2026-07-26 change).
+    resp = client.get("/api/v1/utilization/overview", headers=_auth(token))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert 0.0 <= body["average_period_utilization_pct"] <= 1.0
+    assert body["total_employees"] > 0
+    assert body["weekly_trend"]
+    assert body["employee_ranking"]
+
+    # /api/v1/qa/reconcile must 404 with a helpful message naming the
+    # missing file.
+    reconcile = client.get(
+        "/api/v1/qa/reconcile?dataset=utilization", headers=_auth(token)
+    )
+    assert reconcile.status_code == 404, reconcile.text
+    assert "ground-truth" in reconcile.json()["detail"].lower()
+
+
+def test_reconcile_returns_200_when_ground_truth_present(client):
+    """
+    Contrast test: with the bundled ground-truth file present at its
+    default path, `/api/v1/qa/reconcile` returns 200 and a well-shaped
+    reconciliation dict — the admin-only QA path still works, only the
+    runtime dependency was removed.
+    """
+    token = _admin_token(client)
+    resp = client.get(
+        "/api/v1/qa/reconcile?dataset=utilization", headers=_auth(token)
+    )
+    # If the bundled file is genuinely absent on this checkout the smoke
+    # test above still fires; here we simply require that when it IS
+    # present the shape is correct.
+    if resp.status_code == 404:
+        pytest.skip("bundled ground-truth file not present on this checkout")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    for key in (
+        "matched_employee_weeks",
+        "formula_a_exact_matches",
+        "formula_b_exact_matches",
+        "formula_a_match_rate",
+        "formula_b_match_rate",
+        "mismatches",
+        "unmatched_ground_truth_employee_weeks",
+    ):
+        assert key in body, f"missing {key} in reconcile response"
