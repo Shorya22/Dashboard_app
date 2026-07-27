@@ -45,7 +45,6 @@ def _reload_active(file_type: str) -> None:
     {
         "roster": data_loader.reload_roster,
         "booking": data_loader.reload_booking_data,
-        "ground_truth": data_loader.reload_utilization_ground_truth,
     }[file_type]()
 
 

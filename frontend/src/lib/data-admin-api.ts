@@ -3,7 +3,7 @@ import { apiClient } from './api-client'
 
 // Types mirror backend/app/models/data_upload.py. Keep field names exact.
 
-export type FileType = 'roster' | 'booking' | 'ground_truth'
+export type FileType = 'roster' | 'booking'
 
 export interface ValidationIssue {
   stage: string
@@ -210,11 +210,9 @@ export function useRollbackDataset() {
  * `roster` feeds `['roster', ...]` and `['booking', ...]` (Home's donut
  * reads booking summary too); `booking` feeds `['booking', ...]` and every
  * `['utilization', ...]` query (Home/Search/Results/Overview/Employee/
- * Project — all read the booking sheet); `ground_truth` only feeds the
- * admin-only `/qa/reconcile` diagnostic, which isn't cached via
- * TanStack Query today, so no dashboard invalidation is needed for it.
- * Filter-option dropdowns (`['config', 'filters', dataset]`) are also
- * dataset-scoped and invalidated alongside their data.
+ * Project — all read the booking sheet). Filter-option dropdowns
+ * (`['config', 'filters', dataset]`) are also dataset-scoped and
+ * invalidated alongside their data.
  */
 function invalidateDashboardCachesFor(qc: ReturnType<typeof useQueryClient>, fileType: FileType) {
   if (fileType === 'roster') {
@@ -226,8 +224,6 @@ function invalidateDashboardCachesFor(qc: ReturnType<typeof useQueryClient>, fil
     qc.invalidateQueries({ queryKey: ['utilization'] })
     qc.invalidateQueries({ queryKey: ['config', 'filters', 'booking'] })
   }
-  // ground_truth: only consumed by the admin-only /qa/reconcile endpoint,
-  // which is not cached via TanStack Query — nothing to invalidate.
 }
 
 // --- authenticated file downloads ----------------------------------------- //

@@ -13,10 +13,10 @@ multi-value `Client as on June 2026` column, per that skill's explicit
 instruction to prefer this table for per-client metrics.
 
 Utilization-percentage measures (`Weekly Utilization %` and friends) are
-OUT OF SCOPE for this module — deferred per data-model SKILL.md pending
-an overlapping-week export between the booking sheet and the
-ground-truth utilization sheet. Do not add them here without that
-reconciliation being unblocked first.
+computed here via the config-driven `ratio_by`/`ratio_bands` chart types
+(see `evaluate_booking_card`/`evaluate_booking_chart` below) using
+Formula A — `Client Hours / (Client Hours + Internal Hours)` — the only
+data source is this booking sheet.
 """
 
 from __future__ import annotations

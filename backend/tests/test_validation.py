@@ -28,7 +28,6 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 REAL_FILES = {
     "roster": DATA_DIR / "DEPT - Master Data(Sheet1).xlsx",
     "booking": DATA_DIR / "UTILIZATION DATA SHEET.xlsx",
-    "ground_truth": DATA_DIR / "PowerBI_Ready_Utilization_May_2026.xlsx",
 }
 MAX_BYTES = 25 * 1024 * 1024
 
@@ -42,7 +41,6 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 SNAPSHOTS = {
     "roster": FIXTURES_DIR / "roster_snapshot.xlsx",
     "booking": FIXTURES_DIR / "booking_snapshot.xlsx",
-    "ground_truth": FIXTURES_DIR / "ground_truth_snapshot.xlsx",
 }
 
 
@@ -99,7 +97,7 @@ def test_real_files_pass(file_type):
 
 
 def test_available_file_types():
-    assert set(available_file_types()) == {"roster", "booking", "ground_truth"}
+    assert set(available_file_types()) == {"roster", "booking"}
 
 
 # --------------------------------------------------------------------------- #
@@ -389,36 +387,6 @@ def test_booking_missing_employee_is_warning(tmp_path):
     report = _validate_df(df, "booking", tmp_path)
     assert report.passed, [i.to_dict() for i in report.errors]
     assert "empty_optional_value" in _rules_fired_at(report, Severity.WARNING)
-
-
-# --------------------------------------------------------------------------- #
-# ground truth
-# --------------------------------------------------------------------------- #
-def test_ground_truth_blank_utilization_accepted(tmp_path):
-    # Both utilization columns are nullable in light mode. Weekly blanks are
-    # meaningful (no booking-based rate that week) and must NOT be defaulted
-    # to 0, which would drag the average down with a fake zero.
-    df = _read_real("ground_truth")
-    df.loc[0, "Weekly Utilization %"] = None
-    df.loc[1, "Period Total Utilization %"] = None
-    report = _validate_df(df, "ground_truth", tmp_path)
-    assert report.passed, [i.to_dict() for i in report.errors]
-
-
-def test_ground_truth_utilization_above_100_pct_accepted(tmp_path):
-    # No upper bound: overtime can legitimately exceed 100%.
-    df = _read_real("ground_truth")
-    df.loc[0, "Weekly Utilization %"] = 1.5
-    report = _validate_df(df, "ground_truth", tmp_path)
-    assert report.passed, [i.to_dict() for i in report.errors]
-
-
-def test_ground_truth_utilization_stays_numeric(tmp_path):
-    df = _read_real("ground_truth")
-    df["Weekly Utilization %"] = "high"
-    report = _validate_df(df, "ground_truth", tmp_path)
-    assert not report.passed
-    assert any(i.column == "Weekly Utilization %" for i in report.errors)
 
 
 # --------------------------------------------------------------------------- #

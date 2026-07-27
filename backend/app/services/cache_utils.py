@@ -44,8 +44,8 @@ def cache_on_df(fn: F) -> F:
     Cache `fn`'s return value keyed on `(id(first_arg), *rest, **kwargs)`.
 
     Intended for `services/` functions whose first positional argument is
-    the cached DataFrame (`df`, `booking_df`, `ground_truth_long_df`,
-    ...) and whose remaining arguments (if any) are small and hashable
+    the cached DataFrame (`df`, `booking_df`, ...) and whose remaining
+    arguments (if any) are small and hashable
     (e.g. `employee: str`). Do not use on functions taking unhashable
     extra arguments (e.g. raw lists) without converting them to tuples
     first.

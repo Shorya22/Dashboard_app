@@ -296,10 +296,9 @@ charts:
   # ---------------------------------------------------------------------------
   # Every chart below is a Formula A projection off the booking sheet:
   # `Client Hours / (Client Hours + Internal Hours)`, computed per group
-  # (aggregate-then-ratio: sum(client) / sum(total) within each group). The
-  # ground-truth `Utilization_Long` sheet is NO LONGER a runtime dependency —
-  # it survives only as a QA reconciliation input (see `/api/v1/qa/reconcile`
-  # and METRICS.md Page 8's "Ground truth is QA-only" note).
+  # (aggregate-then-ratio: sum(client) / sum(total) within each group).
+  # The roster and booking sheets are the only two data sources the app
+  # reads (see METRICS.md's "Data sources" table).
   #
   # `ratio_by`: per-group aggregate-then-ratio. `aggregate: per_group` means
   # sum(num)/sum(denom) within each group (as opposed to averaging per-row

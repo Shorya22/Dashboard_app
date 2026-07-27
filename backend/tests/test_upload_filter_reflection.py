@@ -43,7 +43,6 @@ def client(tmp_path, monkeypatch):
     data_loader._roster_cache = None
     data_loader._booking_cache = None
     data_loader._booking_prepared_cache = None
-    data_loader._utilization_ground_truth_cache = None
     limiter.reset()
     with TestClient(app) as c:
         yield c
@@ -51,7 +50,6 @@ def client(tmp_path, monkeypatch):
     data_loader._roster_cache = None
     data_loader._booking_cache = None
     data_loader._booking_prepared_cache = None
-    data_loader._utilization_ground_truth_cache = None
 
 
 def _admin_token(client) -> str:
@@ -495,41 +493,15 @@ def test_drill_throughs_reflect_new_booking_data(client):
 
 
 # --------------------------------------------------------------------- #
-# Ground-truth-absent smoke test
+# Overview smoke test
 # --------------------------------------------------------------------- #
-# As of 2026-07-26 the Overview page is booking-derived (Formula A, D1a)
-# and the `PowerBI_Ready_Utilization_May_2026.xlsx` file is only needed
-# by the admin `/qa/reconcile` endpoint. This locks the contract that
-# the runtime dashboard starts and answers /overview cleanly even when
-# the ground-truth file is absent, and that /qa/reconcile 404s with a
-# helpful body naming the missing file. When the file IS present the
-# same reconcile path still returns 200.
-def test_overview_works_and_reconcile_404s_when_ground_truth_absent(
-    client, tmp_path, monkeypatch
-):
+def test_overview_returns_well_shaped_booking_derived_response(client):
     """
-    Fake the ground-truth path to a nonexistent file via monkeypatch so
-    the storage layer's `resolved_path("ground_truth")` returns a path
-    that does not exist. `load_ground_truth_long` now returns None when
-    the file is missing and the loader chain propagates that as None.
+    Utilization Overview is computed entirely from the booking sheet
+    (Formula A, D1a) — the roster and booking sheets are the only two
+    data sources the app reads. This locks the response shape.
     """
-    from app.services import utilization_metrics, data_loader
-
-    missing = tmp_path / "ground_truth.absent.xlsx"
-    assert not missing.exists()
-
-    monkeypatch.setattr(utilization_metrics, "DEFAULT_GROUND_TRUTH_PATH", missing)
-    # Also point storage.resolved_path at the missing file so upload-storage
-    # doesn't fall through to the bundled default.
-    from app.services.validation import storage as _storage
-    monkeypatch.setitem(_storage._DEFAULT_PATHS, "ground_truth", missing)
-    data_loader._utilization_ground_truth_cache = None
-
     token = _admin_token(client)
-
-    # /utilization/overview must still return 200 with the booking-derived
-    # response shape — the endpoint doesn't consult the ground-truth file
-    # anymore (2026-07-26 change).
     resp = client.get("/api/v1/utilization/overview", headers=_auth(token))
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -537,41 +509,3 @@ def test_overview_works_and_reconcile_404s_when_ground_truth_absent(
     assert body["total_employees"] > 0
     assert body["weekly_trend"]
     assert body["employee_ranking"]
-
-    # /api/v1/qa/reconcile must 404 with a helpful message naming the
-    # missing file.
-    reconcile = client.get(
-        "/api/v1/qa/reconcile?dataset=utilization", headers=_auth(token)
-    )
-    assert reconcile.status_code == 404, reconcile.text
-    assert "ground-truth" in reconcile.json()["detail"].lower()
-
-
-def test_reconcile_returns_200_when_ground_truth_present(client):
-    """
-    Contrast test: with the bundled ground-truth file present at its
-    default path, `/api/v1/qa/reconcile` returns 200 and a well-shaped
-    reconciliation dict — the admin-only QA path still works, only the
-    runtime dependency was removed.
-    """
-    token = _admin_token(client)
-    resp = client.get(
-        "/api/v1/qa/reconcile?dataset=utilization", headers=_auth(token)
-    )
-    # If the bundled file is genuinely absent on this checkout the smoke
-    # test above still fires; here we simply require that when it IS
-    # present the shape is correct.
-    if resp.status_code == 404:
-        pytest.skip("bundled ground-truth file not present on this checkout")
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    for key in (
-        "matched_employee_weeks",
-        "formula_a_exact_matches",
-        "formula_b_exact_matches",
-        "formula_a_match_rate",
-        "formula_b_match_rate",
-        "mismatches",
-        "unmatched_ground_truth_employee_weeks",
-    ):
-        assert key in body, f"missing {key} in reconcile response"

@@ -147,27 +147,26 @@ server-side for traceability. Contrast with a defaulted blank, which
 
 ## Data sources
 
+The app reads exactly **two** source files — nothing else:
+
 | Source | File | Drives |
 |---|---|---|
 | Roster | `DEPT - Master Data(Sheet1).xlsx` | Headcount, status, seniority, experience |
-| Booking | `UTILIZATION DATA SHEET.xlsx` | Hours, client vs internal utilization |
-| Ground truth | `PowerBI_Ready_Utilization_May_2026.xlsx` | **QA-only** (see below) — NOT a runtime input to any dashboard page |
+| Booking | `UTILIZATION DATA SHEET.xlsx` | Hours, client vs internal utilization, Formula A utilization % |
 
 The dashboard always reads the **latest promoted upload**; if nothing has
 been uploaded it falls back to the bundled file.
 
-**Ground truth is QA-only, not a dashboard data source.** As of
-2026-07-26 no dashboard page reads `PowerBI_Ready_Utilization_May_2026.xlsx`
-at runtime — Utilization Overview computes from the booking sheet using
-Formula A instead (see Page 8 below). The file is only consulted by the
-admin-only `GET /api/v1/qa/reconcile?dataset=utilization` diagnostic
-endpoint, which checks Formula A against this file's shipped ratios. Its
-upload card on the Data Management page is labelled accordingly
-(`display_name`/`description` in
-`backend/app/services/validation/configs/ground_truth.yaml`, rendered
-verbatim by the frontend — config-driven, not hardcoded in the React
-component) so uploading it never reads as required for the dashboard to
-work.
+**As of 2026-07-27 the ground-truth Power BI export
+(`PowerBI_Ready_Utilization_May_2026.xlsx`) has been removed entirely** —
+the file, its ingestion contract, its loaders, the reconciliation
+function, and the admin-only `/api/v1/qa/reconcile` endpoint that
+consulted it are all gone from the codebase. It had already stopped being
+a runtime dependency on 2026-07-26 (Utilization Overview switched to
+booking-derived Formula A — see Page 8 below); removing it outright
+simply drops the now-unused QA-only diagnostic path so the Data
+Management page only ever offers the two datasets that actually run the
+dashboard.
 
 ---
 
@@ -901,7 +900,7 @@ flagged before it goes live:
 | `weekly_trend_sums_to_total_hours` | Utilization Home's Weekly Hours Trend, summed across every week, equals Total Hours (any unplaced NaN-week rows are named in the detail) |
 | `region_market_bars_sum_to_total_hours` | Utilization Home's Total Hours by Region / Market bars sum to Total Hours (any rows with a blank Region or Market are named in the detail) |
 | `records_summary_reuses_declared_cards` | Utilization Results' 5 summary KPIs route through the same declared cards as Utilization Home — same label, same declaration, no page-to-page drift |
-| `overview_client_hours_equals_booking_client_hours` | Overview's Formula A numerator (per-employee client-hour sum) reconciles to Utilization Home's Client Hours — the ground-truth-to-booking runtime switch cannot have wired a different underlying column |
+| `overview_client_hours_equals_booking_client_hours` | Overview's Formula A numerator (per-employee client-hour sum) reconciles to Utilization Home's Client Hours — both pages read the same underlying booking column |
 | `employee_utilization_totals_reconcile` | For every Employee, the drill-through Total Hours KPI equals that employee's summed `Employee Booked Hours` — same rows, same reduction |
 | `project_utilization_totals_reconcile` | Same shape, scoped by Holding — the Project drill-through Total Hours reconciles to the holding's summed booking rows |
 | `overview_average_period_utilization_pct_in_range` | Formula A ratios are bounded to [0, 1] by construction, so their mean is too — a value outside means a booking row has a negative/out-of-range hours cell or a new Booked Hours Type category has broken the denominator |
@@ -916,42 +915,37 @@ the card above them because blanks were dropped.
 ## Page 8 — Utilization Overview
 
 The dashboard's utilization landing page: 3 KPIs plus a weekly trend, a
-utilization-band split, and a per-employee ranking. As of 2026-07-26
-**every value on this page is computed from the booking sheet** using
-Formula A — the ground-truth `Utilization_Long` sheet is no longer a
-runtime input. See `configs/booking_metrics.yaml` for the declarations
+utilization-band split, and a per-employee ranking. **Every value on this
+page is computed from the booking sheet** using Formula A — there is no
+other data source. See `configs/booking_metrics.yaml` for the declarations
 (cards + charts) and `services/utilization_metrics.py::get_utilization_overview`
 for the orchestration.
 
-### Ground truth is QA-only
+### History — ground truth removed entirely (2026-07-27)
 
-`PowerBI_Ready_Utilization_May_2026.xlsx` used to power this page
-directly, but the file is:
+This page used to be sourced from a ground-truth Power BI export
+(`PowerBI_Ready_Utilization_May_2026.xlsx`, `Utilization_Long` sheet)
+directly. That file was:
 1. A rounded export of an underlying DAX calculation — Formula A
-   reproduces the same numbers exactly for 147/156 (94.2%) of matched
-   employee/weeks, and to within 0.3-0.4 pp for the remaining 9 rows
-   (see `utilization_metrics.py`'s module docstring). Its `Weekly
-   Utilization %` column is therefore a *view* of Formula A, not an
-   independent source of truth.
-2. Snapshot-only: it covers **4 weeks** (2026-05-04 to 2026-05-25) while
+   reproduced the same numbers exactly for 147/156 (94.2%) of matched
+   employee/weeks, and to within 0.3-0.4 pp for the remaining 9 rows. Its
+   `Weekly Utilization %` column was therefore a *view* of Formula A, not
+   an independent source of truth.
+2. Snapshot-only: it covered **4 weeks** (2026-05-04 to 2026-05-25) while
    the booking sheet spans 7+ weeks. Consuming it at runtime meant the
    Overview page silently trailed the current data by whatever the
    ground-truth's own refresh cadence was — and it was hand-cut in Excel.
-3. Optional at deployment time: a fresh clone with no ground-truth file
-   present would refuse to serve `/utilization/overview` and produced a
-   500. Moving Overview to the booking sheet removes that dependency;
-   the app now boots and answers /overview cleanly with no ground-truth
-   file present, and the QA path returns a helpful 404 (see
-   Consistency Rules below).
 
-The file survives as an OPTIONAL QA input. The admin-only endpoint
-`GET /api/v1/qa/reconcile?dataset=utilization` reads it lazily and
-returns the full Formula A vs ground-truth reconciliation — the same
-`reconcile_weekly_utilization` function used by the module's regression
-test. This is where the 9/156 residual mismatches surface today (before
-the switch they weren't surfaced anywhere — the runtime just showed the
-ground-truth's shipped values). Not a data-quality regression: it is the
-opposite, an unblocked observability.
+On 2026-07-26 Overview was switched to compute Formula A directly from
+the booking sheet, and the ground-truth file was kept only as an
+optional QA reconciliation input (`/api/v1/qa/reconcile`). On 2026-07-27
+that file, its ingestion contract, its loaders
+(`load_ground_truth_long`/`load_ground_truth_wide`), the reconciliation
+function, and the `/qa/reconcile` endpoint were all **removed
+entirely** — the app now reads exactly two source files (roster,
+booking), matching the "Data sources" table above. The Data Management
+page's upload list is config-driven off the two remaining ingestion
+contracts, so it no longer offers a ground-truth upload card.
 
 ### Formula A — the one measure that matters here
 
@@ -1045,14 +1039,11 @@ deliberately generic:
   compute per-inner-group ratios and return the mean. Backs the Weekly
   Utilization Trend under D1a's per-employee-first semantics.
 
-Numbers change from the previous ground-truth-sourced page:
-
-| | Ground-truth sourced (before) | Booking-derived (now) |
-|---|---|---|
-| Total Employees | 41 | 46+ (booking-only employees now included) |
-| Weeks in trend | 4 (May only) | 7+ (full booking range) |
-| Formula body | DAX calculated column | Formula A, direct compute |
-| Reconcile residuals | Hidden in the shipped column | Visible only via `/qa/reconcile` |
+Numbers moved from the previous ground-truth-sourced page (now removed —
+see "History" above): Total Employees went from 41 to 46+ (booking-only
+employees are now included, since booking is the only source), and the
+weekly trend now spans the full booking range (7+ weeks) instead of the
+ground truth's May-only snapshot (4 weeks).
 
 ### Card: Average Period Utilization %
 Mean of per-employee period ratios (formula above). Routed via
@@ -1282,9 +1273,8 @@ Analytics, not Home — to be reviewed when we get to that page.)*
 Uploading a new file OR rolling back to a prior version must make
 **every** dashboard consumer of that dataset (every card, chart, filter
 dropdown, and drill-through) reflect the newly active version on the
-very next request — no stale reads, for both `roster` and `booking`
-(and, for completeness, `ground_truth`, even though it is QA-only —
-see above).
+very next request — no stale reads, for both `roster` and `booking` (the
+only two datasets the app reads).
 
 **Backend guarantee.** `backend/app/services/data_loader.py` holds one
 module-level in-memory cache per dataset:
@@ -1294,19 +1284,17 @@ module-level in-memory cache per dataset:
 | `_roster_cache` | `get_roster_df()` | `reload_roster()` |
 | `_booking_cache` | `get_booking_df()` | `reload_booking_data()` |
 | `_booking_prepared_cache` | `get_booking_df_prepared()` | `reload_booking_data()` (sets it to `None`; recomputed lazily from the fresh `_booking_cache` on next read — see `data_loader.py` line ~76) |
-| `_utilization_ground_truth_cache` | `get_utilization_ground_truth_df()` | `reload_utilization_ground_truth()` |
 
 Both `process_upload()` and `rollback()` in
 `backend/app/services/validation/service.py` call a single shared
-`_reload_active(file_type)` helper (lines ~41-49) immediately after the
-new version is promoted or the active pointer is moved back, mapping
-`file_type` to the correct `reload_*` function:
+`_reload_active(file_type)` helper immediately after the new version is
+promoted or the active pointer is moved back, mapping `file_type` to the
+correct `reload_*` function:
 
 ```python
 {
     "roster": data_loader.reload_roster,
     "booking": data_loader.reload_booking_data,
-    "ground_truth": data_loader.reload_utilization_ground_truth,
 }[file_type]()
 ```
 
@@ -1341,7 +1329,6 @@ a manual reload happened to occur):
 |---|---|
 | `roster` | `['roster']`, `['booking']` (Home's utilization donut also reads booking-derived summary), `['config', 'filters', 'roster']` |
 | `booking` | `['booking']`, `['utilization']` (every Utilization page), `['config', 'filters', 'booking']` |
-| `ground_truth` | none — only consumed by the admin-only `/qa/reconcile` endpoint, which is not cached via TanStack Query |
 
 **Net guarantee:** after any successful upload or rollback response,
 the next request to any endpoint or any page re-reads the active

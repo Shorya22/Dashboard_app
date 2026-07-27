@@ -22,7 +22,6 @@ import pandas as pd
 
 from app.services.booking_metrics import load_booking_data, prepare_booking_df
 from app.services.roster_metrics import load_roster
-from app.services.utilization_metrics import load_ground_truth_long
 from app.services.validation import storage
 from app.services.validation.engine import apply_dataset_defaults
 
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 _roster_cache: pd.DataFrame | None = None
 _booking_cache: pd.DataFrame | None = None
 _booking_prepared_cache: pd.DataFrame | None = None
-_utilization_ground_truth_cache: pd.DataFrame | None = None
 
 # Guards the lazy-load-on-first-use path for each cache above, so two
 # concurrent requests racing on a cold cache can't both trigger a
@@ -85,30 +83,6 @@ def get_booking_df_prepared() -> pd.DataFrame:
     return _booking_prepared_cache
 
 
-def get_utilization_ground_truth_df() -> pd.DataFrame | None:
-    """
-    Return the cached `Utilization_Long` ground-truth DataFrame, loading it
-    on first use, or `None` if the file is not present under
-    `backend/data/`.
-
-    As of 2026-07-26 the ground-truth file is OPTIONAL — Overview computes
-    from the booking sheet using Formula A (see
-    `utilization_metrics.get_utilization_overview`), so a missing
-    ground-truth file no longer blocks any runtime endpoint. The QA
-    reconcile endpoint (`/api/v1/qa/reconcile`) uses this loader lazily on
-    demand and returns 404 if the file is absent.
-    """
-    global _utilization_ground_truth_cache
-    if _utilization_ground_truth_cache is None:
-        with _load_lock:
-            if _utilization_ground_truth_cache is None:
-                raw = load_ground_truth_long(storage.resolved_path("ground_truth"))
-                if raw is None:
-                    return None
-                _utilization_ground_truth_cache = apply_dataset_defaults(raw, "ground_truth")
-    return _utilization_ground_truth_cache
-
-
 def reload_roster() -> pd.DataFrame:
     """Force a re-read of the roster Excel file, refreshing the cache."""
     global _roster_cache
@@ -126,19 +100,3 @@ def reload_booking_data() -> pd.DataFrame:
         _booking_prepared_cache = None  # recomputed lazily from the new df
     logger.info("reload_booking_data: cache refreshed")
     return _booking_cache
-
-
-def reload_utilization_ground_truth() -> pd.DataFrame | None:
-    """
-    Force a re-read of the utilization ground-truth Excel file, refreshing
-    the cache. Returns `None` if the file is absent — the QA reconcile
-    endpoint handles that as 404. Runtime endpoints do not call this.
-    """
-    global _utilization_ground_truth_cache
-    with _load_lock:
-        raw = load_ground_truth_long(storage.resolved_path("ground_truth"))
-        _utilization_ground_truth_cache = (
-            apply_dataset_defaults(raw, "ground_truth") if raw is not None else None
-        )
-    logger.info("reload_utilization_ground_truth: cache refreshed (file %s)", "present" if _utilization_ground_truth_cache is not None else "absent")
-    return _utilization_ground_truth_cache

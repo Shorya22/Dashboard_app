@@ -47,7 +47,6 @@ def client(tmp_path, monkeypatch):
     data_loader._roster_cache = None
     data_loader._booking_cache = None
     data_loader._booking_prepared_cache = None
-    data_loader._utilization_ground_truth_cache = None
     limiter.reset()
     with TestClient(app) as c:
         yield c
@@ -57,7 +56,6 @@ def client(tmp_path, monkeypatch):
     data_loader._roster_cache = None
     data_loader._booking_cache = None
     data_loader._booking_prepared_cache = None
-    data_loader._utilization_ground_truth_cache = None
 
 
 # --------------------------------------------------------------------------- #
@@ -282,7 +280,7 @@ def test_status_lists_all_datasets(client):
     resp = client.get("/api/v1/data/status", headers=_auth(token))
     assert resp.status_code == 200
     datasets = {d["file_type"]: d for d in resp.json()["datasets"]}
-    assert set(datasets) == {"roster", "booking", "ground_truth"}
+    assert set(datasets) == {"roster", "booking"}
     assert datasets["roster"]["source"] == "default"  # nothing uploaded yet
 
 

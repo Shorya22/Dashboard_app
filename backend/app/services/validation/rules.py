@@ -283,7 +283,7 @@ def unique_together(df: pd.DataFrame, rule: dict) -> list[ValidationIssue]:
     The combination of `columns` must be unique across rows (a composite
     primary key). Flags every row that shares its key with another.
 
-    e.g. (Employee, Week Start) must be unique in the ground-truth sheet
+    e.g. (Employee, Monday of Week) must be unique in the booking sheet
     — a duplicate would double-count that employee's week.
     """
     cols = rule["columns"]

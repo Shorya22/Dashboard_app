@@ -1,12 +1,11 @@
 """
 Cross-dataset validation checks — warnings only, never block promotion.
 
-Roster, booking, and ground-truth are three views of one reality (who /
-activity / computed result), so an employee in booking or ground-truth
-should exist in the roster. But these are uploaded independently, so a
-temporary mismatch (roster updated a week before booking) is expected —
-PLAN.md Phase 8 fixes these as WARNINGS. Confirmed current match rates
-(2026-07-21): booking→roster 46/46, ground_truth→roster 40/41.
+Roster and booking are two views of one reality (who / activity), so an
+employee in booking should exist in the roster. But these are uploaded
+independently, so a temporary mismatch (roster updated a week before
+booking) is expected — PLAN.md Phase 8 fixes these as WARNINGS. Confirmed
+current match rate (2026-07-21): booking→roster 46/46.
 
 Employee names are free text with inconsistent spacing/middle names, so
 matching is token-subset based (same approach the audit used), not exact
@@ -31,7 +30,6 @@ from app.services.validation.report import Severity, Stage, ValidationIssue
 _EMPLOYEE_COLUMN = {
     "roster": "NAME",
     "booking": "Employee",
-    "ground_truth": "Employee",
 }
 
 
@@ -67,7 +65,6 @@ def _active_names(file_type: str) -> pd.Series:
     loaders = {
         "roster": data_loader.get_roster_df,
         "booking": data_loader.get_booking_df,
-        "ground_truth": data_loader.get_utilization_ground_truth_df,
     }
     df = loaders[file_type]()
     return df[_EMPLOYEE_COLUMN[file_type]]
@@ -112,20 +109,15 @@ def checks_for(file_type: str) -> list[CrossDatasetCheck]:
     """
     Cross-dataset checks to run when uploading `file_type`.
 
-    - booking / ground_truth upload: warn for employees absent from the
-      active roster (the master list of who exists).
-    - roster upload: warn for active booking/ground_truth employees who
-      would no longer have a roster row after this upload.
+    - booking upload: warn for employees absent from the active roster
+      (the master list of who exists).
+    - roster upload: warn for active booking employees who would no
+      longer have a roster row after this upload.
     """
     if file_type == "booking":
         return [_unmatched_warning_check("Employee", "roster", "roster")]
-    if file_type == "ground_truth":
-        return [_unmatched_warning_check("Employee", "roster", "roster")]
     if file_type == "roster":
-        return [
-            _reverse_unmatched_check("booking", "booking data"),
-            _reverse_unmatched_check("ground_truth", "utilization ground-truth data"),
-        ]
+        return [_reverse_unmatched_check("booking", "booking data")]
     return []
 
 

@@ -1,5 +1,6 @@
-"""Routes over the utilization portal's 6 pages — booking-sheet aggregations
-(`Sheet1`) and the ground-truth `%`-based measures (`UtilizationLongTable`).
+"""Routes over the utilization portal's 6 pages — booking-sheet
+aggregations (`Sheet1`), including the `%`-based utilization measures
+(Formula A).
 
 Thin per api-conventions SKILL.md: no pandas here, all aggregation lives in
 `services/booking_metrics.py` / `services/utilization_metrics.py`.
@@ -270,12 +271,8 @@ def utilization_overview(
     filters: dict = Depends(_booking_filter_params),
 ) -> UtilizationOverview:
     """
-    Utilization Overview page. Booking-derived (Formula A) as of
-    2026-07-26 — the ground-truth `Utilization_Long` file is no longer a
-    runtime dependency, only a QA reconciliation input (see
-    `/api/v1/qa/reconcile`). Response shape unchanged; the numbers move
-    per METRICS.md Page 8 (46 booking employees vs 41 ground-truth, 7
-    weeks vs 4).
+    Utilization Overview page. Computed entirely from the booking sheet
+    using Formula A (see `utilization_metrics.get_utilization_overview`).
 
     Accepts the same repeated `?week=`/`?region=`/... query-param set as
     every other utilization endpoint (via `_booking_filter_params`) so

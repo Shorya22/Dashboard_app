@@ -186,7 +186,7 @@ export function UtilizationOverviewPage() {
           isError={overview.isError}
           isEmpty={splitData.every((d) => d.value === 0)}
           provisional
-          provisionalNote="Utilization bands (High >= 90%, Moderate 80-90%, Low < 80%) are PROVISIONAL — thresholds not yet confirmed against a real Power BI DAX band measure. Underlying values are booking-derived Formula A as of 2026-07-26 (ground-truth file no longer consulted at runtime); QA reconciliation between Formula A and the ground truth is available via /api/v1/qa/reconcile. See METRICS.md Page 8."
+          provisionalNote="Utilization bands (High >= 90%, Moderate 80-90%, Low < 80%) are PROVISIONAL — thresholds not yet confirmed against a real Power BI DAX band measure. Underlying values are booking-derived Formula A, computed entirely from the booking sheet. See METRICS.md Page 8."
         >
           <CustomDonutChart data={splitData} colors={splitColors} className="h-full" />
         </ChartCard>

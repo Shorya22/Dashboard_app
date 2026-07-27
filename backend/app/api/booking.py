@@ -1,8 +1,8 @@
 """Routes over the booking (`Sheet1`) aggregations.
 
-Thin per api-conventions SKILL.md: no pandas here, no utilization-%
-endpoints (still blocked per data-model skill — no overlapping week
-between the booking sheet and the ground-truth sheet yet).
+Thin per api-conventions SKILL.md: no pandas here. Utilization-%
+endpoints live on the utilization router (`app/api/utilization.py`),
+computed via Formula A directly from this sheet.
 """
 
 from __future__ import annotations

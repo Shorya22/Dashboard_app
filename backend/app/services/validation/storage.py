@@ -31,7 +31,6 @@ from typing import Any
 from app.core.config import settings
 from app.services.booking_metrics import DEFAULT_BOOKING_PATH
 from app.services.roster_metrics import DEFAULT_ROSTER_PATH
-from app.services.utilization_metrics import DEFAULT_GROUND_TRUTH_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_PATHS: dict[str, Path] = {
     "roster": DEFAULT_ROSTER_PATH,
     "booking": DEFAULT_BOOKING_PATH,
-    "ground_truth": DEFAULT_GROUND_TRUTH_PATH,
 }
 
 _lock = threading.Lock()

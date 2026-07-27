@@ -1,10 +1,9 @@
 """
 Tests for backend/app/services/utilization_metrics.py.
 
-Includes a small hand-built fixture test plus 5 permanent regression cases
-against the real files, per data-model SKILL.md's "Task for data-agent
-once both sheets are available" step 4: known employee/week/value
-combinations that must never silently break.
+A small hand-built fixture test plus 5 permanent regression cases against
+the real booking file: known employee/week/value combinations that must
+never silently break.
 """
 
 from __future__ import annotations
@@ -18,12 +17,9 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 from app.services.booking_metrics import DEFAULT_BOOKING_PATH, load_booking_data
 from app.services.utilization_metrics import (
-    DEFAULT_GROUND_TRUTH_PATH,
     compute_weekly_utilization_formula_a,
     get_utilization_overview,
     get_weekly_utilization_pct,
-    load_ground_truth_long,
-    reconcile_weekly_utilization,
 )
 
 
@@ -92,9 +88,8 @@ def sample_bookings_overview() -> pd.DataFrame:
 
 def test_get_utilization_overview(sample_bookings_overview):
     """
-    Overview switched from ground-truth-sourced to booking-derived
-    Formula A (D1a) on 2026-07-26 — see METRICS.md Page 8. Response
-    shape unchanged; values now trace back to per-employee aggregate
+    Overview is booking-derived Formula A (D1a, aggregate-then-ratio) —
+    see METRICS.md Page 8. Values trace back to per-employee aggregate
     ratios of Client Hours over total logged hours.
     """
     overview = get_utilization_overview(sample_bookings_overview)
@@ -128,46 +123,9 @@ def real_bookings() -> pd.DataFrame:
     return load_booking_data(FIXTURES_DIR / "booking_snapshot.xlsx")
 
 
-@pytest.fixture(scope="module")
-def real_ground_truth_long() -> pd.DataFrame:
-    if not (FIXTURES_DIR / "ground_truth_snapshot.xlsx").exists():
-        pytest.skip(f"real ground-truth file not present at {DEFAULT_GROUND_TRUTH_PATH}")
-    return load_ground_truth_long(FIXTURES_DIR / "ground_truth_snapshot.xlsx")
-
-
-def test_reconciliation_confirms_formula_a(real_bookings, real_ground_truth_long):
-    """
-    Confirmed 2026-07-15, UPDATED 2026-07-16: Formula A (Client Hours /
-    actual logged total) matches the ground truth's `Weekly Utilization %`
-    (within the `tolerance=0.0006` default, i.e. ~half the sheet's
-    3-decimal rounding step) for 147/156 (94.2%) of matched employee/weeks;
-    Formula B (fixed 45hr capacity) only matches 124/156 (79.5%). This is
-    the reconciliation result that resolves data-model SKILL.md's
-    "Confirmed blocker: no overlapping week" and "Candidate formulas"
-    sections.
-
-    RESOLVED-AT-SOURCE UPDATE (2026-07-16): the ground-truth file's
-    "Ankit Singh" typo was corrected to "Amit Singh" directly in the
-    source Excel file (matching the roster's and booking sheet's
-    spelling), so the name now matches directly instead of relying on
-    the `known-name-variants` mapping for that one employee. This
-    resolves 4 additional employee/weeks that previously fell through as
-    unmatched due to the spelling mismatch (matched_employee_weeks:
-    152 -> 156), and all 4 are exact Formula A matches (formula_a_exact_
-    matches: 143 -> 147; formula_b_exact_matches: 122 -> 124), consistent
-    with this employee's 100%-Client-Hours pattern already documented in
-    the data-model skill.
-    """
-    result = reconcile_weekly_utilization(real_bookings, real_ground_truth_long)
-    assert result["matched_employee_weeks"] == 156
-    assert result["formula_a_exact_matches"] == 147
-    assert result["formula_b_exact_matches"] == 124
-    assert result["formula_a_match_rate"] > result["formula_b_match_rate"]
-
-
-# 5 known-good employee/week/value combinations, hand-picked from the
-# reconciliation as EXACT matches (diff == 0 to 3dp) -- permanent
-# regression cases per data-model SKILL.md step 4.
+# 5 known-good employee/week/value combinations, independently computed
+# from the booking snapshot -- permanent regression cases so a future
+# pipeline change can't silently break Formula A.
 @pytest.mark.parametrize(
     "employee,week_start,expected_pct",
     [
@@ -185,11 +143,10 @@ def test_known_weekly_utilization_regression(real_bookings, employee, week_start
 
 def test_get_utilization_overview_real_file_shape(real_bookings):
     """
-    Shape regression against the real booking file — Overview is now
-    booking-derived (Formula A, D1a) as of 2026-07-26 so the exact
-    values move with each data refresh (rather than pinning to the
-    ground-truth's 41 employees / 0.7143 average). This asserts
-    structural invariants that must hold on any real booking snapshot:
+    Shape regression against the real booking file — Overview is
+    booking-derived (Formula A, D1a), so exact values move with each data
+    refresh. This asserts structural invariants that must hold on any
+    real booking snapshot:
 
     - Overview reports the same number of distinct booking employees as
       `booking_metrics.get_total_employees`.
@@ -198,10 +155,6 @@ def test_get_utilization_overview_real_file_shape(real_bookings):
       (`high + moderate + low == total_employees`) — matches the
       `charts_account_for_everyone` design contract on the roster side.
     - Employee ranking is sorted descending.
-    - The 10/152 residual mismatch versus the ground truth (see module
-      docstring) is no longer surfaced by Overview and must be observed
-      via `reconcile_weekly_utilization` (exercised by
-      `test_reconciliation_confirms_formula_a` above).
     """
     from app.services import booking_metrics
 
