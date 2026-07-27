@@ -18,3 +18,6 @@ email-validator==2.3.0
 pandera==0.20.4          # declarative DataFrame schema validation engine
 pyyaml==6.0.2            # reads the per-dataset validation config files
 python-multipart==0.0.9  # FastAPI file-upload (UploadFile) support
+
+# SSO: Microsoft Entra ID (OIDC, Authorization Code flow)
+msal==1.31.0
