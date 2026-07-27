@@ -23,7 +23,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 
-from app.core.security import require_role
+from app.core.security import get_current_user
 from app.db.models import User
 from app.models.data_upload import (
     AuditEntryModel,
@@ -53,8 +53,12 @@ router = APIRouter(prefix="/data", tags=["data-upload"])
 
 _XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-# Admin-only dependency, reused on every route in this module.
-require_admin = require_role("admin")
+# TEMPORARY (per explicit instruction): opened to every authenticated user,
+# not just admins, so Data Management is usable by all users for now. Was
+# `require_role("admin")` — restore that call to re-gate this to admins only.
+# Every route in this module depends on `require_admin` by name so that
+# restoring the role-gate later is this one line, not a per-route change.
+require_admin = get_current_user
 
 
 def _ensure_known(file_type: str) -> None:

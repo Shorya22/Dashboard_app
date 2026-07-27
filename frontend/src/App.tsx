@@ -6,7 +6,6 @@ import { queryClient } from '@/lib/query-client'
 import { AuthProvider, useAuth } from '@/lib/auth-context'
 import { apiClient, setOnAuthLost, setOnTokenRefreshed } from '@/lib/api-client'
 import { ProtectedRoute } from '@/components/protected-route'
-import { AdminRoute } from '@/components/admin-route'
 import { AppLayout } from '@/components/app-shell/app-layout'
 import { PageLoadingFallback } from '@/components/dashboard/page-loading-fallback'
 
@@ -295,11 +294,13 @@ function AppRoutes() {
         <Route
           path="data-management"
           element={
-            <AdminRoute>
-              <React.Suspense fallback={<PageLoadingFallback />}>
-                <DataManagementPage />
-              </React.Suspense>
-            </AdminRoute>
+            // TEMPORARY (per explicit instruction): open to every logged-in
+            // user, not just admins — was wrapped in <AdminRoute>. Backend
+            // route dependency relaxed to match (see data_upload.py's
+            // `require_admin` comment). Re-wrap in <AdminRoute> to restore.
+            <React.Suspense fallback={<PageLoadingFallback />}>
+              <DataManagementPage />
+            </React.Suspense>
           }
         />
       </Route>

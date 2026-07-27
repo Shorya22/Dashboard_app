@@ -20,7 +20,6 @@ import {
 
 import { cn } from '@/lib/utils'
 import { preloadRoute } from '@/lib/route-preload'
-import { useAuth } from '@/lib/auth-context'
 
 import deptLogo from '@/assets/dept-logo-white.png'
 
@@ -53,10 +52,12 @@ const navGroups = [
   },
 ]
 
-// Admin-only. Appended to the nav for users whose role is 'admin' — the
-// route itself is also guarded server-side + by AdminRoute, this just
-// hides the link from viewers.
-const adminNavGroup = {
+// TEMPORARY (per explicit instruction): shown to every logged-in user, not
+// just admins, so Data Management is usable by all users for now — the
+// backend route dependency was relaxed to match (see data_upload.py's
+// `require_admin` comment). To restore admin-only visibility later, gate
+// this back on `user?.role === 'admin'` below.
+const systemNavGroup = {
   label: 'System',
   items: [{ to: '/data-management', label: 'Data Management', icon: Database }],
 }
@@ -69,9 +70,7 @@ export function Sidebar({
   onMobileClose?: () => void
 }) {
   const [collapsed, setCollapsed] = React.useState(false)
-  const { user } = useAuth()
-  const groups =
-    user?.role === 'admin' ? [...navGroups, adminNavGroup] : navGroups
+  const groups = [...navGroups, systemNavGroup]
 
   return (
     <>

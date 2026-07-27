@@ -1,9 +1,11 @@
 """
 Integration tests for the Phase 8b data-upload API.
 
-Covers auth gating (admin vs viewer), the full upload lifecycle (validate
-dry-run, promote, fingerprint dedup, reject-without-touching-active,
-rollback), and the schema/template/history/status endpoints.
+Covers auth gating (login required; TEMPORARILY open to any role, not just
+admin — see data_upload.py's `require_admin` comment), the full upload
+lifecycle (validate dry-run, promote, fingerprint dedup,
+reject-without-touching-active, rollback), and the
+schema/template/history/status endpoints.
 
 DB isolation follows the same env-var-before-import pattern documented in
 test_auth.py. Storage is isolated per test via a fresh temp dir and by
@@ -102,14 +104,21 @@ def test_upload_requires_auth(client):
     assert resp.status_code == 401
 
 
-def test_upload_forbidden_for_viewer(client):
+def test_upload_allowed_for_viewer(client):
+    """
+    TEMPORARY (per explicit instruction): Data Management is open to every
+    authenticated user right now, not just admins — `require_admin` in
+    data_upload.py is `get_current_user`, not `require_role("admin")`. This
+    replaces the old `test_upload_forbidden_for_viewer` (which asserted 403
+    here); restore that test alongside reverting the dependency.
+    """
     token = _viewer_token(client)
     resp = client.post(
         "/api/v1/data/upload/roster",
         files=_files(_real_roster_bytes()),
         headers=_auth(token),
     )
-    assert resp.status_code == 403
+    assert resp.status_code != 403
 
 
 def test_unknown_file_type_404(client):
