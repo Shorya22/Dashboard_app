@@ -33,7 +33,7 @@ from app.api.health import router as health_router
 from app.api.router import api_v1_router
 from app.core.config import configure_logging, settings
 from app.core.limiter import limiter
-from app.db.session import Base, SessionLocal, engine, run_startup_migrations
+from app.db.session import Base, SessionLocal, engine
 from app.services.user_service import seed_dev_admin_if_empty
 
 configure_logging()
@@ -80,8 +80,12 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 
 @app.on_event("startup")
 def _startup_create_db_and_seed() -> None:
+    # Schema changes now go through Alembic migrations (backend/alembic/) —
+    # `alembic upgrade head` is a real deploy step. create_all is kept only
+    # as a safety net for a from-scratch checkout with no DB file yet; it
+    # never alters an existing table, so it can't substitute for a real
+    # migration once one is needed.
     Base.metadata.create_all(bind=engine)
-    run_startup_migrations()
     db = SessionLocal()
     try:
         seed_dev_admin_if_empty(db)

@@ -55,7 +55,7 @@ def _create_token(subject: str, role: str, token_type: TokenType, expires_delta:
         "exp": now + expires_delta,
         "jti": str(uuid.uuid4()),
     }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, settings.jwt_private_key, algorithm=settings.jwt_algorithm)
 
 
 def create_access_token(user: User) -> str:
@@ -82,7 +82,7 @@ class TokenError(Exception):
 
 def decode_token(token: str, expected_type: TokenType) -> dict:
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_public_key, algorithms=[settings.jwt_algorithm])
     except jwt.ExpiredSignatureError as exc:
         raise TokenError("Token expired") from exc
     except jwt.InvalidTokenError as exc:

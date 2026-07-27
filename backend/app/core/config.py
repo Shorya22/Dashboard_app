@@ -8,6 +8,7 @@ is hardcoded for a real deploy later.
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 from pathlib import Path
@@ -37,13 +38,22 @@ class Settings:
     ]
 
     # --- Auth / JWT ---
-    # Local-dev default secret. MUST be overridden via the JWT_SECRET_KEY
-    # env var for any real deployment — this default is intentionally
-    # obvious so it's never mistaken for a production secret.
-    jwt_secret_key: str = os.environ.get(
-        "JWT_SECRET_KEY", "dev-only-insecure-secret-change-me"
+    # RS256: signing uses the private key, verification uses only the
+    # public key — so anything that only needs to *verify* tokens (not
+    # issue them) never needs the private key at all. Keys are stored
+    # base64-encoded in one env var each (PEM contains newlines, which
+    # plain .env files handle poorly unescaped). In production these
+    # should come from Key Vault, not a checked-in/local .env — same
+    # caveat as AZURE_CLIENT_SECRET above.
+    jwt_algorithm: str = "RS256"
+    _jwt_private_key_b64: str = os.environ.get("JWT_PRIVATE_KEY_B64", "")
+    _jwt_public_key_b64: str = os.environ.get("JWT_PUBLIC_KEY_B64", "")
+    jwt_private_key: str = (
+        base64.b64decode(_jwt_private_key_b64).decode() if _jwt_private_key_b64 else ""
     )
-    jwt_algorithm: str = "HS256"
+    jwt_public_key: str = (
+        base64.b64decode(_jwt_public_key_b64).decode() if _jwt_public_key_b64 else ""
+    )
     access_token_expire_minutes: int = int(
         os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
     )

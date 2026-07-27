@@ -161,13 +161,13 @@ def me(user: User = Depends(get_current_user)) -> CurrentUser:
 
 
 @router.get("/login/microsoft")
-def login_microsoft() -> RedirectResponse:
+def login_microsoft(db: Session = Depends(get_db)) -> RedirectResponse:
     """Starts the SSO flow: redirects the browser to Microsoft's login
     page. Not called via axios/fetch — the frontend navigates the whole
     page here (a real browser redirect), since Microsoft's login page
     can't be loaded inside an XHR/fetch response."""
     try:
-        auth_url = build_auth_redirect()
+        auth_url = build_auth_redirect(db)
     except SsoError as exc:
         logger.error("login_microsoft: %s", exc)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="SSO is not available")
@@ -185,7 +185,7 @@ def sso_callback(request: Request, db: Session = Depends(get_db)) -> RedirectRes
     token-handling code required.
     """
     try:
-        claims = complete_auth_flow(dict(request.query_params))
+        claims = complete_auth_flow(db, dict(request.query_params))
         user = get_or_create_sso_user(db, claims)
     except SsoError as exc:
         logger.info("sso_callback: failed (%s)", exc)

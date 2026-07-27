@@ -142,7 +142,7 @@ def test_me_with_expired_token_returns_401(client):
         "exp": now - datetime.timedelta(minutes=15),
         "jti": "expired-test-token",
     }
-    expired_token = jwt.encode(expired_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    expired_token = jwt.encode(expired_payload, settings.jwt_private_key, algorithm=settings.jwt_algorithm)
 
     resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
     assert resp.status_code == 401

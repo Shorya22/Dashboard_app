@@ -3,34 +3,31 @@
 Kept in services/ per project convention — routes stay thin and never
 touch MSAL or persistence directly.
 
-The `state`-keyed pending-flow store below is an in-memory dict. That's
-correct for this app's current single-process `uvicorn` dev setup, but
-would silently break behind multiple worker processes or replicas (a
-login started on one process could complete on another, with no shared
-state). Flagged here rather than baked in silently — swap for a shared
-store (Redis, DB-backed) before running with more than one process.
+The pending-flow store is the `sso_flows` DB table (see app.db.models),
+not an in-memory dict — deliberately, so the login-start request and the
+callback request can land on different app instances/replicas (an
+in-memory dict only works for a single process, which would silently
+break under Azure App Service/Container Apps autoscaling).
 """
 
 from __future__ import annotations
 
+import datetime
+import json
 import logging
 import secrets
-import time
 
 import msal
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.db.models import User, UserRole
+from app.db.models import SsoFlow, User, UserRole
 
 logger = logging.getLogger(__name__)
 
 _SCOPES = ["User.Read"]
-_FLOW_TTL_SECONDS = 600  # generous for a login-redirect round trip
-
-# state -> (flow dict, created_at)
-_pending_flows: dict[str, tuple[dict, float]] = {}
+_FLOW_TTL = datetime.timedelta(seconds=600)  # generous for a login-redirect round trip
 
 
 class SsoError(Exception):
@@ -45,39 +42,46 @@ def _msal_app() -> msal.ConfidentialClientApplication:
     )
 
 
-def _prune_expired_flows() -> None:
-    cutoff = time.time() - _FLOW_TTL_SECONDS
-    expired = [s for s, (_, ts) in _pending_flows.items() if ts < cutoff]
-    for s in expired:
-        _pending_flows.pop(s, None)
+def _prune_expired_flows(db: Session) -> None:
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - _FLOW_TTL
+    db.query(SsoFlow).filter(SsoFlow.created_at < cutoff).delete()
 
 
-def build_auth_redirect() -> str:
+def build_auth_redirect(db: Session) -> str:
     """Starts the login flow and returns the Microsoft auth URL to
     redirect the browser to. The flow (incl. state + PKCE verifier) is
-    stashed server-side, keyed by its own `state`, for the callback."""
+    stashed in `sso_flows`, keyed by its own `state`, for the callback —
+    any app instance can complete it, not just the one that started it."""
     if not settings.sso_configured:
         raise SsoError("SSO is not configured (missing Azure tenant/client settings)")
 
     app = _msal_app()
     flow = app.initiate_auth_code_flow(_SCOPES, redirect_uri=settings.azure_redirect_uri)
-    _prune_expired_flows()
-    _pending_flows[flow["state"]] = (flow, time.time())
+    _prune_expired_flows(db)
+    db.add(SsoFlow(state=flow["state"], flow_json=json.dumps(flow)))
+    db.commit()
     return flow["auth_uri"]
 
 
-def complete_auth_flow(query_params: dict) -> dict:
+def complete_auth_flow(db: Session, query_params: dict) -> dict:
     """Exchanges the callback's query params for validated ID token claims.
 
     Raises SsoError on any failure: unknown/expired/replayed state, or
     Microsoft rejecting the code exchange.
     """
     state = query_params.get("state")
-    pending = _pending_flows.pop(state, None) if state else None
-    if pending is None:
+    row = db.get(SsoFlow, state) if state else None
+    if row is None:
         raise SsoError("Unknown or expired login attempt — please try signing in again")
-    flow, _ = pending
 
+    # One-time use: delete immediately so a replayed callback can't reuse it.
+    db.delete(row)
+    db.commit()
+
+    if row.created_at < datetime.datetime.now(datetime.timezone.utc) - _FLOW_TTL:
+        raise SsoError("Login attempt expired — please try signing in again")
+
+    flow = json.loads(row.flow_json)
     result = _msal_app().acquire_token_by_auth_code_flow(flow, query_params)
     if "error" in result:
         raise SsoError(result.get("error_description") or result["error"])
