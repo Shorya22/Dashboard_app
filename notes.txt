@@ -665,3 +665,15 @@ SOURCE DATA CLEANED AT THE ROOT (not just worked around in code)
    Docs (data-model SKILL.md, known-name-variants.md) updated to mark
    these RESOLVED AT SOURCE, distinct from the earlier "code
    workaround" framing.
+
+
+
+
+#### we have done:
+1- SSO integration
+2- DB in to postgress
+3- RS256 implementation insteam of HSA.
+4- PII removed from logs
+5- CORS implemented.
+6- Secure cookie default
+7- Auth on all API routes
