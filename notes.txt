@@ -677,3 +677,7 @@ SOURCE DATA CLEANED AT THE ROOT (not just worked around in code)
 5- CORS implemented.
 6- Secure cookie default
 7- Auth on all API routes
+
+Pending:
+VAPT (Vulnerability Assessment and Penetration Testing)
+Azure Key Vault — move secrets (Client Secret, JWT secret, DB credentials) out of .env files into Key Vault
