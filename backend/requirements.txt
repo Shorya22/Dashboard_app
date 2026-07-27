@@ -21,3 +21,7 @@ python-multipart==0.0.9  # FastAPI file-upload (UploadFile) support
 
 # SSO: Microsoft Entra ID (OIDC, Authorization Code flow)
 msal==1.31.0
+
+# Postgres driver — DATABASE_URL still defaults to local SQLite for dev
+# (per CLAUDE.md), but production points this at a real Postgres instance.
+psycopg[binary]==3.2.3

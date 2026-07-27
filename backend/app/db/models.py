@@ -6,7 +6,7 @@ import datetime
 import enum
 import uuid
 
-from sqlalchemy import DateTime, Enum, String
+from sqlalchemy import DateTime, Enum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -37,3 +37,22 @@ class User(Base):
     # one after the fact, so uniqueness is enforced at the lookup layer
     # (get_or_create_sso_user) instead.
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+
+
+class SsoFlow(Base):
+    """Pending Microsoft SSO login attempts, keyed by MSAL's `state`.
+
+    DB-backed (not in-memory) specifically so the login-start request and
+    the callback request can land on different app instances/replicas —
+    the in-memory dict this replaces only worked for a single process. Row
+    is deleted once consumed by the callback; `created_at` lets a periodic
+    cleanup (or just a query-time filter) drop abandoned/expired attempts.
+    """
+
+    __tablename__ = "sso_flows"
+
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    flow_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )

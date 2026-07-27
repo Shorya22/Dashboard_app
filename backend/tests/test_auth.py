@@ -142,7 +142,7 @@ def test_me_with_expired_token_returns_401(client):
         "exp": now - datetime.timedelta(minutes=15),
         "jti": "expired-test-token",
     }
-    expired_token = jwt.encode(expired_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    expired_token = jwt.encode(expired_payload, settings.jwt_private_key, algorithm=settings.jwt_algorithm)
 
     resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
     assert resp.status_code == 401
@@ -280,3 +280,72 @@ def test_login_rate_limited_after_repeated_bad_attempts(client):
 
     assert last_status == 429
     assert "detail" in resp.json()
+
+
+# --- SSO (Microsoft Entra ID, OIDC) ---
+# These test the DB-backed pending-flow mechanics (sso_flows table) and
+# error handling, not a real Microsoft code exchange — that can't be
+# faked without a live Azure tenant. `complete_auth_flow`'s success path
+# (a real `code` MSAL accepts) is exercised manually against the real
+# tenant, not here.
+
+
+def test_login_microsoft_redirects_to_azure_and_persists_pending_flow(client):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.db.models import SsoFlow
+    from app.db.session import SessionLocal
+
+    resp = client.get("/api/auth/login/microsoft", follow_redirects=False)
+
+    assert resp.status_code in (302, 307)
+    location = resp.headers["location"]
+    assert location.startswith("https://login.microsoftonline.com/")
+
+    state = parse_qs(urlparse(location).query)["state"][0]
+
+    db = SessionLocal()
+    try:
+        row = db.get(SsoFlow, state)
+        assert row is not None
+        assert row.flow_json  # non-empty JSON blob of the MSAL flow dict
+    finally:
+        db.close()
+
+
+def test_sso_callback_with_unknown_state_redirects_to_login_with_error(client):
+    resp = client.get(
+        "/api/auth/saml/acs",
+        params={"state": "not-a-real-pending-state", "code": "fake-code"},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code in (302, 307)
+    assert resp.headers["location"].endswith("/login?sso_error=1")
+
+
+def test_sso_callback_consumes_pending_flow_state_exactly_once(client):
+    """A replayed callback (same state reused) must fail the second time —
+    proves the DB row is actually deleted on first use, not just read."""
+    login_resp = client.get("/api/auth/login/microsoft", follow_redirects=False)
+    from urllib.parse import parse_qs, urlparse
+
+    state = parse_qs(urlparse(login_resp.headers["location"]).query)["state"][0]
+
+    # First use: fails at Microsoft's code exchange (fake code), but that
+    # still proves the state itself was found and consumed.
+    first = client.get(
+        "/api/auth/saml/acs",
+        params={"state": state, "code": "fake-code"},
+        follow_redirects=False,
+    )
+    assert first.headers["location"].endswith("/login?sso_error=1")
+
+    # Second use of the same state: must now be "unknown", since the row
+    # was deleted on first use.
+    second = client.get(
+        "/api/auth/saml/acs",
+        params={"state": state, "code": "fake-code"},
+        follow_redirects=False,
+    )
+    assert second.headers["location"].endswith("/login?sso_error=1")
