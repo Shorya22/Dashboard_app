@@ -78,7 +78,13 @@ def complete_auth_flow(db: Session, query_params: dict) -> dict:
     db.delete(row)
     db.commit()
 
-    if row.created_at < datetime.datetime.now(datetime.timezone.utc) - _FLOW_TTL:
+    # SQLite hands back a naive datetime even for a DateTime(timezone=True)
+    # column (unlike Postgres, which preserves tzinfo) — normalize to UTC
+    # before comparing so this works correctly on both.
+    created_at = row.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+    if created_at < datetime.datetime.now(datetime.timezone.utc) - _FLOW_TTL:
         raise SsoError("Login attempt expired — please try signing in again")
 
     flow = json.loads(row.flow_json)
