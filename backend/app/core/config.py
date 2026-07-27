@@ -15,7 +15,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+# backend/.env — deliberately NOT the monorepo root. Backend and frontend
+# are deployed as two separate Azure resources (App Service + Static Web
+# Apps), each with no knowledge of the other's directory at all in
+# production, so a shared root .env doesn't reflect the real deployment
+# shape. In production neither reads a .env file anyway — real values
+# come from that platform's own environment/secret configuration.
+ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
 
