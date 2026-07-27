@@ -22,6 +22,8 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 import anyio.to_thread
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -33,7 +35,7 @@ from app.api.health import router as health_router
 from app.api.router import api_v1_router
 from app.core.config import configure_logging, settings
 from app.core.limiter import limiter
-from app.db.session import Base, SessionLocal, engine
+from app.db.session import SessionLocal
 from app.services.user_service import seed_dev_admin_if_empty
 
 configure_logging()
@@ -80,12 +82,16 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 
 @app.on_event("startup")
 def _startup_create_db_and_seed() -> None:
-    # Schema changes now go through Alembic migrations (backend/alembic/) —
-    # `alembic upgrade head` is a real deploy step. create_all is kept only
-    # as a safety net for a from-scratch checkout with no DB file yet; it
-    # never alters an existing table, so it can't substitute for a real
-    # migration once one is needed.
-    Base.metadata.create_all(bind=engine)
+    # Runs Alembic migrations programmatically on every startup — this is
+    # deliberately NOT the Docker CMD/entrypoint's job, since App Service's
+    # native Python deploy (no Dockerfile involved at all) needs this too.
+    # Idempotent: alembic no-ops if already at head, so this is safe to run
+    # on every restart, not just the first one.
+    alembic_cfg = Config(str(ROOT_DIR / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(ROOT_DIR / "alembic"))
+    alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
+    command.upgrade(alembic_cfg, "head")
+
     db = SessionLocal()
     try:
         seed_dev_admin_if_empty(db)
