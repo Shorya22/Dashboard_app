@@ -28,7 +28,6 @@ export function UtilizationOverviewPage() {
   const filterOptions = useUtilizationFilterOptions()
   const filterConfig = useFilterConfig('booking')
 
-  const [hoursType, setHoursType] = React.useState<string | undefined>()
   const [regionMarket, setRegionMarket] = React.useState<string[]>([])
   const [weeks, setWeeks] = React.useState<string[]>([])
   const [department, setDepartment] = React.useState<string | undefined>()
@@ -44,12 +43,11 @@ export function UtilizationOverviewPage() {
 
   const filters = React.useMemo(
     () => ({
-      hours_type: hoursType,
       ...splitRegionMarketSelection(regionMarket),
       week: weeks,
       department,
     }),
-    [hoursType, regionMarket, weeks, department],
+    [regionMarket, weeks, department],
   )
 
   const overview = useUtilizationOverview(filters)
@@ -97,7 +95,7 @@ export function UtilizationOverviewPage() {
   )
 
   const hasActiveFilters =
-    !!hoursType || regionMarket.length > 0 || weeks.length > 0 || !!department
+    regionMarket.length > 0 || weeks.length > 0 || !!department
   const emptyMsg = hasActiveFilters
     ? 'No booking hours match the selected filters. Try clearing a filter.'
     : undefined
@@ -105,12 +103,6 @@ export function UtilizationOverviewPage() {
   return (
     <div className="space-y-5">
       <div className="grid w-full grid-cols-1 gap-3 sm:flex sm:w-auto sm:flex-wrap">
-        <FilterSelect
-          label={filterLabel(filterConfig.data?.filters, 'hours_type', 'Hours Type')}
-          value={hoursType}
-          options={filterOptions.data?.hours_types ?? []}
-          onChange={setHoursType}
-        />
         <FilterControl
           label={`${filterLabel(filterConfig.data?.filters, 'region', 'Region')}/${filterLabel(filterConfig.data?.filters, 'market', 'Market')}`}
         >
