@@ -19,3 +19,7 @@ backend/data/backups/
 
 # Phase 8 runtime upload storage (versioned datasets + manifests)
 backend/data/uploads/
+
+# Personal scratch/tracking notes, not shared repo docs
+docs/Enhancements.md
+docs/vapt-and-deployment-tracker.md
