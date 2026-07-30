@@ -520,11 +520,20 @@ def _resolve_period(
             # A filter can legitimately select zero rows (or rows with no
             # joining date). Return an empty window so every date measure
             # reports zero, rather than the page erroring out.
-            empty = pd.Timestamp.min + pd.Timedelta(days=1)
+            empty = pd.Timestamp.min + pd.DateOffset(days=1)
             return empty, empty, empty
         start = available_months.min_month_start
         end = available_months.max_month_end
-        previous = available_months.earliest_date - pd.Timedelta(days=1)
+        # `pd.DateOffset`, not `pd.Timedelta`: a caller-supplied
+        # `period_month` (or a Timestamp built from a date-only ISO
+        # string, e.g. `pd.Timestamp("2026-06-01")`) can carry a
+        # non-nanosecond resolution ('s' as of pandas 2.2 for that exact
+        # construction) — subtracting a `Timedelta`, which is always
+        # nanosecond-resolution, from a coarser-resolution Timestamp
+        # trips a deprecated NumPy "generic unit" code path. `DateOffset`
+        # does calendar-day arithmetic without ever mixing datetime64
+        # units, so it's correct regardless of the input's resolution.
+        previous = available_months.earliest_date - pd.DateOffset(days=1)
         return start, end, previous
 
     month_ts = pd.to_datetime(period_month, format=DATE_FORMAT, errors="coerce")
@@ -532,7 +541,7 @@ def _resolve_period(
         month_ts = pd.to_datetime(period_month)
     start = month_ts.replace(day=1)
     end = start + pd.offsets.MonthEnd(0)
-    previous = start - pd.Timedelta(days=1)
+    previous = start - pd.DateOffset(days=1)
     return start, end, previous
 
 
