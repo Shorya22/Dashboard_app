@@ -22,8 +22,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 import anyio.to_thread
-from alembic import command
-from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -35,6 +33,7 @@ from app.api.health import router as health_router
 from app.api.router import api_v1_router
 from app.core.config import configure_logging, settings
 from app.core.limiter import limiter
+from app.db.migrations import run_startup_migrations
 from app.db.session import SessionLocal
 from app.services.user_service import seed_dev_admin_if_empty
 
@@ -85,12 +84,12 @@ def _startup_create_db_and_seed() -> None:
     # Runs Alembic migrations programmatically on every startup — this is
     # deliberately NOT the Docker CMD/entrypoint's job, since App Service's
     # native Python deploy (no Dockerfile involved at all) needs this too.
-    # Idempotent: alembic no-ops if already at head, so this is safe to run
-    # on every restart, not just the first one.
-    alembic_cfg = Config(str(ROOT_DIR / "alembic.ini"))
-    alembic_cfg.set_main_option("script_location", str(ROOT_DIR / "alembic"))
-    alembic_cfg.set_main_option("sqlalchemy.url", settings.database_url)
-    command.upgrade(alembic_cfg, "head")
+    # `run_startup_migrations` is idempotent (upgrade head no-ops if
+    # already current) AND self-heals the one known schema/version
+    # mismatch — see app/db/migrations.py's module docstring — instead of
+    # crashing on it, which under --reload looks exactly like the server
+    # hanging forever with no listening socket and no visible traceback.
+    run_startup_migrations()
 
     db = SessionLocal()
     try:

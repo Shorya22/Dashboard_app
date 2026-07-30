@@ -5,11 +5,12 @@ Phase 3 introduces the first real table (`users`). Local dev only, per
 CLAUDE.md — no Azure/AWS setup yet — so a SQLite file at
 `backend/app/data/app.db` is the lightest-weight option that's still a
 real database (not a stub/in-memory dict). `backend/alembic/` is
-scaffolded per api-conventions for "once a real DB exists"; we set up a
-single initial migration for the `users` table (see
-`backend/alembic/versions/`), but also keep `Base.metadata.create_all`
-as a safety net at startup so a fresh checkout without alembic run
-still works for local dev.
+scaffolded per api-conventions for "once a real DB exists"; schema is
+brought to head by `app/db/migrations.py:run_startup_migrations` at
+app startup, which also heals the one-time case of a local `app.db`
+that predates Alembic's adoption (created by an earlier, now-removed
+`Base.metadata.create_all()` startup safety net) — see that module's
+docstring.
 """
 
 from __future__ import annotations
